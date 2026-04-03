@@ -1,16 +1,15 @@
 // maarmapa — Claude API proxy
-// Deploy en Railway, la API key vive aquí como variable de entorno
-
 const express = require('express');
 const app = express();
 app.use(express.json());
 
-// CORS — permite llamadas desde maarmapa.eth.limo y cualquier origen
+// CORS completo
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
   next();
 });
 
@@ -44,7 +43,7 @@ LINKS:
 - Substack: maarmapa.substack.com
 - Instagram: @maarmapa.eth
 - Early works: jibtone.blogspot.com
-- Decentralized site: maarmapa.eth.limo
+- Site: maarmapa.eth.limo
 
 TONE:
 - Bilingual: detect language of question, respond in same language
@@ -60,13 +59,12 @@ app.post('/chat', async (req, res) => {
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
-
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'x-api-key': process.env.API_KEY,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
@@ -76,7 +74,6 @@ app.post('/chat', async (req, res) => {
         messages,
       }),
     });
-
     const data = await response.json();
     const reply = data.content?.[0]?.text || '...';
     res.json({ reply });
@@ -88,4 +85,4 @@ app.post('/chat', async (req, res) => {
 app.get('/', (req, res) => res.json({ status: 'online', service: 'maarmapa agent' }));
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`maarmapa agent on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`maarmapa agent on port ${PORT}`));
