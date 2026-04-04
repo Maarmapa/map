@@ -301,7 +301,8 @@ Respond in the same language as the query. Be concise and focused on what's rele
     });
 
     const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || '...';
+    console.log('GROK RAW:', JSON.stringify(data).slice(0,500));
+const reply = data.choices?.[0]?.message?.content || data.error || JSON.stringify(data);
     res.json({ reply, source: 'grok-3' });
   } catch (err) {
     console.error('Grok error:', err);
