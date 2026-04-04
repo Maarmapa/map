@@ -266,3 +266,83 @@ app.get('/', (req, res) => res.json({
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => console.log(`maarmapa agent v5 on port ${PORT}`));
+
+// ── GROK / X.AI ENDPOINT ──────────────────────────────
+app.post('/grok', async (req, res) => {
+  const { query } = req.body;
+  if (!query) return res.status(400).json({ error: 'query required' });
+
+  try {
+    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GROK_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'grok-3',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'system',
+            content: `You are an art intelligence assistant for maarmapa — a Chilean contemporary artist. 
+Search X/Twitter for real-time conversations, trends, and news about:
+- Street art and urban art
+- Contemporary art market
+- Latin American art scene  
+- Art + blockchain/NFT/Web3
+- Relevant artists, galleries, curators
+Respond in the same language as the query. Be concise and focused on what's relevant for maarmapa's practice.`
+          },
+          { role: 'user', content: query }
+        ],
+      }),
+    });
+
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || '...';
+    res.json({ reply, source: 'grok-3' });
+  } catch (err) {
+    console.error('Grok error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Combined digest — Claude + Grok
+app.get('/digest/full', async (req, res) => {
+  try {
+    const posts = await fetchSubstackRSS();
+    const substackCtx = buildSubstackContext(posts);
+
+    // Claude web search digest
+    const claudeMessages = [{ role: 'user', content: 'Generate the weekly art intelligence digest. Search for the most relevant developments from the past 7 days.' }];
+    const claudeDigest = await runWithTools(claudeMessages, DIGEST_SYSTEM + substackCtx, 2048);
+
+    // Grok X/Twitter pulse
+    const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GROK_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'grok-3',
+        max_tokens: 800,
+        messages: [
+          { role: 'system', content: 'You are an art intelligence assistant tracking X/Twitter for a Chilean urban artist.' },
+          { role: 'user', content: 'What are the most relevant conversations happening RIGHT NOW on X/Twitter about: street art, urban art, contemporary art market, Latin American art, art+blockchain? Give me 4-5 key trends or conversations with context.' }
+        ],
+      }),
+    });
+    const grokData = await grokRes.json();
+    const grokPulse = grokData.choices?.[0]?.message?.content || '';
+
+    res.json({
+      digest: claudeDigest,
+      xPulse: grokPulse,
+      sources: ['Claude + web search', 'Grok + X/Twitter']
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
