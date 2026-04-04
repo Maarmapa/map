@@ -282,6 +282,7 @@ app.post('/grok', async (req, res) => {
       body: JSON.stringify({
         model: 'grok-3',
         max_tokens: 1024,
+        search_parameters: { mode: 'auto', return_citations: true, sources: [{ type: 'x' }, { type: 'web' }] },
         messages: [
           {
             role: 'system',
@@ -328,6 +329,7 @@ app.get('/digest/full', async (req, res) => {
       body: JSON.stringify({
         model: 'grok-3',
         max_tokens: 800,
+        search_parameters: { mode: 'auto', return_citations: true, sources: [{ type: 'x' }, { type: 'web' }] },
         messages: [
           { role: 'system', content: 'You are an art intelligence assistant tracking X/Twitter for a Chilean urban artist.' },
           { role: 'user', content: 'What are the most relevant conversations happening RIGHT NOW on X/Twitter about: street art, urban art, contemporary art market, Latin American art, art+blockchain? Give me 4-5 key trends or conversations with context.' }
