@@ -1,4 +1,4 @@
-// maarmapa — Claude API proxy v3 — research + substack editor
+// maarmapa — Claude API proxy v4 — research + substack + digest + /post
 const express = require('express');
 const app = express();
 app.use(express.json());
@@ -22,66 +22,94 @@ IDENTITY:
 - Early works: jibtone.blogspot.com — Site: maarmapa.eth.limo
 - Instagram: @maarmapa.eth — Substack: maarmapa.substack.com
 
-RESEARCH DOMAINS — search actively for:
-- Contemporary street art and urban art worldwide (Artforum, Frieze, e-flux, Artsy, Artishock)
-- Philosophy of city, space, territory (Lefebvre, de Certeau, Benjamin, Baudrillard, Virilio)
+PUBLISHED POSTS (already covered — avoid repeating angles):
+- NFTs y arte digital — mercado, tecnología, coleccionismo
+- WEB3 y cultura descentralizada
+- Música y colaboraciones
+- Arte urbano como tendencia
+
+RESEARCH DOMAINS — search actively:
+- Contemporary street art worldwide (Artforum, Frieze, e-flux, Artsy, Artishock)
+- Philosophy: Lefebvre, de Certeau, Benjamin, Baudrillard, Virilio
 - Art history — Situationism, Fluxus, Arte Povera, Latin American avant-gardes
-- Art + blockchain + decentralized tech — NFTs, IPFS, on-chain art, Web3 culture
-- Current exhibitions, art fairs (Art Basel, ARTBO, arteBA, Material Art Fair)
-- Galleries, curators, collectors working with urban/contemporary art
+- Art + blockchain + decentralized tech
+- Current exhibitions, art fairs, galleries
 - News at intersection of technology, cities, culture
 
 BEHAVIOR:
 - Bilingual: detect language, respond in same language
-- Search web when asked about art, philosophy, history, technology, artists, galleries
+- Search web when asked about art, philosophy, history, technology
 - Connect findings to maarmapa's work naturally
 - Laconic but deep — 3-6 lines unless asked for more
-- Never corporate — artist or sharp research collaborator`;
+- Never corporate`;
 
-const SYSTEM_SUBSTACK = `You are the editorial intelligence behind maarmapa's Substack — a contemporary Chilean artist who paints cities as abstract systems, rooted in street art and stencil, now working on canvas and IPFS.
+const SYSTEM_SUBSTACK = `You are the editorial intelligence behind maarmapa's Substack (maarmapa.substack.com) — a Chilean artist who paints cities as abstract systems, rooted in street art, now working on canvas and IPFS.
 
-The Substack (maarmapa.substack.com) publishes essays, artist profiles, and cultural research at the intersection of:
-- Urban art and street art
-- Philosophy of the city
-- Art history and contemporary movements  
-- Blockchain, IPFS, decentralized culture
-- Latin American art scene
+ALREADY PUBLISHED (avoid repeating these exact angles):
+- NFTs y arte digital — mercado, tecnología
+- WEB3 y cultura descentralizada  
+- Música y colaboraciones
+- Arte urbano como tendencia global
 
 EDITORIAL VOICE:
 - Sharp, poetic, informed — not academic, not populist
-- Connects the local (Santiago, Latin America) with the global
-- First person when relevant — the artist reflecting on the world
-- References: theory, history, current events — all woven together
-- Spanish primary, English when the subject demands it
+- Connects local (Santiago, Latin America) with global
+- First person when relevant
+- References: theory, history, current events woven together
+- Spanish primary
 
-PRIORITY SOURCES to search and cite:
-- e-flux.com, artforum.com, frieze.com, artnews.com, artsy.net
-- artishock.net (Latin American art)
-- theartnewspaper.com, hyperallergic.com
-- philosopher.net, plato.stanford.edu for theory
+PRIORITY SOURCES: e-flux.com, artforum.com, frieze.com, artishock.net, hyperallergic.com, theartnewspaper.com
 
-WHEN WRITING A POST:
-1. Search for current info about the subject
-2. Structure: hook (1 párrafo) → contexto/historia (2-3 párrafos) → conexión con el presente → cierre con pregunta abierta o provocación
-3. Length: 400-700 words
-4. Include: 2-3 specific references (artists, works, theorists)
-5. End with a question or provocation that invites response`;
+POST STRUCTURE:
+1. Hook — 1 párrafo que engancha
+2. Contexto/historia — 2-3 párrafos con referencias reales
+3. Conexión con el presente y con la práctica de maarmapa
+4. Cierre — pregunta abierta o provocación
+
+LENGTH: 500-700 palabras
+ALWAYS include: 2-3 specific references (artists, works, theorists)
+ALWAYS end with a question or provocation`;
 
 const SYSTEM_DIGEST = `You are a weekly art intelligence digest for maarmapa — a Chilean contemporary artist.
 
-Search the web for the most relevant news and developments from the past 7 days in:
+Search for the most relevant news from the past 7 days in:
 1. Street art and urban art worldwide
-2. Latin American contemporary art scene
-3. Art + blockchain/NFT/Web3 developments
-4. Philosophy, theory related to urbanism and space
-5. Major gallery/museum/fair news relevant to urban/contemporary art
+2. Latin American contemporary art
+3. Art + blockchain/NFT/Web3
+4. Philosophy and theory of urbanism and space
+5. Major gallery/museum/fair news
 
-For each item found:
-- Summarize in 2-3 lines
-- Explain why it's relevant for maarmapa's practice
-- Suggest a potential Substack angle
+For each item:
+- Title + 2-3 line summary
+- Why it's relevant for maarmapa's practice (1-2 lines)
+- Suggested Substack angle (1 line)
 
-Deliver as a structured digest: 5-8 items, ranked by relevance. Bilingual based on source.`;
+Format: 5-8 items ranked by relevance. Include sources.`;
+
+const SYSTEM_POST = `You are a Substack post generator for maarmapa (maarmapa.substack.com).
+
+Generate a complete, publication-ready Substack post.
+
+OUTPUT FORMAT (strict):
+{
+  "title": "...",
+  "subtitle": "...",
+  "tags": ["tag1", "tag2", "tag3"],
+  "body": "full post in markdown..."
+}
+
+RULES:
+- Search the web for current information on the topic
+- Title: punchy, specific, not clickbait
+- Subtitle: 1 sentence that expands the hook
+- Tags: 3-5 relevant tags
+- Body: 500-700 words, markdown format
+- Sections: Hook → Contexto → Presente → Cierre provocador
+- Include 2-3 real references with names and works
+- Voice: sharp, poetic, never academic
+- Language: Spanish primary
+- End with an open question or provocation
+- Respond ONLY with the JSON object, no preamble`;
 
 const TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
 
@@ -113,7 +141,7 @@ async function runWithTools(messages, system, maxTokens) {
     loopMessages.push({ role: 'assistant', content: data.content });
     const toolResults = data.content
       .filter(b => b.type === 'tool_use')
-      .map(b => ({ type: 'tool_result', tool_use_id: b.id, content: 'Search completed successfully.' }));
+      .map(b => ({ type: 'tool_result', tool_use_id: b.id, content: 'Search completed.' }));
     loopMessages.push({ role: 'user', content: toolResults });
     data = await callClaude(loopMessages, system, maxTokens);
     iterations++;
@@ -125,7 +153,7 @@ async function runWithTools(messages, system, maxTokens) {
     .join('') || '...';
 }
 
-// Main chat endpoint
+// Chat — agent / substack / digest modes
 app.post('/chat', async (req, res) => {
   const { messages, mode } = req.body;
   if (!messages || !Array.isArray(messages)) {
@@ -144,25 +172,53 @@ app.post('/chat', async (req, res) => {
   }
 });
 
-// Digest endpoint — weekly art news
+// POST /post — generate complete Substack post
+app.post('/post', async (req, res) => {
+  const { topic } = req.body;
+  if (!topic) return res.status(400).json({ error: 'topic required' });
+  try {
+    const messages = [{
+      role: 'user',
+      content: `Generate a complete Substack post about: ${topic}`
+    }];
+    const raw = await runWithTools(messages, SYSTEM_POST, 2048);
+    // Parse JSON response
+    const clean = raw.replace(/```json|```/g, '').trim();
+    try {
+      const post = JSON.parse(clean);
+      res.json({ post });
+    } catch {
+      res.json({ post: { title: topic, subtitle: '', tags: [], body: raw } });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /digest — weekly art news digest
 app.get('/digest', async (req, res) => {
   try {
     const messages = [{
       role: 'user',
-      content: 'Generate the weekly art intelligence digest. Search for the most relevant developments in the past 7 days across street art, Latin American art, art+blockchain, and urbanism theory.'
+      content: 'Generate the weekly art intelligence digest for maarmapa. Search for the most relevant developments from the past 7 days.'
     }];
-    const reply = await runWithTools(messages, SYSTEM_DIGEST, 2048);
-    res.json({ digest: reply });
+    const digest = await runWithTools(messages, SYSTEM_DIGEST, 2048);
+    res.json({ digest });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/', (req, res) => res.json({ 
-  status: 'online', 
-  service: 'maarmapa agent v3',
-  modes: ['chat (agent)', 'chat (substack)', 'chat (digest)', 'GET /digest']
+app.get('/', (req, res) => res.json({
+  status: 'online',
+  service: 'maarmapa agent v4',
+  endpoints: {
+    'POST /chat': 'modes: agent | substack | digest',
+    'POST /post': 'body: { topic: "..." } → complete Substack post',
+    'GET /digest': 'weekly art intelligence digest'
+  }
 }));
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => console.log(`maarmapa agent v3 on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`maarmapa agent v4 on port ${PORT}`));
