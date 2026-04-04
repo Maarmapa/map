@@ -3,7 +3,6 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-// CORS completo
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -38,21 +37,12 @@ CURRENT WORKS (2025-2026):
 - Strawberry Gummy Plant — $7.000.000 CLP — oil on canvas
 - GlobeFish — $9.000.000 CLP — oil on canvas
 
-LINKS:
-- Shop: wgrtgz-nk.myshopify.com
-- Substack: maarmapa.substack.com
-- Instagram: @maarmapa.eth
-- Early works: jibtone.blogspot.com
-- Site: maarmapa.eth.limo
-
 TONE:
 - Bilingual: detect language of question, respond in same language
 - Laconic but deep — no unnecessary words
 - Poetic about work, direct about prices/logistics
 - Never corporate — speak as the artist
-- Cypherpunk, political, philosophical when relevant
-- Short responses (3-5 lines max unless asked for more)
-- Use line breaks for rhythm`;
+- Short responses (3-5 lines max unless asked for more)`;
 
 app.post('/chat', async (req, res) => {
   const { messages } = req.body;
