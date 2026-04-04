@@ -273,7 +273,7 @@ app.post('/grok', async (req, res) => {
   if (!query) return res.status(400).json({ error: 'query required' });
 
   try {
-    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+    const response = await fetch('https://api.x.ai/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -301,8 +301,7 @@ Respond in the same language as the query. Be concise and focused on what's rele
     });
 
     const data = await response.json();
-    console.log('GROK RAW:', JSON.stringify(data).slice(0,500));
-const reply = data.choices?.[0]?.message?.content || data.error || JSON.stringify(data);
+    const reply = data.choices?.[0]?.message?.content || '...';
     res.json({ reply, source: 'grok-3' });
   } catch (err) {
     console.error('Grok error:', err);
@@ -321,7 +320,7 @@ app.get('/digest/full', async (req, res) => {
     const claudeDigest = await runWithTools(claudeMessages, DIGEST_SYSTEM + substackCtx, 2048);
 
     // Grok X/Twitter pulse
-    const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
+    const grokRes = await fetch('https://api.x.ai/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -329,16 +328,12 @@ app.get('/digest/full', async (req, res) => {
       },
       body: JSON.stringify({
         model: 'grok-3',
-        max_tokens: 800,
-        search_parameters: { mode: 'auto', return_citations: true, sources: [{ type: 'x' }, { type: 'web' }] },
-        messages: [
-          { role: 'system', content: 'You are an art intelligence assistant tracking X/Twitter for a Chilean urban artist.' },
-          { role: 'user', content: 'What are the most relevant conversations happening RIGHT NOW on X/Twitter about: street art, urban art, contemporary art market, Latin American art, art+blockchain? Give me 4-5 key trends or conversations with context.' }
-        ],
+        tools: [{ type: 'web_search' }, { type: 'x_search' }],
+        input: 'What are the most relevant conversations happening RIGHT NOW on X/Twitter about: street art, urban art, contemporary art market, Latin American art, art+blockchain? Give 4-5 key trends with context.',
       }),
     });
     const grokData = await grokRes.json();
-    const grokPulse = grokData.choices?.[0]?.message?.content || '';
+    const grokPulse = grokData.output?.map(b => b.content?.[0]?.text || '').join('') || '';
 
     res.json({
       digest: claudeDigest,
