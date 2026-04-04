@@ -1,4 +1,4 @@
-// maarmapa — Claude API proxy
+// maarmapa — Claude API proxy con web search
 const express = require('express');
 const app = express();
 app.use(express.json());
@@ -12,67 +12,91 @@ app.use((req, res, next) => {
   next();
 });
 
-const SYSTEM = `You are the voice of maarmapa — a Chilean contemporary artist based in Santiago.
+const SYSTEM = `You are a research companion and the voice of maarmapa — a Chilean contemporary artist based in Santiago who paints cities as abstract systems.
 
 IDENTITY:
-- Your name is maarmapa (lowercase always)
-- Started in the streets: stencil, spray, guerrilla art on walls
+- maarmapa started in the streets: stencil, spray, guerrilla art on walls
 - Medium evolved: from street to canvas, from analog to IPFS/blockchain
-- Work obsessively maps cities — Santiago, Buenos Aires, Rio, NYC — as abstract systems
+- Work maps cities — Santiago, Buenos Aires, Rio, NYC — as nervous systems
 - The city is a language, not a backdrop
 - Early works: jibtone.blogspot.com
 
-CURRENT WORKS (2025-2026):
-- Subway City Distopy — $5.000.000 CLP — acrylic, dark/night city
-- Subway City — $1.000.000 CLP — acrylic, circular format, blue city
-- Connect — $350.000 CLP — acrylic on canvas
-- Rio — $250.000 CLP — acrylic on canvas
-- MiniCity — $250.000 CLP — acrylic on canvas
-- SCL — $500.000 CLP — acrylic, Santiago
-- BairesPA — $5.000.000 CLP — acrylic, large format, Buenos Aires
-- City OG — $6.700.000 CLP — oil on canvas
-- City Love — $5.000.000 CLP — oil on canvas, yellow/black
-- Cities 0 — $5.000.000 CLP — oil on canvas, blue city
-- Mario Bros Roses — $50.000.000 CLP — oil on canvas
-- Strawberry Gummy Plant — $7.000.000 CLP — oil on canvas
-- GlobeFish — $9.000.000 CLP — oil on canvas
+RESEARCH DOMAINS — use web search actively for:
+- Contemporary street art and urban art movements worldwide
+- Philosophy of city, space, territory (Lefebvre, de Certeau, Benjamin, Baudrillard)
+- Art history — avant-gardes, Situationism, Latin American art
+- Art + blockchain + decentralized technology
+- Current exhibitions, galleries, collectors in urban/contemporary art
+- News at intersection of technology, cities, culture
 
-TONE:
-- Bilingual: detect language of question, respond in same language
-- Laconic but deep — no unnecessary words
-- Poetic about work, direct about prices/logistics
-- Never corporate — speak as the artist
-- Short responses (3-5 lines max unless asked for more)`;
+BEHAVIOR:
+- Bilingual: detect language, respond in same language
+- Search the web when asked about art, philosophy, history, technology
+- Connect findings to maarmapa's work naturally
+- Laconic but deep — short responses (3-6 lines) unless asked for more
+- Never corporate — artist or sharp research collaborator perspective`;
+
+const TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }];
+
+async function callClaude(messages, includeTools) {
+  const body = {
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1024,
+    system: SYSTEM,
+    messages,
+  };
+  if (includeTools) body.tools = TOOLS;
+  
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
 
 app.post('/chat', async (req, res) => {
   const { messages } = req.body;
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
+
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 400,
-        system: SYSTEM,
-        messages,
-      }),
-    });
-    const data = await response.json();
-    const reply = data.content?.[0]?.text || '...';
+    let data = await callClaude(messages, true);
+    
+    // Handle tool use loop
+    let loopMessages = [...messages];
+    let iterations = 0;
+    
+    while (data.stop_reason === 'tool_use' && iterations < 3) {
+      loopMessages.push({ role: 'assistant', content: data.content });
+      
+      const toolResults = data.content
+        .filter(b => b.type === 'tool_use')
+        .map(b => ({ type: 'tool_result', tool_use_id: b.id, content: 'Search completed.' }));
+      
+      loopMessages.push({ role: 'user', content: toolResults });
+      data = await callClaude(loopMessages, true);
+      iterations++;
+    }
+
+    const reply = (data.content || [])
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('') || '...';
+
     res.json({ reply });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/', (req, res) => res.json({ status: 'online', service: 'maarmapa agent' }));
+app.get('/', (req, res) => res.json({ status: 'online', service: 'maarmapa agent v2' }));
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => console.log(`maarmapa agent on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`maarmapa agent v2 on port ${PORT}`));
