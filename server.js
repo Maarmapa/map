@@ -327,7 +327,7 @@ app.get('/digest/full', async (req, res) => {
         'Authorization': `Bearer ${process.env.GROK_KEY}`,
       },
       body: JSON.stringify({
-        model: 'grok-3',
+        model: 'grok-4-1-fast',
         tools: [{ type: 'web_search' }, { type: 'x_search' }],
         input: 'What are the most relevant conversations happening RIGHT NOW on X/Twitter about: street art, urban art, contemporary art market, Latin American art, art+blockchain? Give 4-5 key trends with context.',
       }),
