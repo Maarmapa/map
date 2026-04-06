@@ -1,4 +1,4 @@
-// maarmapa — Claude API proxy v6 — Substack RSS + Instagram + Grok x_search
+// maarmapa — Claude API proxy v6 stable
 const express = require('express');
 const app = express();
 app.use(express.json());
@@ -61,7 +61,11 @@ const TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }]
 async function callClaude(messages, system, maxTokens = 1024) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.MAARMAPA_AGENT, 'anthropic-version': '2023-06-01' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.MAARMAPA_AGENT,
+      'anthropic-version': '2023-06-01'
+    },
     body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: maxTokens, system, tools: TOOLS, messages }),
   });
   return res.json();
@@ -81,32 +85,6 @@ async function runWithTools(messages, system, maxTokens) {
   return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || '...';
 }
 
-async function callGrok(userMessage) {
-  try {
-    const res = await fetch('https://api.x.ai/v1/responses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROK_KEY}` },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast',
-        tools: [{ type: 'web_search' }, { type: 'x_search' }],
-        input: [
-          { role: 'system', content: 'Art intelligence assistant for maarmapa — Chilean urban artist. Search X/Twitter and web for street art, urban art, Latin American art, art+blockchain news. Same language as query.' },
-          { role: 'user', content: userMessage }
-        ],
-      }),
-    });
-    const text = await res.text();
-    const data = JSON.parse(text);
-    const output = data.output || [];
-    return output.filter(b => b.type === 'message').flatMap(b => b.content || []).filter(c => c.type === 'output_text').map(c => c.text).join('')
-      || output.map(b => b.content?.[0]?.text || '').join('')
-      || data.error || '...';
-  } catch(e) {
-    console.error('Grok error:', e.message);
-    return '...';
-  }
-}
-
 app.post('/chat', async (req, res) => {
   const { messages, mode } = req.body;
   if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages array required' });
@@ -116,8 +94,12 @@ app.post('/chat', async (req, res) => {
     let system = BASE_SYSTEM + ctx, maxTokens = 1024;
     if (mode === 'substack') { system = SUBSTACK_SYSTEM + ctx; maxTokens = 2048; }
     if (mode === 'digest') { system = DIGEST_SYSTEM + ctx; maxTokens = 2048; }
-    res.json({ reply: await runWithTools(messages, system, maxTokens) });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const reply = await runWithTools(messages, system, maxTokens);
+    res.json({ reply });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/post', async (req, res) => {
@@ -130,13 +112,9 @@ app.post('/post', async (req, res) => {
     const clean = raw.replace(/```json|```/g, '').trim();
     try { res.json({ post: JSON.parse(clean) }); }
     catch { res.json({ post: { title: topic, subtitle: '', tags: [], body: raw } }); }
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.post('/grok', async (req, res) => {
-  const { query } = req.body;
-  if (!query) return res.status(400).json({ error: 'query required' });
-  res.json({ reply: await callGrok(query), source: 'grok-4-1-fast + x_search' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/digest', async (req, res) => {
@@ -145,19 +123,9 @@ app.get('/digest', async (req, res) => {
     const ctx = buildSubstackContext(posts);
     const digest = await runWithTools([{ role: 'user', content: 'Generate the weekly art intelligence digest. Search for the most relevant developments from the past 7 days.' }], DIGEST_SYSTEM + ctx, 2048);
     res.json({ digest });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.get('/digest/full', async (req, res) => {
-  try {
-    const posts = await fetchSubstackRSS();
-    const ctx = buildSubstackContext(posts);
-    const [claudeDigest, grokPulse] = await Promise.all([
-      runWithTools([{ role: 'user', content: 'Generate the weekly art intelligence digest. Search for the most relevant developments from the past 7 days.' }], DIGEST_SYSTEM + ctx, 2048),
-      callGrok('What are the most relevant conversations on X RIGHT NOW about: street art, urban art, Latin American art, art+blockchain? 4-5 key trends.')
-    ]);
-    res.json({ digest: claudeDigest, xPulse: grokPulse, sources: ['Claude + web search', 'Grok + X/Twitter'] });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/substack', async (req, res) => {
@@ -166,7 +134,7 @@ app.get('/substack', async (req, res) => {
 
 app.get('/', (req, res) => res.json({
   status: 'online', service: 'maarmapa agent v6',
-  endpoints: { 'POST /chat': 'agent|substack|digest', 'POST /post': '{topic}', 'POST /grok': '{query}', 'GET /digest': 'weekly', 'GET /digest/full': 'claude+grok', 'GET /substack': 'posts' }
+  endpoints: { 'POST /chat': 'agent|substack|digest', 'POST /post': '{topic}', 'GET /digest': 'weekly', 'GET /substack': 'posts' }
 }));
 
 const PORT = process.env.PORT || 8080;
