@@ -63,7 +63,7 @@ async function callClaude(messages, system, maxTokens = 1024) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': process.env.map,
+      'x-api-key': process.env.MAARMAPA_AGENT,
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: maxTokens, system, tools: TOOLS, messages }),
