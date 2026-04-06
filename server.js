@@ -61,7 +61,7 @@ const TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }]
 async function callClaude(messages, system, maxTokens = 1024) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.API_KEY, 'anthropic-version': '2023-06-01' },
+    headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.MAARMAPA_AGENT, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: maxTokens, system, tools: TOOLS, messages }),
   });
   return res.json();
