@@ -34,7 +34,7 @@ async function fetchSubstackRSS() {
 
 function buildSubstackContext(posts) {
   if (!posts.length) return '';
-  return `\n\nPUBLISHED SUBSTACK POSTS (don't repeat these angles):\n` + posts.map((p,i) => `${i+1}. "${p.title}" — ${p.desc}`).join('\n');
+  return `\n\nPUBLISHED SUBSTACK POSTS:\n` + posts.map((p,i) => `${i+1}. "${p.title}" — ${p.desc}`).join('\n');
 }
 
 const INSTAGRAM_CONTEXT = `
