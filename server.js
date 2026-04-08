@@ -139,3 +139,48 @@ app.get('/', (req, res) => res.json({
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => console.log(`maarmapa agent v6 on port ${PORT}`));
+
+// ── GROK / X.AI ───────────────────────────────────────
+async function callGrok(userMessage) {
+  try {
+    const res = await fetch('https://api.x.ai/v1/responses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROK_KEY}` },
+      body: JSON.stringify({
+        model: 'grok-4-1-fast',
+        tools: [{ type: 'web_search' }, { type: 'x_search' }],
+        input: [
+          { role: 'system', content: 'Art intelligence assistant for maarmapa — Chilean urban artist. Search X/Twitter and web for street art, urban art, Latin American art, art+blockchain news. Same language as query.' },
+          { role: 'user', content: userMessage }
+        ],
+      }),
+    });
+    const text = await res.text();
+    const data = JSON.parse(text);
+    const output = data.output || [];
+    return output.filter(b => b.type === 'message').flatMap(b => b.content || []).filter(c => c.type === 'output_text').map(c => c.text).join('')
+      || output.map(b => b.content?.[0]?.text || '').join('')
+      || data.error || '...';
+  } catch(e) {
+    console.error('Grok error:', e.message);
+    return '...';
+  }
+}
+
+app.post('/grok', async (req, res) => {
+  const { query } = req.body;
+  if (!query) return res.status(400).json({ error: 'query required' });
+  res.json({ reply: await callGrok(query), source: 'grok-4-1-fast + x_search' });
+});
+
+app.get('/digest/full', async (req, res) => {
+  try {
+    const posts = await fetchSubstackRSS();
+    const ctx = buildSubstackContext(posts);
+    const [claudeDigest, grokPulse] = await Promise.all([
+      runWithTools([{ role: 'user', content: 'Generate the weekly art intelligence digest. Search for the most relevant developments from the past 7 days.' }], DIGEST_SYSTEM + ctx, 2048),
+      callGrok('What are the most relevant conversations on X RIGHT NOW about: street art, urban art, Latin American art, art+blockchain? 4-5 key trends.')
+    ]);
+    res.json({ digest: claudeDigest, xPulse: grokPulse, sources: ['Claude + web search', 'Grok + X/Twitter'] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
