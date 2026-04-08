@@ -56,7 +56,7 @@ const POST_SYSTEM = `Substack post generator for maarmapa. OUTPUT strict JSON on
 {"title":"...","subtitle":"...","tags":["tag1","tag2"],"body":"markdown..."}
 Search web. 500-700 words. Hook→Contexto→Presente→Cierre. 2-3 real references. Spanish. End with question.${INSTAGRAM_CONTEXT}`;
 
-const TOOLS = [];
+const TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
 
 async function callClaude(messages, system, maxTokens = 1024) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -66,14 +66,22 @@ async function callClaude(messages, system, maxTokens = 1024) {
       'x-api-key': process.env.API_KEY,
       'anthropic-version': '2023-06-01'
     },
-    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, system, messages }),
+    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: maxTokens, system, tools: TOOLS, messages }),
   });
   return res.json();
 }
 
 async function runWithTools(messages, system, maxTokens) {
-  const data = await callClaude(messages, system, maxTokens);
-  console.log('Claude response:', JSON.stringify(data).slice(0, 200));
+  let data = await callClaude(messages, system, maxTokens);
+  let loopMessages = [...messages];
+  let iterations = 0;
+  while (data.stop_reason === 'tool_use' && iterations < 5) {
+    loopMessages.push({ role: 'assistant', content: data.content });
+    const toolResults = data.content.filter(b => b.type === 'tool_use').map(b => ({ type: 'tool_result', tool_use_id: b.id, content: 'Search completed.' }));
+    loopMessages.push({ role: 'user', content: toolResults });
+    data = await callClaude(loopMessages, system, maxTokens);
+    iterations++;
+  }
   return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || '...';
 }
 
