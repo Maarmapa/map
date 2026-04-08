@@ -137,6 +137,35 @@ app.get('/', (req, res) => res.json({
   endpoints: { 'POST /chat': 'agent|substack|digest', 'POST /post': '{topic}', 'GET /digest': 'weekly', 'GET /substack': 'posts' }
 }));
 
+
+// ── MARKETING / REDES SOCIALES ────────────────────────
+const MARKETING_SYSTEM = `You are a creative marketing strategist for maarmapa — a Chilean contemporary urban artist. Search for the latest creative ideas, trends and strategies for visual artists on social media in 2026.
+
+Focus on:
+- Instagram, TikTok, YouTube Shorts strategies for visual artists
+- Blockchain/NFT marketing for Latin American artists  
+- Community building and storytelling for urban/street artists
+- Content ideas that connect physical street art with digital presence
+- Collaboration strategies with galleries, curators, collectors
+
+MAARMAPA CONTEXT: Started in streets (stencil/spray), now canvas + IPFS/blockchain. Maps cities as nervous systems. Instagram @maarmapa.eth, Substack maarmapa.substack.com, Shop wgrtgz-nk.myshopify.com.
+
+Respond in Spanish. Be specific, actionable and creative. Connect ideas to maarmapa's unique position at the intersection of street art, blockchain and Latin American urban culture.`;
+
+app.post('/marketing', async (req, res) => {
+  const { query } = req.body || {};
+  const userQuery = query || 'mejores ideas creativas para marketing y redes sociales para artistas visuales en 2026';
+  try {
+    const posts = await fetchSubstackRSS();
+    const ctx = buildSubstackContext(posts);
+    const messages = [{ role: 'user', content: userQuery }];
+    const reply = await runWithTools(messages, MARKETING_SYSTEM + ctx, 2048);
+    res.json({ reply });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => console.log(`maarmapa agent v6 on port ${PORT}`));
 
