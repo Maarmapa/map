@@ -154,13 +154,15 @@ Respond in Spanish. Be specific, actionable and creative. Connect ideas to maarm
 
 app.post('/marketing', async (req, res) => {
   const { query } = req.body || {};
-  const userQuery = query || 'mejores ideas creativas para marketing y redes sociales para artistas visuales en 2026';
+  const userQuery = query || 'mejores ideas creativas premiadas Cannes Lions marketing redes sociales 2026';
   try {
     const posts = await fetchSubstackRSS();
     const ctx = buildSubstackContext(posts);
-    const messages = [{ role: 'user', content: userQuery }];
-    const reply = await runWithTools(messages, MARKETING_SYSTEM + ctx, 2048);
-    res.json({ reply });
+    const [claudeReply, grokPulse] = await Promise.all([
+      runWithTools([{ role: 'user', content: userQuery }], MARKETING_SYSTEM + ctx, 2048),
+      callGrok(`Busca en X/Twitter las campanas de marketing mas creativas y virales de 2026: ${userQuery}`)
+    ]);
+    res.json({ reply: claudeReply, xPulse: grokPulse });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
