@@ -52,9 +52,36 @@ const SUBSTACK_SYSTEM = `Editorial intelligence for maarmapa's Substack. Sharp, 
 
 const DIGEST_SYSTEM = `Weekly art intelligence digest for maarmapa. Search past 7 days: street art, Latin American art, art+blockchain, urbanism philosophy, gallery news. Per item: title, 2-3 line summary, why relevant, Substack angle, Instagram accounts. 5-8 items ranked by relevance.${INSTAGRAM_CONTEXT}`;
 
-const POST_SYSTEM = `Substack post generator for maarmapa. OUTPUT strict JSON only:
-{"title":"...","subtitle":"...","tags":["tag1","tag2"],"body":"markdown..."}
-Search web. 500-700 words. Hook→Contexto→Presente→Cierre. 2-3 real references. Spanish. End with question.${INSTAGRAM_CONTEXT}`;
+const POST_SYSTEM = `You are a content generator for maarmapa — Chilean contemporary urban artist. Generate editorial content about art, culture, blockchain and cities. Search the web for real, current information about the topic.
+
+OUTPUT strict JSON only, no preamble, no markdown fences:
+{
+  "title": "post title",
+  "subtitle": "one line subtitle",
+  "tags": ["tag1", "tag2", "tag3"],
+  "body": "full Substack post in markdown, 500-700 words, Hook→Contexto→Presente→Cierre, end with open question",
+  "thumbnail_prompt": "detailed image generation prompt in English for the post thumbnail, editorial/dark aesthetic, no people, conceptual",
+  "instagram": {
+    "caption": "short instagram caption in Spanish, max 150 chars, lowercase, end with relevant hashtags",
+    "slides": [
+      "Slide 1 text (hook, max 10 words)",
+      "Slide 2 text",
+      "Slide 3 text",
+      "Slide 4 text",
+      "Slide 5 text",
+      "Slide 6 text (key question or insight)",
+      "Slide 7 text (CTA or conclusion)"
+    ]
+  }
+}
+
+RULES:
+- This is EDITORIAL content, not promotional. Do not mix with maarmapa artworks unless the topic is specifically about them.
+- Search web for current facts, dates, names, context
+- Spanish for body and instagram. English for thumbnail_prompt.
+- Thumbnail must be conceptual, dark editorial aesthetic, no faces/people
+- Instagram slides must be punchy, minimal text, designed to stop the scroll
+- ONLY output valid JSON, nothing else`;
 
 const TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
 
@@ -164,6 +191,135 @@ app.post('/marketing', async (req, res) => {
     ]);
     res.json({ reply: claudeReply, xPulse: grokPulse });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ── CONTENT FACTORY ──────────────────────────────────
+const FACTORY_SYSTEM = `You are a content factory for maarmapa — Chilean contemporary urban artist and art intelligence voice. Generate complete editorial content packages about art, culture, blockchain and cities.
+
+Search the web for current, real information about the topic before generating.
+
+OUTPUT strict JSON only, no preamble, no markdown fences:
+{
+  "title": "compelling post title",
+  "subtitle": "one sharp line",
+  "tags": ["tag1", "tag2", "tag3"],
+  "body": "full Substack post in markdown, 500-700 words, Spanish, Hook→Contexto→Presente→Cierre, 2-3 real references, end with open question",
+  "thumbnail_prompt": "detailed English prompt for Grok image generation: Square 1:1 format editorial Instagram slide. Dark background. Strict center-safe text zone with 100px margins on ALL sides. [describe specific background image at 10-15% opacity, blurred, film grain, cinematic vignette]. Typography: top-left small caps label in dark gray. Large bold condensed Bebas Neue style text left-aligned in white fitting inside margins: [MAIN HEADLINE]. Bottom left small gray subtext. Bottom right T/07 faint. ALL text inside 100px safe margins. No watermarks. Dark cinematic editorial style.",
+  "slides": [
+    {
+      "num": "01",
+      "prompt": "Square 1:1 editorial Instagram slide. [full Grok image prompt with safe margins, background, typography, film grain, specific text for this slide]"
+    },
+    { "num": "02", "prompt": "..." },
+    { "num": "03", "prompt": "..." },
+    { "num": "04", "prompt": "..." },
+    { "num": "05", "prompt": "..." },
+    { "num": "06", "prompt": "..." },
+    { "num": "07", "prompt": "..." }
+  ],
+  "instagram_caption": "short punchy caption in Spanish lowercase, max 150 chars, relevant hashtags at end"
+}
+
+RULES:
+- Search web first for real facts, dates, quotes
+- Editorial content only — do not mix with maarmapa artworks unless topic is specifically about them
+- Each slide prompt must be self-contained and complete for Grok image generation
+- Slides tell a story: Hook → Context → Data → Quote → Analysis → Key Question → CTA
+- Slide 07 always ends with @maarmapa.eth handle
+- ONLY output valid JSON`;
+
+async function generateImages(slides) {
+  if (!process.env.GROK_KEY) return slides.map(s => ({ ...s, url: null }));
+  
+  const results = await Promise.allSettled(
+    slides.map(async (slide) => {
+      try {
+        const res = await fetch('https://api.x.ai/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': \`Bearer \${process.env.GROK_KEY}\`
+          },
+          body: JSON.stringify({
+            model: 'grok-2-image',
+            prompt: slide.prompt,
+            n: 1,
+            response_format: 'url'
+          })
+        });
+        const data = await res.json();
+        return { num: slide.num, prompt: slide.prompt, url: data.data?.[0]?.url || null };
+      } catch(e) {
+        return { num: slide.num, prompt: slide.prompt, url: null };
+      }
+    })
+  );
+  
+  return results.map(r => r.status === 'fulfilled' ? r.value : { url: null });
+}
+
+app.post('/factory', async (req, res) => {
+  const { topic } = req.body;
+  if (!topic) return res.status(400).json({ error: 'topic required' });
+  
+  console.log('Factory generating for:', topic);
+  
+  try {
+    // Step 1: Claude generates all content + prompts
+    const posts = await fetchSubstackRSS();
+    const ctx = buildSubstackContext(posts);
+    const raw = await runWithTools(
+      [{ role: 'user', content: \`Generate a complete content package about: \${topic}\` }],
+      FACTORY_SYSTEM + ctx,
+      4096
+    );
+    
+    const clean = raw.replace(/\`\`\`json|\`\`\`/g, '').trim();
+    let content;
+    try {
+      content = JSON.parse(clean);
+    } catch(e) {
+      return res.status(500).json({ error: 'JSON parse failed', raw: raw.slice(0, 500) });
+    }
+    
+    // Step 2: Grok generates thumbnail + all 7 slide images in parallel
+    console.log('Generating images with Grok...');
+    const [thumbnailResult, slidesWithImages] = await Promise.all([
+      // Thumbnail
+      (async () => {
+        try {
+          const r = await fetch('https://api.x.ai/v1/images/generations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': \`Bearer \${process.env.GROK_KEY}\` },
+            body: JSON.stringify({ model: 'grok-2-image', prompt: content.thumbnail_prompt, n: 1, response_format: 'url' })
+          });
+          const d = await r.json();
+          return d.data?.[0]?.url || null;
+        } catch(e) { return null; }
+      })(),
+      // 7 slides
+      generateImages(content.slides || [])
+    ]);
+    
+    res.json({
+      topic,
+      substack: {
+        title: content.title,
+        subtitle: content.subtitle,
+        tags: content.tags,
+        body: content.body
+      },
+      thumbnail_url: thumbnailResult,
+      carousel: slidesWithImages,
+      instagram_caption: content.instagram_caption,
+      generated_at: new Date().toISOString()
+    });
+    
+  } catch (err) {
+    console.error('Factory error:', err);
     res.status(500).json({ error: err.message });
   }
 });
