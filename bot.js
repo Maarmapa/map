@@ -3,8 +3,6 @@
 
 const AGENT_URL = 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const HIGGSFIELD_KEY = process.env.HIGGSFIELD_KEY;
-
 // ── TELEGRAM POLLING ──────────────────────────────────
 async function getUpdates(offset = 0) {
   const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getUpdates?offset=${offset}&timeout=30`);
@@ -39,25 +37,49 @@ async function sendVideo(chatId, url, caption = '') {
 // ── HIGGSFIELD IMAGE TO VIDEO ─────────────────────────
 async function imageToVideo(imageUrl, motionPrompt) {
   try {
-    const res = await fetch('https://api.higgsfield.ai/v1/video/image-to-video', {
+    // Runway Gen-3 Alpha image-to-video
+    const res = await fetch('https://api.runwayml.com/v1/image_to_video', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${HIGGSFIELD_KEY}`
+        'Authorization': `Bearer ${process.env.RUNWAY_KEY}`,
+        'X-Runway-Version': '2024-11-06'
       },
       body: JSON.stringify({
-        image_url: imageUrl,
-        prompt: motionPrompt,
-        duration: 3,
-        aspect_ratio: '9:16'
+        model: 'gen3a_turbo',
+        promptImage: imageUrl,
+        promptText: motionPrompt,
+        ratio: '768:1344',
+        duration: 5
       })
     });
     const data = await res.json();
-    return data.video_url || data.url || null;
+    console.log('Runway response:', JSON.stringify(data).slice(0, 200));
+    if (data.id) return await pollRunway(data.id);
+    return null;
   } catch(e) {
-    console.error('Higgsfield error:', e.message);
+    console.error('Runway error:', e.message);
     return null;
   }
+}
+
+async function pollRunway(taskId) {
+  for (let i = 0; i < 24; i++) {
+    await new Promise(r => setTimeout(r, 10000));
+    try {
+      const res = await fetch(`https://api.runwayml.com/v1/tasks/${taskId}`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.RUNWAY_KEY}`,
+          'X-Runway-Version': '2024-11-06'
+        }
+      });
+      const data = await res.json();
+      console.log('Runway poll status:', data.status);
+      if (data.status === 'SUCCEEDED') return data.output?.[0] || null;
+      if (data.status === 'FAILED') return null;
+    } catch(e) { continue; }
+  }
+  return null;
 }
 
 // ── GROK IMAGE GENERATION ─────────────────────────────
@@ -84,11 +106,40 @@ async function generateImage(prompt) {
 }
 
 // ── MAIN FACTORY ──────────────────────────────────────
+function progressBar(current, total) {
+  const filled = Math.round((current / total) * 10);
+  const empty = 10 - filled;
+  return '[' + '█'.repeat(filled) + '░'.repeat(empty) + '] ' + Math.round((current / total) * 100) + '%';
+}
+
+async function editMessage(chatId, msgId, text) {
+  try {
+    await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/editMessageText', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, message_id: msgId, text, parse_mode: 'Markdown' })
+    });
+  } catch(e) {}
+}
+
+async function sendAndGetId(chatId, text) {
+  const res = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' })
+  });
+  const data = await res.json();
+  return data.result?.message_id;
+}
+
 async function runFactory(chatId, input) {
-  await sendMessage(chatId, '⚙️ *Generando contenido...*\n\nEsto toma 2-3 minutos.');
+  const total = 20;
+  let step = 0;
+  const msgId = await sendAndGetId(chatId, '⚙️ *maarmapa factory*\n' + progressBar(0, total) + ' iniciando...');
 
   // Step 1: Claude genera texto + prompts
-  await sendMessage(chatId, '1️⃣ Claude analizando el tema...');
+  step = 2;
+  await editMessage(chatId, msgId, '⚙️ *maarmapa factory*\n' + progressBar(step, total) + ' Claude analizando...');
   const factoryRes = await fetch(`${AGENT_URL}/factory`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -97,7 +148,7 @@ async function runFactory(chatId, input) {
   const factory = await factoryRes.json();
 
   if (factory.error) {
-    await sendMessage(chatId, `❌ Error: ${factory.error}`);
+    await editMessage(chatId, msgId, '❌ Error: ' + factory.error);
     return;
   }
 
@@ -110,18 +161,25 @@ async function runFactory(chatId, input) {
     await sendPhoto(chatId, factory.thumbnail_url, '🖼 Thumbnail Substack');
   }
 
-  // Step 3: Generar slides carrusel (ya incluidas en factory)
-  await sendMessage(chatId, '3️⃣ Generando slides carrusel...');
+  // Step 3: Slides
+  step = 10;
+  await editMessage(chatId, msgId, '⚙️ *maarmapa factory*
+' + progressBar(step, total) + ' 📸 Enviando slides...');
   const carousel = factory.carousel || [];
+  let slidesOk = 0;
   for (const slide of carousel.slice(0, 7)) {
     if (slide.url) {
-      await sendPhoto(chatId, slide.url, `Slide ${slide.num}/07`);
+      await sendPhoto(chatId, slide.url, 'Slide ' + slide.num + '/07');
+      slidesOk++;
+      await editMessage(chatId, msgId, '⚙️ *maarmapa factory*
+' + progressBar(10 + slidesOk, total) + ' 📸 Slide ' + slidesOk + '/7');
       await new Promise(r => setTimeout(r, 500));
     }
   }
 
-  // Step 4: Generar clips de reel con Higgsfield
-  await sendMessage(chatId, '4️⃣ Convirtiendo imágenes a video con Higgsfield...');
+  // Step 4: Runway video
+  await editMessage(chatId, msgId, '⚙️ *maarmapa factory*
+' + progressBar(17, total) + ' 🎬 Generando clips Runway...');
   const motionPrompts = [
     'slow cinematic zoom in, dramatic lighting pulse, film grain effect',
     'subtle camera drift left, text glows softly, dark atmospheric',
@@ -136,17 +194,24 @@ async function runFactory(chatId, input) {
   for (let i = 0; i < Math.min(carousel.length, 7); i++) {
     const slide = carousel[i];
     if (slide?.url) {
-      await sendMessage(chatId, `🎬 Clip ${i+1}/7...`);
+      await editMessage(chatId, msgId, '⚙️ *maarmapa factory*
+' + progressBar(17 + i, total) + ' 🎬 Clip ' + (i+1) + '/7 Runway...');
       const videoUrl = await imageToVideo(slide.url, motionPrompts[i]);
       if (videoUrl) {
         videoUrls.push(videoUrl);
-        await sendVideo(chatId, videoUrl, `Clip reel ${i+1}/7`);
+        await sendVideo(chatId, videoUrl, '🎬 Clip ' + (i+1) + '/7');
       }
-      await new Promise(r => setTimeout(r, 1000));
     }
   }
 
-  await sendMessage(chatId, `✅ *Contenido generado completo*\n\n📊 Slides: ${carousel.filter(s => s.url).length}/7\n🎬 Clips: ${videoUrls.length}/7\n\n_Combina los clips en Capcut o CapCut para el reel final._`);
+  await editMessage(chatId, msgId, '⚙️ *maarmapa factory*
+' + progressBar(total, total) + ' ✅ Completado');
+  await sendMessage(chatId, '✅ *Listo*
+
+📸 Slides: ' + slidesOk + '/7
+🎬 Clips: ' + videoUrls.length + '/7
+
+_Une los clips en CapCut para el reel._');
 }
 
 // ── COMMAND HANDLER ───────────────────────────────────
