@@ -220,4 +220,12 @@ async function startBot() {
   }
 }
 
+// ── HTTP SERVER (required by Render) ─────────────────
+const http = require('http');
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('maarmapa bot online');
+}).listen(PORT, () => console.log(`Bot HTTP on port ${PORT}`));
+
 startBot();
