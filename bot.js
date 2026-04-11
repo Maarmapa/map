@@ -195,14 +195,15 @@ async function runFactory(chatId, topic) {
   // 5. Runway clips (optional)
   let clips = 0;
   if (process.env.RUNWAY_KEY && slideUrls.length > 0) {
-    const motions = [
-      'slow cinematic zoom in, dramatic lighting, film grain',
-      'subtle camera drift left, dark atmospheric',
-      'gentle vertical pan, spotlight flicker',
-      'slow zoom out, cinematic vignette',
-      'static hold, light flicker',
-      'slow push in, minimal motion',
-      'fade to black, cinematic end'
+     const motions = [
+       'Instagram Reel editorial transition. Slide starts static and sharp — headline text fully legible. After 1 second: text slides out left with motion blur while new background element fades in. Typography always readable at start and end frames. Dark cinematic editorial. Coherent design throughout.',
+       'Instagram Reel editorial transition. White slide starts sharp — black headline fully legible. After 1 second: text scales up dramatically and blurs out while slide brightens to overexposed white. Clean typographic impact. Start and end frames sharp and designed.',
+       'Instagram Reel editorial transition. Dark slide starts static — number and stats fully legible. After 1 second: numbers animate counting up fast then blur. Vertical white line slides in from left with energy. Cinematic editorial motion. Legible at start and end.',
+       'Instagram Reel editorial transition. Quote slide starts static — italic text fully readable centered. After 1 second: text fades and drifts upward slowly like smoke. Contemplative mood. Background deepens to black. Poetic editorial motion. Legible at start.',
+       'Instagram Reel editorial transition. Grid slide starts static — all 4 cells legible. After 1 second: cells flash sequentially like a reveal animation. Each cell highlights then dims. Brutalist editorial rhythm. All text readable at start frame.',
+       'Instagram Reel editorial transition. White slide starts static — question text fully legible centered. After 1 second: letters scatter outward from center like an explosion. Question mark stays last. Clean kinetic typography. Legible at start frame.',
+       'Instagram Reel editorial transition. Dark finale slide starts static — handle and hashtags legible. After 1 second: background city pattern brightens and pulses. Text holds sharp. Slow cinematic fade. Editorial brand moment. @maarmapa.eth clear and readable throughout.'
+     ];
     ];
     for (let i = 0; i < Math.min(slideUrls.length, 7); i++) {
       await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i+1) + '/' + slideUrls.length + ' Runway..._');
