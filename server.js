@@ -83,7 +83,7 @@ RULES:
 - Instagram slides must be punchy, minimal text, designed to stop the scroll
 - ONLY output valid JSON, nothing else`;
 
-const TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
+const TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }];
 
 async function callClaude(messages, system, maxTokens = 1024) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -93,7 +93,7 @@ async function callClaude(messages, system, maxTokens = 1024) {
       'x-api-key': process.env.API_KEY,
       'anthropic-version': '2023-06-01'
     },
-    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: maxTokens, system, tools: TOOLS, messages }),
+    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, system, tools: TOOLS, messages }),
   });
   return res.json();
 }
