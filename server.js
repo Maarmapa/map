@@ -241,7 +241,7 @@ async function generateImages(slides) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': \`Bearer \${process.env.GROK_KEY}\`
+            'Authorization': `Bearer ${process.env.GROK_KEY}`
           },
           body: JSON.stringify({
             model: 'grok-2-image',
@@ -272,12 +272,12 @@ app.post('/factory', async (req, res) => {
     const posts = await fetchSubstackRSS();
     const ctx = buildSubstackContext(posts);
     const raw = await runWithTools(
-      [{ role: 'user', content: \`Generate a complete content package about: \${topic}\` }],
+      [{ role: 'user', content: `Generate a complete content package about: ${topic}` }],
       FACTORY_SYSTEM + ctx,
       4096
     );
     
-    const clean = raw.replace(/\`\`\`json|\`\`\`/g, '').trim();
+    const clean = raw.replace(/```json|```/g, '').trim();
     let content;
     try {
       content = JSON.parse(clean);
@@ -293,7 +293,7 @@ app.post('/factory', async (req, res) => {
         try {
           const r = await fetch('https://api.x.ai/v1/images/generations', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': \`Bearer \${process.env.GROK_KEY}\` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROK_KEY}` },
             body: JSON.stringify({ model: 'grok-2-image', prompt: content.thumbnail_prompt, n: 1, response_format: 'url' })
           });
           const d = await r.json();
