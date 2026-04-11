@@ -86,10 +86,34 @@ async function runway(imageUrl, prompt) {
 }
 
 // ── FACTORY PASO A PASO ───────────────────────────────
-async function runFactory(chatId, topic) {
-  const msgId = await sendMessage(chatId, '⚙️ *maarmapa factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+async function wakeAgent() {
+  for (let i = 0; i < 8; i++) {
+    try {
+      const res = await fetch(AGENT_URL + '/');
+      const text = await res.text();
+      if (text.includes('maarmapa agent')) return true;
+    } catch(e) {}
+    await new Promise(r => setTimeout(r, 10000));
+  }
+  return false;
+}
 
-  // PASO 1: Claude genera texto + prompts de imagen
+async function runFactory(chatId, topic) {
+  const msgId = await sendMessage(chatId, '⚙️ *maarmapa factory*\n' + bar(0, 10) + '\n_Despertando agente..._');
+
+  const awake = await wakeAgent();
+  if (!awake) {
+    await editMessage(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto con /post de nuevo.');
+    return;
+  }
+
+  await editMessage(chatId, msgId, '⚙️ *maarmapa factory*\n' + bar(1, 10) + '\n_Agente despierto ✅_');
+
+  // PASO 1: Despertar agente + Claude genera texto
+  await editMessage(chatId, msgId, '⚙️ *maarmapa factory*\n' + bar(1, 10) + '\n_Despertando agente..._');
+  try { await fetch(AGENT_URL + '/'); } catch(e) {}
+  await new Promise(r => setTimeout(r, 4000));
+
   await editMessage(chatId, msgId, '⚙️ *maarmapa factory*\n' + bar(1, 10) + '\n_Claude analizando tema..._');
 
   let postData;
@@ -99,10 +123,16 @@ async function runFactory(chatId, topic) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic })
     });
-    const raw = await res.json();
-    postData = raw.post || raw;
+    const text = await res.text();
+    try {
+      const raw = JSON.parse(text);
+      postData = raw.post || raw;
+    } catch(e) {
+      await editMessage(chatId, msgId, '❌ Respuesta inesperada: ' + text.slice(0, 150));
+      return;
+    }
   } catch(e) {
-    await editMessage(chatId, msgId, '❌ Error llamando al agente: ' + e.message);
+    await editMessage(chatId, msgId, '❌ Error: ' + e.message);
     return;
   }
 
