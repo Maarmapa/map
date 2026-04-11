@@ -52,7 +52,7 @@ const SUBSTACK_SYSTEM = `Editorial intelligence for maarmapa's Substack. Sharp, 
 
 const DIGEST_SYSTEM = `Weekly art intelligence digest for maarmapa. Search past 7 days: street art, Latin American art, art+blockchain, urbanism philosophy, gallery news. Per item: title, 2-3 line summary, why relevant, Substack angle, Instagram accounts. 5-8 items ranked by relevance.${INSTAGRAM_CONTEXT}`;
 
-const POST_SYSTEM = `You are a content generator for maarmapa — Chilean contemporary urban artist. Generate editorial content about art, culture, blockchain and cities. Search the web for real, current information about the topic.
+const POST_SYSTEM = `You are an expert editorial writer for maarmapa — Chilean contemporary urban artist and art intelligence voice. Generate high-quality, complete Substack posts about art, culture, marketing, blockchain and cities. Always search the web for real, current, specific information before writing. Write complete, untruncated posts with full paragraphs. Never use ellipsis or cut sentences mid-thought.
 
 OUTPUT strict JSON only, no preamble, no markdown fences:
 {
@@ -135,7 +135,7 @@ app.post('/post', async (req, res) => {
   try {
     const posts = await fetchSubstackRSS();
     const ctx = buildSubstackContext(posts);
-    const raw = await runWithTools([{ role: 'user', content: `Generate a complete Substack post about: ${topic}` }], POST_SYSTEM + ctx, 2048);
+    const raw = await runWithTools([{ role: 'user', content: `Generate a complete Substack post about: ${topic}` }], POST_SYSTEM + ctx, 4096);
     const clean = raw.replace(/```json|```/g, '').trim();
     try { res.json({ post: JSON.parse(clean) }); }
     catch { res.json({ post: { title: topic, subtitle: '', tags: [], body: raw } }); }
