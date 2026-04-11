@@ -70,21 +70,24 @@ async function grokImg(prompt) {
 async function runwayVideo(imageUrl, prompt) {
   if (!process.env.RUNWAY_KEY) return null;
   try {
-    const res = await fetch('https://api.runwayml.com/v1/image_to_video', {
+    const res = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
-      body: JSON.stringify({ model: 'gen3a_turbo', promptImage: imageUrl, promptText: prompt, ratio: '768:1344', duration: 5 })
+      body: JSON.stringify({ model: 'gen4.5', promptImage: imageUrl, promptText: prompt, ratio: '720:1280', duration: 5 })
     });
-    const d = await res.json();
-    if (!d.id) return null;
-    for (let i = 0; i < 24; i++) {
+    const text = await res.text();
+    console.log('Runway:', text.slice(0, 150));
+    let d; try { d = JSON.parse(text); } catch(e) { return null; }
+    if (!d.id) { console.error('Runway no id:', JSON.stringify(d).slice(0,100)); return null; }
+    for (let i = 0; i < 30; i++) {
       await new Promise(r => setTimeout(r, 10000));
-      const p = await fetch('https://api.runwayml.com/v1/tasks/' + d.id, {
+      const p = await fetch('https://api.dev.runwayml.com/v1/tasks/' + d.id, {
         headers: { 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' }
       });
       const t = await p.json();
+      console.log('Runway poll ' + i + ':', t.status);
       if (t.status === 'SUCCEEDED') return t.output?.[0] || null;
-      if (t.status === 'FAILED') return null;
+      if (t.status === 'FAILED') { console.error('Runway failed:', t.failure); return null; }
     }
   } catch(e) { return null; }
 }
