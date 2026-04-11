@@ -59,7 +59,7 @@ async function grokImg(prompt) {
     const res = await fetch('https://api.x.ai/v1/images/generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.GROK_KEY },
-      body: JSON.stringify({ model: 'grok-2-image', prompt, n: 1, response_format: 'url' })
+      body: JSON.stringify({ model: 'grok-imagine-image', prompt, n: 1, response_format: 'url' })
     });
     const d = await res.json();
     return d.data?.[0]?.url || null;
