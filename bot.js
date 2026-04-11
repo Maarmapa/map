@@ -148,24 +148,30 @@ async function runFactory(chatId, topic) {
   await send(chatId, '📝 *' + title + '*\n\n' + body + '...\n\n_Caption:_ ' + caption);
 
   // 3. Thumbnail
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4, 10) + '\n_Generando thumbnail..._');
   if (postData.thumbnail_prompt) {
-    await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4, 10) + '\n_Generando thumbnail..._');
     const thumbUrl = await grokImg(postData.thumbnail_prompt);
     if (thumbUrl) await photo(chatId, thumbUrl, '🖼 Thumbnail Substack');
   }
 
-  // 4. Slides
-  const slides = postData.slides || [];
+  // 4. Slides — use from API or generate defaults
   const slideUrls = [];
-  for (let i = 0; i < Math.min(slides.length, 7); i++) {
+  const apiSlides = (postData.slides || []).map(s => s?.prompt).filter(Boolean);
+  const t = (postData.title || topic).toUpperCase().slice(0, 40);
+  const defaultPrompts = [
+    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. Ghost city grid 10% opacity film grain. Bold Bebas Neue white: ' + t + ' 3 lines massive. 01/07 faint. Dark cinematic.',
+    'Square 1:1 editorial Instagram. White bg. Safe zone 100px all sides. Bold black Bebas Neue left-aligned massive 3 lines key insight about ' + t + '. 02/07 faint. High contrast editorial.',
+    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. Abstract data viz 8% opacity film grain. Large white bold numbers/stats. 03/07. Dark cinematic.',
+    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. Large italic serif quote light gray centered about ' + t + '. Attribution small dark gray. 04/07. Cinematic editorial.',
+    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. 2x2 brutalist grid 4 dark cells each with label and bold white condensed text key concept. 05/07. Brutalist.',
+    'Square 1:1 editorial Instagram. White bg. Safe zone 100px all sides. Massive centered Bebas Neue black provocative question 4 lines about ' + t + '. 06/07 faint. Minimalist powerful.',
+    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. Faint urban pattern 5% opacity film grain. Bold white Bebas Neue conclusion 2 lines. Bottom @maarmapa.eth dark. Hashtags. 07/07.'
+  ];
+  const finalPrompts = apiSlides.length >= 7 ? apiSlides : defaultPrompts;
+  for (let i = 0; i < Math.min(finalPrompts.length, 7); i++) {
     await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i+1) + '/7..._');
-    if (slides[i]?.prompt) {
-      const url = await grokImg(slides[i].prompt);
-      if (url) {
-        slideUrls.push(url);
-        await photo(chatId, url, 'Slide ' + (i+1) + '/7');
-      }
-    }
+    const url = await grokImg(finalPrompts[i]);
+    if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i+1) + '/7'); }
   }
 
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_' + slideUrls.length + ' slides listos_');
@@ -266,6 +272,4 @@ async function poll() {
 
 // HTTP server for Render
 require('http').createServer((q, s) => { s.writeHead(200); s.end('ok'); }).listen(process.env.PORT || 3000);
-poll();git add bot.js
-git commit -m "bot v3 spinner real time"
-git push origin main
+poll();
