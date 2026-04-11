@@ -141,11 +141,21 @@ async function runFactory(chatId, topic) {
 
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n✅ _Texto generado_');
 
-  // Send text
-  const title = postData.title || topic;
-  const body = (postData.body || '').slice(0, 600);
-  const caption = postData.instagram_caption || '';
-  await send(chatId, '📝 *' + title + '*\n\n' + body + '...\n\n_Caption:_ ' + caption);
+  // Send text — clean cite tags and headers
+  const title = (postData.title || topic).slice(0, 120);
+  const body = (postData.body || '')
+    .replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '')
+    .replace(/## [^\n]+\n?/g, '\n')
+    .replace(/# [^\n]+\n?/g, '\n')
+    .replace(/\*\*/g, '')
+    .replace(/biena([^l])/g, 'bienal$1')
+    .replace(/\s{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 900);
+  const caption = (postData.instagram_caption || '').replace(/<[^>]*>/g, '').slice(0, 250);
+  await send(chatId, '📝 *' + title + '*\n\n' + body + '...');
+  await new Promise(r => setTimeout(r, 500));
+  if (caption) await send(chatId, '📌 _Caption:_\n' + caption);
 
   // 3. Thumbnail
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4, 10) + '\n_Generando thumbnail..._');
@@ -158,14 +168,15 @@ async function runFactory(chatId, topic) {
   const slideUrls = [];
   const apiSlides = (postData.slides || []).map(s => s?.prompt).filter(Boolean);
   const t = (postData.title || topic).toUpperCase().slice(0, 40);
+  const T = (postData.title || topic).toUpperCase().slice(0, 35);
   const defaultPrompts = [
-    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. Ghost city grid 10% opacity film grain. Bold Bebas Neue white: ' + t + ' 3 lines massive. 01/07 faint. Dark cinematic.',
-    'Square 1:1 editorial Instagram. White bg. Safe zone 100px all sides. Bold black Bebas Neue left-aligned massive 3 lines key insight about ' + t + '. 02/07 faint. High contrast editorial.',
-    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. Abstract data viz 8% opacity film grain. Large white bold numbers/stats. 03/07. Dark cinematic.',
-    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. Large italic serif quote light gray centered about ' + t + '. Attribution small dark gray. 04/07. Cinematic editorial.',
-    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. 2x2 brutalist grid 4 dark cells each with label and bold white condensed text key concept. 05/07. Brutalist.',
-    'Square 1:1 editorial Instagram. White bg. Safe zone 100px all sides. Massive centered Bebas Neue black provocative question 4 lines about ' + t + '. 06/07 faint. Minimalist powerful.',
-    'Square 1:1 editorial Instagram. Dark bg. Safe zone 100px all sides. Faint urban pattern 5% opacity film grain. Bold white Bebas Neue conclusion 2 lines. Bottom @maarmapa.eth dark. Hashtags. 07/07.'
+    'Square 1:1 format editorial Instagram slide. Dark background #080808. Strict center-safe text zone 100px margins ALL sides. Background: faint ghost image related to ' + T + ' 15% opacity blurred film grain cinematic vignette. Top-left small caps dark gray ARTE CONTEMPORANEO ABRIL 2026. Large bold condensed Bebas Neue white text left-aligned: ' + T + ' 3 lines massive. Bottom left small muted gray subtext. Bottom right 01/07 faint gray. ALL text inside 100px safe margins. No watermarks. Dark cinematic mood.',
+    'Square 1:1 format editorial Instagram slide. White off-white background #f5f5f0. Strict center-safe text zone 100px margins ALL sides. Background: faint decorative symbol 5% opacity dark gray. Subtle film grain. Large bold condensed Bebas Neue black text left-aligned inside margins: key paradox or insight about ' + T + ' 3 lines massive. Bottom left small caps light gray caption. Bottom right 02/07 faint. ALL text inside 100px safe margins. No watermarks. High contrast editorial magazine style.',
+    'Square 1:1 format editorial Instagram slide. Near black background. Strict center-safe text zone 100px margins ALL sides. Background: faint architecture 10% opacity blurred film grain vignette. Thin vertical white line 2px left. Top small caps dark gray. Massive bold Bebas Neue white text: key stat or number from ' + T + '. Bottom small gray text. 03/07 faint. ALL text inside 100px safe margins. No watermarks. Dark cinematic.',
+    'Square 1:1 format editorial Instagram slide. Near black background. Strict center-safe text zone 100px margins ALL sides. Background: very faint quotation mark 3% opacity top-left. Film grain vignette. Large italic serif quote text light gray centered: key quote or insight about ' + T + '. Bottom small caps dark gray attribution. 04/07 faint. ALL text inside 100px safe margins. No watermarks. Cinematic editorial.',
+    'Square 1:1 format editorial Instagram slide. Near black background. Strict center-safe text zone 100px margins ALL sides. Film grain. 2x2 brutalist grid 4 dark gray cells 3px gap inside safe zone. Each cell: small label top, bold condensed white text key concept from ' + T + '. ALL inside 100px margins. No watermarks. Brutalist editorial.',
+    'Square 1:1 format editorial Instagram slide. Clean white off-white background #f5f5f0. Strict center-safe text zone 100px margins ALL sides. Light film grain. Centered massive Bebas Neue 4 lines: provocative open question about ' + T + ' alternating deep black and italic medium gray. Below small gray context text. 06/07 faint. ALL text inside 100px safe margins. No watermarks. Minimalist powerful.',
+    'Square 1:1 format editorial Instagram slide. Near black background. Strict center-safe text zone 100px margins ALL sides. Background: faint abstract urban pattern 5% opacity film grain vignette. Top left small caps dark gray REFLEXION. Large bold Bebas Neue white left-aligned: final statement about ' + T + ' 2 lines. Bottom left dark gray @maarmapa.eth. Bottom right very dark gray hashtags. ALL text inside 100px safe margins. No watermarks. Dark cinematic editorial finale.'
   ];
   const finalPrompts = apiSlides.length >= 7 ? apiSlides : defaultPrompts;
   for (let i = 0; i < Math.min(finalPrompts.length, 7); i++) {
