@@ -219,22 +219,24 @@ async function runAnime(chatId, concept) {
 
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(2, 10) + '\n_Claude diseñando personajes..._');
 
-  let characters;
-  try {
-    const res = await fetch(AGENT_URL + '/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: 'Generate 3 anime character image prompts for: "' + concept + '". Return ONLY a JSON array, no markdown, no explanation: [{"character":"name","role":"role","prompt":"detailed English prompt for 2D anime cel-shading thick black outlines full body white background urban ninja style dark palette neon accents"}]' }]
-      })
-    });
-    const data = await res.json();
-    const raw = (data.reply || '').replace(/```json|```/g, '').trim();
-    characters = JSON.parse(raw);
-  } catch(e) {
-    await edit(chatId, msgId, '❌ Error: ' + e.message);
-    return;
-  }
+  // Personajes fijos del squad
+  const characters = [
+    {
+      character: 'Andino',
+      role: 'Beatmaker',
+      prompt: '2D anime cel-shading style, thick black outlines, full body character, white background. Male character with light/blonde hair, wearing black polo hoodie, red headphones around neck. Standing behind MPC drum machine and turntable setup. Urban streetwear ninja aesthetic. Dark color palette with red neon accents. Sharp confident pose of a master beatmaker. South Side urban noir Latin hip-hop style. Clean character sheet illustration.'
+    },
+    {
+      character: 'Piero',
+      role: 'MC',
+      prompt: '2D anime cel-shading style, thick black outlines, full body character, white background. Male character wearing tight fitted wool beanie hat, glasses/sunglasses, holding microphone raised. Urban streetwear ninja aesthetic. Dark color palette with yellow neon accents. Confident MC performance pose, one hand on mic one hand gesturing. South Side urban noir Latin hip-hop style. Clean character sheet illustration.'
+    },
+    {
+      character: 'Kinny',
+      role: 'DJ Dancer',
+      prompt: '2D anime cel-shading style, thick black outlines, full body character, white background. Male character wearing five panel flat brim cap, jogger pants, fresh sneakers/zapatillas. Athletic build dancer stance, one hand raised. Urban streetwear ninja aesthetic. Dark color palette with cyan neon accents. Dynamic breakdance ready pose. South Side urban noir Latin hip-hop style. Clean character sheet illustration.'
+    }
+  ];
 
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(3, 10) + '\n_' + characters.length + ' personajes ✅_');
   await send(chatId, '🎨 *Personajes:*\n' + characters.map((c, i) => (i + 1) + '. *' + c.character + '* — ' + c.role).join('\n'));
@@ -253,17 +255,30 @@ async function runAnime(chatId, concept) {
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7, 10) + '\n_' + characterImages.length + ' imágenes listas ✅_');
 
   // Runway anima
+  // 3 image prompts for Grok — cinematic scene each character
+  const scenePrompts = [
+    '2D anime cinematic style cel-shading thick black outlines. Andino the beatmaker with light blonde hair black polo hoodie red headphones sits on a rooftop at night, MPC turntable in front of him, urban city lights far below. Low angle shot from ground looking up. Red neon lightning flash illuminates his face. He drops needle on vinyl in slow motion. Dark palette rain smoke South Side urban noir atmosphere. Cinematic poster composition.',
+    '2D anime cinematic style cel-shading thick black outlines. Piero the MC with tight wool beanie and glasses stands center in rain-soaked alley covered in graffiti murals, steam rising from grates, microphone raised high. Kinny the dancer in five panel cap joggers explodes in from frame left mid-breakdance spin, jacket flying, motion blur on arms. Fast cut energy hip-hop urban Latin mood. Cinematic wide shot.',
+    '2D anime cinematic style cel-shading thick black outlines. Top-down drone shot descending fast. Three characters — Andino beatmaker, Piero MC, Kinny dancer — standing in triangle formation on wet black asphalt reflecting neon red. Piero raises fist to sky. Intense energy burst radiates outward. Red glitch title text SOUTH SIDE CRIMINI. Cinematic final frame anime poster composition.'
+  ];
+
+  // Runway motion prompts for each scene
   const motions = [
-    'Anime character animation. Static pose fully visible at start. After 1s: dramatic action with motion blur on limbs, energy lines radiating. Urban hip-hop energy. Beat-driven. Cel-shading maintained.',
-    'Anime character animation. Performance pose visible. After 1s: mic raised, head nodding to beat, arm gestures, steam effects. Urban noir cinematic. Fluid anime motion.',
-    'Anime character animation. Ready stance visible. After 1s: explosive spin or breakdance with motion blur, particles and energy burst. High energy. Anime style throughout.'
+    'Cinematic anime push-in from low angle. Camera slowly rises from ground level up toward rooftop. Character stays centered and sharp. Neon red lightning flashes once dramatically. Rain particles fall in foreground. Vinyl needle drops in slow motion. Dark atmospheric urban noir. Beat-driven camera movement.',
+    'Cinematic anime 180-degree tracking arc. Camera sweeps around the two characters in the alley. Steam rises from grates in foreground. MC raises microphone higher during arc. Dancer spin accelerates with motion blur. Graffiti walls visible throughout. Fast hip-hop energy. Urban Latin mood.',
+    'Cinematic anime top-down drone descent. Camera falls fast from above toward the three characters below. Neon red reflections ripple on wet asphalt. MC raises fist slowly as camera descends. Energy burst expands outward from center. White flash freeze frame at end. Title text glitches in red. Anime poster finale.'
   ];
 
   const clips = [];
-  for (let i = 0; i < Math.min(characterImages.length, 3); i++) {
-    await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7 + i, 10) + '\n_🎬 Animando ' + characterImages[i].character + '..._');
-    const vid = await runwayVideo(characterImages[i].url, motions[i]);
-    if (vid) { clips.push(vid); await video(chatId, vid, '🎬 ' + characterImages[i].character); }
+  for (let i = 0; i < 3; i++) {
+    await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7 + i, 10) + '\n_🎨 Shot ' + (i + 1) + '/3 — Grok generando escena..._');
+    const sceneUrl = await grokImg(scenePrompts[i]);
+    if (sceneUrl) {
+      await photo(chatId, sceneUrl, '🎨 Shot ' + (i + 1) + '/3');
+      await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7 + i, 10) + '\n_🎬 Shot ' + (i + 1) + '/3 — Runway animando..._');
+      const vid = await runwayVideo(sceneUrl, motions[i]);
+      if (vid) { clips.push(vid); await video(chatId, vid, '🎬 Shot ' + (i + 1) + '/3'); }
+    }
   }
 
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(10, 10) + '\n✅ *Completado*');
