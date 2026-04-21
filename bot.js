@@ -226,6 +226,13 @@ async function handle(msg) {
     return;
   }
 
+
+  if (text.startsWith('/anime ')) {
+    const concept = text.replace('/anime ', '');
+    runAnime(chatId, concept).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
   if (text.startsWith('/post ')) {
     runFactory(chatId, text.replace('/post ', '')).catch(e => send(chatId, '❌ ' + e.message));
     return;
@@ -266,6 +273,98 @@ async function handle(msg) {
   if (text && !text.startsWith('/')) {
     await send(chatId, '💡 `/post ' + text.slice(0,30) + '` para contenido\n`/buscar ' + text.slice(0,30) + '` para noticias\n`/chat ' + text.slice(0,30) + '` para preguntar');
   }
+}
+
+
+// ── ANIME FACTORY ─────────────────────────────────────
+async function runAnime(chatId, concept) {
+  const msgId = await send(chatId, '🎬 *maarmapa anime factory*
+[░░░░░░░░░░] 0%
+_Iniciando..._');
+
+  // Step 1: Claude genera personajes + prompts
+  await edit(chatId, msgId, '🎬 *maarmapa anime factory*
+[██░░░░░░░░] 20%
+_Claude diseñando personajes..._');
+
+  let characters;
+  try {
+    const res = await fetch(AGENT_URL + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: `Generate 3 anime character image prompts for this concept: "${concept}". 
+        
+        Return ONLY valid JSON array with 3 objects, no markdown:
+        [
+          {"character": "name", "role": "role description", "prompt": "detailed grok image prompt for 2D anime cel-shading character, thick black outlines, full body, white background, urban streetwear ninja style, dark palette with neon accents"},
+          {"character": "name", "role": "role description", "prompt": "..."},
+          {"character": "name", "role": "role description", "prompt": "..."}
+        ]
+        
+        Each prompt must be detailed, in English, specify: 2D anime cel-shading, thick black outlines, full body character, white background, specific colors and accessories matching the concept.` }]
+      })
+    });
+    const data = await res.json();
+    const raw = (data.reply || '').replace(/```json|```/g, '').trim();
+    characters = JSON.parse(raw);
+  } catch(e) {
+    await edit(chatId, msgId, '❌ Error generando personajes: ' + e.message);
+    return;
+  }
+
+  await edit(chatId, msgId, '🎬 *maarmapa anime factory*
+[████░░░░░░] 40%
+_' + characters.length + ' personajes diseñados ✅_');
+  await send(chatId, '🎨 *Personajes:*
+' + characters.map((c,i) => (i+1) + '. *' + c.character + '* — ' + c.role).join('
+'));
+
+  // Step 2: Grok genera imágenes de los personajes
+  const characterImages = [];
+  for (let i = 0; i < characters.length; i++) {
+    await edit(chatId, msgId, '🎬 *maarmapa anime factory*
+[' + '█'.repeat(4+i) + '░'.repeat(6-i) + '] ' + (40+i*15) + '%
+_🎨 Generando ' + characters[i].character + '..._');
+    const url = await grokImg(characters[i].prompt);
+    if (url) {
+      characterImages.push({ ...characters[i], url });
+      await photo(chatId, url, '🎨 ' + characters[i].character + ' — ' + characters[i].role);
+    }
+  }
+
+  await edit(chatId, msgId, '🎬 *maarmapa anime factory*
+[███████░░░] 70%
+_' + characterImages.length + ' imágenes listas ✅_');
+
+  // Step 3: Runway anima cada personaje
+  const motionPrompts = [
+    'Anime character animation. Character starts in static pose fully visible. After 1 second: dramatic movement begins — fast action with motion blur on limbs, energy lines radiating outward, cel-shading style maintained. Urban hip-hop energy. Beat-driven motion. Character stays in frame.',
+    'Anime character animation. Character holds mic or instrument pose clearly visible. After 1 second: performance animation — head nodding to beat, arm gestures, steam/smoke effects appear around character. Cinematic urban noir mood. Fluid anime motion.',
+    'Anime character animation. Character in ready stance fully visible. After 1 second: explosive movement — spin, jump or breakdance move with dramatic motion blur, particles and energy burst effects. High energy finale. Anime style maintained throughout.'
+  ];
+
+  const clips = [];
+  for (let i = 0; i < Math.min(characterImages.length, 3); i++) {
+    await edit(chatId, msgId, '🎬 *maarmapa anime factory*
+[████████░░] ' + (70+i*10) + '%
+_🎬 Animando ' + characterImages[i].character + ' con Runway..._');
+    const vid = await runwayVideo(characterImages[i].url, motionPrompts[i]);
+    if (vid) {
+      clips.push(vid);
+      await video(chatId, vid, '🎬 ' + characterImages[i].character);
+    }
+  }
+
+  await edit(chatId, msgId, '🎬 *maarmapa anime factory*
+[██████████] 100%
+✅ *Completado*');
+  await send(chatId, '✅ *Anime listo*
+
+🎨 Personajes: ' + characterImages.length + '/3
+🎬 Clips: ' + clips.length + '/3
+
+_Une los clips en CapCut para el video final. Ratio: 720:1280_');
 }
 
 // Polling
