@@ -1,7 +1,8 @@
-// maarmapa — Telegram Bot v3
+// maarmapa — Telegram Bot v4
 const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 
+// ── TELEGRAM ──────────────────────────────────────────
 async function tg(method, body) {
   const res = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/' + method, {
     method: 'POST',
@@ -30,29 +31,11 @@ async function video(chatId, url, caption) {
 }
 
 function bar(n, total) {
-  const f = Math.round((n/total)*10);
-  return '[' + '█'.repeat(f) + '░'.repeat(10-f) + '] ' + Math.round((n/total)*100) + '%';
+  const f = Math.round((n / total) * 10);
+  return '[' + '█'.repeat(f) + '░'.repeat(10 - f) + '] ' + Math.round((n / total) * 100) + '%';
 }
 
-// Spinner que se actualiza cada 5 segundos mientras espera
-async function withSpinner(chatId, msgId, label, promise) {
-  const frames = ['⏳', '⌛'];
-  let i = 0;
-  const interval = setInterval(async () => {
-    i++;
-    await edit(chatId, msgId, frames[i % 2] + ' *' + label + '*\n_' + ['procesando', 'trabajando', 'calculando', 'buscando'][i % 4] + '..._');
-  }, 5000);
-  try {
-    const result = await promise;
-    clearInterval(interval);
-    return result;
-  } catch(e) {
-    clearInterval(interval);
-    throw e;
-  }
-}
-
-// Grok image
+// ── GROK IMAGE ────────────────────────────────────────
 async function grokImg(prompt) {
   if (!process.env.GROK_KEY) return null;
   try {
@@ -66,19 +49,24 @@ async function grokImg(prompt) {
   } catch(e) { return null; }
 }
 
-// Runway
+// ── RUNWAY ────────────────────────────────────────────
 async function runwayVideo(imageUrl, prompt) {
   if (!process.env.RUNWAY_KEY) return null;
   try {
     const res = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + process.env.RUNWAY_KEY,
+        'X-Runway-Version': '2024-11-06'
+      },
       body: JSON.stringify({ model: 'gen4_turbo', promptImage: imageUrl, promptText: prompt, ratio: '720:1280', duration: 3 })
     });
     const text = await res.text();
     console.log('Runway:', text.slice(0, 150));
-    let d; try { d = JSON.parse(text); } catch(e) { return null; }
-    if (!d.id) { console.error('Runway no id:', JSON.stringify(d).slice(0,100)); return null; }
+    let d;
+    try { d = JSON.parse(text); } catch(e) { return null; }
+    if (!d.id) { console.error('Runway no id:', JSON.stringify(d).slice(0, 100)); return null; }
     for (let i = 0; i < 30; i++) {
       await new Promise(r => setTimeout(r, 10000));
       const p = await fetch('https://api.dev.runwayml.com/v1/tasks/' + d.id, {
@@ -89,32 +77,34 @@ async function runwayVideo(imageUrl, prompt) {
       if (t.status === 'SUCCEEDED') return t.output?.[0] || null;
       if (t.status === 'FAILED') { console.error('Runway failed:', t.failure); return null; }
     }
-  } catch(e) { return null; }
+    return null;
+  } catch(e) { console.error('Runway error:', e.message); return null; }
 }
 
-// Main factory
-async function runFactory(chatId, topic) {
-  const msgId = await send(chatId, '🏭 *maarmapa factory*\n' + bar(0, 10) + '\n_Iniciando..._');
-
-  // 1. Wake agent
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(1, 10) + '\n_Despertando agente..._');
-  let agentOk = false;
+// ── WAKE AGENT ────────────────────────────────────────
+async function wakeAgent(chatId, msgId) {
   for (let i = 0; i < 10; i++) {
     try {
       const r = await fetch(AGENT_URL + '/');
       const t = await r.text();
-      if (t.includes('maarmapa agent')) { agentOk = true; break; }
+      if (t.includes('maarmapa agent')) return true;
     } catch(e) {}
-    await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(1, 10) + '\n_Despertando agente ' + (i+1) + '/10..._');
+    await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(1, 10) + '\n_Despertando agente ' + (i + 1) + '/10..._');
     await new Promise(r => setTimeout(r, 8000));
   }
+  return false;
+}
 
-  if (!agentOk) {
-    await edit(chatId, msgId, '❌ Agente no responde. Espera 1 min y reintenta.');
+// ── POST FACTORY ──────────────────────────────────────
+async function runFactory(chatId, topic) {
+  const msgId = await send(chatId, '🏭 *maarmapa factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+
+  const awake = await wakeAgent(chatId, msgId);
+  if (!awake) {
+    await edit(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto.');
     return;
   }
 
-  // 2. Generate post text
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Claude generando texto..._');
 
   let postData;
@@ -124,90 +114,91 @@ async function runFactory(chatId, topic) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic })
     });
-
-    // Update spinner while waiting
-    const spinPromise = (async () => {
-      const labels = ['Claude buscando', 'Claude escribiendo', 'Claude refinando', 'Claude terminando'];
-      for (let i = 0; i < 20; i++) {
-        await new Promise(r => setTimeout(r, 8000));
-        await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_' + labels[i % labels.length] + '..._');
-      }
-    })();
-
-    const res = await fetchPost;
-    const raw = await res.json();
-    postData = raw.post || raw;
+    const labels = ['Claude buscando', 'Claude escribiendo', 'Claude refinando', 'Claude terminando'];
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 8000));
+      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_' + labels[i % labels.length] + '..._');
+      try {
+        const res = await fetchPost;
+        const raw = await res.json();
+        postData = raw.post || raw;
+        break;
+      } catch(e) {}
+    }
+    if (!postData) {
+      const res = await fetchPost;
+      const raw = await res.json();
+      postData = raw.post || raw;
+    }
   } catch(e) {
-    await edit(chatId, msgId, '❌ Error generando texto: ' + e.message);
+    await edit(chatId, msgId, '❌ Error: ' + e.message);
     return;
   }
 
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n✅ _Texto generado_');
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_✅ Texto listo_');
 
-  // Send text — clean cite tags and headers
   const title = (postData.title || topic).slice(0, 120);
   const body = (postData.body || '')
     .replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '')
     .replace(/## [^\n]+\n?/g, '\n')
     .replace(/# [^\n]+\n?/g, '\n')
     .replace(/\*\*/g, '')
-    .replace(/biena([^l])/g, 'bienal$1')
     .replace(/\s{3,}/g, '\n\n')
     .trim()
     .slice(0, 900);
   const caption = (postData.instagram_caption || '').replace(/<[^>]*>/g, '').slice(0, 250);
+
   await send(chatId, '📝 *' + title + '*\n\n' + body + '...');
   await new Promise(r => setTimeout(r, 500));
   if (caption) await send(chatId, '📌 _Caption:_\n' + caption);
 
-  // 3. Thumbnail
+  // Thumbnail
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4, 10) + '\n_Generando thumbnail..._');
   if (postData.thumbnail_prompt) {
     const thumbUrl = await grokImg(postData.thumbnail_prompt);
     if (thumbUrl) await photo(chatId, thumbUrl, '🖼 Thumbnail Substack');
   }
 
-  // 4. Slides — use from API or generate defaults
+  // Slides
   const slideUrls = [];
   const apiSlides = (postData.slides || []).map(s => s?.prompt).filter(Boolean);
-  const t = (postData.title || topic).toUpperCase().slice(0, 40);
   const T = (postData.title || topic).toUpperCase().slice(0, 38);
   const TL = (postData.title || topic);
   const defaultPrompts = [
-    'Square 1:1 format editorial Instagram slide. Dark background #080808. ALL text and elements MUST stay strictly inside a 120px safe margin from every edge — nothing touches the borders. Background: faint transparent ghost image related to ' + TL + ' at 12% opacity, slightly blurred, perfectly centered, subtle film grain and soft cinematic vignette. Inside top-left safe zone: small caps label in muted dark gray #333333. Inside safe zone left-aligned: bold condensed Bebas Neue white text massive 3 lines: ' + T + '. Inside bottom-left safe zone: small muted gray subtext. Inside bottom-right safe zone: 01/07 very faint gray. No watermarks, no text outside 120px margins. Dark cinematic mood high contrast contemporary editorial poster.',
-    'Square 1:1 format editorial Instagram slide. Clean white off-white background #f5f5f0. ALL text strictly inside 120px safe margin from every edge. Background: faint large decorative symbol 4% opacity centered dark gray. Subtle film grain texture overlay. Inside safe zone left-aligned: bold condensed Bebas Neue black text massive 3-4 lines: key paradox or shocking fact about ' + T + '. Inside bottom-left safe zone: small caps caption light gray. Inside bottom-right safe zone: 02/07 faint gray. No watermarks, no text outside 120px margins. High contrast editorial magazine style.',
-    'Square 1:1 format editorial Instagram slide. Near black background #080808. ALL text strictly inside 120px safe margin from every edge. Background: faint transparent architectural or cultural space image 10% opacity blurred film grain cinematic vignette. Thin vertical white line 2px on left side inside safe zone gradient fade top and bottom. Inside top-left safe zone: small caps dark gray label. Inside safe zone: massive bold Bebas Neue white number or stat enormous, below descriptor word large. Inside bottom safe zone: small gray descriptive text. Inside bottom-right: 03/07 faint. No watermarks. Dark cinematic.',
-    'Square 1:1 format editorial Instagram slide. Near black background #080808. ALL text strictly inside 120px safe margin from every edge. Background: very faint large quotation mark symbol 3% opacity decorative top-left. Subtle film grain vignette. Inside safe zone vertically centered: large italic serif quote text light gray #cccccc — a real insightful quote about ' + TL + '. Inside bottom-left safe zone: small caps dark gray attribution. Inside bottom-right: 04/07 faint gray. No watermarks. Cinematic editorial mood.',
-    'Square 1:1 format editorial Instagram slide. Near black background #080808. ALL elements strictly inside 120px safe margin from every edge. Subtle film grain overlay. Inside safe zone: 2x2 brutalist grid 4 equal dark gray cells #0d0d0d with 3px gap. Each cell has small caps label top and bold condensed white text concept from ' + TL + '. Grid completely inside 120px margins. No watermarks. Brutalist editorial dark design.',
-    'Square 1:1 format editorial Instagram slide. Clean white off-white background #f5f5f0. ALL text strictly inside 120px safe margin from every edge. Subtle light film grain. Inside safe zone centered: massive bold condensed Bebas Neue 4 lines centered — provocative open question about ' + TL + ' alternating deep black and italic medium gray #666666. Below centered: small gray context text. Inside bottom-right: 06/07 very faint gray. No watermarks. Minimalist powerful typography poster style.',
-    'Square 1:1 format editorial Instagram slide. Near black background #080808. ALL text strictly inside 120px safe margin from every edge. Background: very faint abstract city nervous system pattern 5% opacity light gray film grain cinematic vignette. Inside top-left safe zone: small caps dark gray REFLEXIÓN. Inside safe zone left-aligned: large bold Bebas Neue white text conclusion about ' + TL + ' 2-3 lines. Inside bottom-left safe zone: small dark gray @maarmapa.eth. Inside bottom-right safe zone: very dark gray stacked hashtags. No watermarks. Dark cinematic editorial finale.'
-  
+    'Square 1:1 format editorial Instagram slide. Dark background #080808. ALL text strictly inside 120px safe margin from every edge. Background: faint ghost image related to ' + TL + ' 12% opacity blurred film grain cinematic vignette. Top-left small caps dark gray ARTE CONTEMPORANEO ABRIL 2026. Bold condensed Bebas Neue white text left-aligned: ' + T + ' 3 lines massive. Bottom left small muted gray subtext. Bottom right 01/07 faint. No watermarks. Dark cinematic editorial.',
+    'Square 1:1 format editorial Instagram slide. White background #f5f5f0. ALL text strictly inside 120px safe margin. Background: faint decorative symbol 4% opacity dark gray. Film grain. Bold condensed Bebas Neue black text left-aligned: key paradox about ' + TL + ' 3 lines massive. Bottom left small caps light gray. Bottom right 02/07 faint. No watermarks. High contrast editorial.',
+    'Square 1:1 format editorial Instagram slide. Near black background. ALL text strictly inside 120px safe margin. Background: faint architecture 10% opacity film grain vignette. Thin vertical white line left side. Top small caps dark gray. Massive Bebas Neue white: key stat or number from ' + TL + '. Bottom small gray text. 03/07 faint. Dark cinematic.',
+    'Square 1:1 format editorial Instagram slide. Near black background. ALL text strictly inside 120px safe margin. Background: faint quotation mark 3% opacity. Film grain. Large italic serif quote light gray centered about ' + TL + '. Bottom attribution small caps dark gray. 04/07 faint. Cinematic editorial.',
+    'Square 1:1 format editorial Instagram slide. Near black background. ALL inside 120px safe margins. Film grain. 2x2 brutalist grid 4 dark gray cells 3px gap. Each cell: small label, bold condensed white text key concept from ' + TL + '. No watermarks. Brutalist editorial.',
+    'Square 1:1 format editorial Instagram slide. White background #f5f5f0. ALL text strictly inside 120px safe margin. Light film grain. Centered: massive Bebas Neue 4 lines — provocative question about ' + TL + ' alternating black and italic gray. Below small gray text. 06/07 faint. Minimalist powerful.',
+    'Square 1:1 format editorial Instagram slide. Near black background. ALL text strictly inside 120px safe margin. Background: faint urban pattern 5% opacity film grain vignette. Top left small caps REFLEXION. Bold Bebas Neue white: final statement 2 lines. Bottom left @maarmapa.eth dark gray. Bottom right hashtags very dark. 07/07. Dark cinematic finale.'
   ];
   const finalPrompts = apiSlides.length >= 7 ? apiSlides : defaultPrompts;
+
   for (let i = 0; i < Math.min(finalPrompts.length, 7); i++) {
-    await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i+1) + '/7..._');
+    await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i + 1) + '/7..._');
     const url = await grokImg(finalPrompts[i]);
-    if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i+1) + '/7'); }
+    if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i + 1) + '/7'); }
   }
 
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_' + slideUrls.length + ' slides listos_');
 
-  // 5. Runway clips (optional)
+  // Runway clips
   let clips = 0;
   if (process.env.RUNWAY_KEY && slideUrls.length > 0) {
-     const motions = [
-       'Instagram Reel editorial transition. Slide starts static and sharp — headline text fully legible. After 1 second: text slides out left with motion blur while new background element fades in. Typography always readable at start and end frames. Dark cinematic editorial. Coherent design throughout.',
-       'Instagram Reel editorial transition. White slide starts sharp — black headline fully legible. After 1 second: text scales up dramatically and blurs out while slide brightens to overexposed white. Clean typographic impact. Start and end frames sharp and designed.',
-       'Instagram Reel editorial transition. Dark slide starts static — number and stats fully legible. After 1 second: numbers animate counting up fast then blur. Vertical white line slides in from left with energy. Cinematic editorial motion. Legible at start and end.',
-       'Instagram Reel editorial transition. Quote slide starts static — italic text fully readable centered. After 1 second: text fades and drifts upward slowly like smoke. Contemplative mood. Background deepens to black. Poetic editorial motion. Legible at start.',
-       'Instagram Reel editorial transition. Grid slide starts static — all 4 cells legible. After 1 second: cells flash sequentially like a reveal animation. Each cell highlights then dims. Brutalist editorial rhythm. All text readable at start frame.',
-       'Instagram Reel editorial transition. White slide starts static — question text fully legible centered. After 1 second: letters scatter outward from center like an explosion. Question mark stays last. Clean kinetic typography. Legible at start frame.',
-       'Instagram Reel editorial transition. Dark finale slide starts static — handle and hashtags legible. After 1 second: background city pattern brightens and pulses. Text holds sharp. Slow cinematic fade. Editorial brand moment. @maarmapa.eth clear and readable throughout.'
-     ];
+    const motions = [
+      'Instagram Reel editorial. Slide starts static fully legible. Text slides out left with motion blur after 1s. Dark cinematic editorial.',
+      'Editorial reel. White slide sharp. Text scales up dramatically then blurs. Clean typographic impact.',
+      'Editorial reel. Dark slide static legible. Numbers animate fast then blur. Vertical line slides in with energy.',
+      'Editorial reel. Quote static readable. Text fades upward like smoke. Contemplative cinematic mood.',
+      'Editorial reel. Grid static legible. Cells flash sequentially. Brutalist editorial rhythm.',
+      'Editorial reel. White slide static. Letters scatter outward like explosion. Kinetic typography.',
+      'Editorial reel. Dark finale. Background pulses. Text sharp throughout. @maarmapa.eth clear. Cinematic fade.'
+    ];
     for (let i = 0; i < Math.min(slideUrls.length, 7); i++) {
-      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i+1) + '/' + slideUrls.length + ' Runway..._');
+      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/' + slideUrls.length + ' Runway..._');
       const vid = await runwayVideo(slideUrls[i], motions[i]);
-      if (vid) { await video(chatId, vid, '🎬 Clip ' + (i+1)); clips++; }
+      if (vid) { await video(chatId, vid, '🎬 Clip ' + (i + 1)); clips++; }
     }
   }
 
@@ -215,25 +206,87 @@ async function runFactory(chatId, topic) {
   await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips);
 }
 
-// Commands
+// ── ANIME FACTORY ─────────────────────────────────────
+async function runAnime(chatId, concept) {
+  const msgId = await send(chatId, '🎬 *maarmapa anime factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+
+  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(1, 10) + '\n_Despertando agente..._');
+  const awake = await wakeAgent(chatId, msgId);
+  if (!awake) {
+    await edit(chatId, msgId, '❌ Agente no responde.');
+    return;
+  }
+
+  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(2, 10) + '\n_Claude diseñando personajes..._');
+
+  let characters;
+  try {
+    const res = await fetch(AGENT_URL + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'Generate 3 anime character image prompts for: "' + concept + '". Return ONLY a JSON array, no markdown, no explanation: [{"character":"name","role":"role","prompt":"detailed English prompt for 2D anime cel-shading thick black outlines full body white background urban ninja style dark palette neon accents"}]' }]
+      })
+    });
+    const data = await res.json();
+    const raw = (data.reply || '').replace(/```json|```/g, '').trim();
+    characters = JSON.parse(raw);
+  } catch(e) {
+    await edit(chatId, msgId, '❌ Error: ' + e.message);
+    return;
+  }
+
+  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(3, 10) + '\n_' + characters.length + ' personajes ✅_');
+  await send(chatId, '🎨 *Personajes:*\n' + characters.map((c, i) => (i + 1) + '. *' + c.character + '* — ' + c.role).join('\n'));
+
+  // Grok genera imágenes
+  const characterImages = [];
+  for (let i = 0; i < characters.length; i++) {
+    await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(3 + i, 10) + '\n_🎨 ' + characters[i].character + '..._');
+    const url = await grokImg(characters[i].prompt);
+    if (url) {
+      characterImages.push({ ...characters[i], url });
+      await photo(chatId, url, '🎨 ' + characters[i].character + ' — ' + characters[i].role);
+    }
+  }
+
+  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7, 10) + '\n_' + characterImages.length + ' imágenes listas ✅_');
+
+  // Runway anima
+  const motions = [
+    'Anime character animation. Static pose fully visible at start. After 1s: dramatic action with motion blur on limbs, energy lines radiating. Urban hip-hop energy. Beat-driven. Cel-shading maintained.',
+    'Anime character animation. Performance pose visible. After 1s: mic raised, head nodding to beat, arm gestures, steam effects. Urban noir cinematic. Fluid anime motion.',
+    'Anime character animation. Ready stance visible. After 1s: explosive spin or breakdance with motion blur, particles and energy burst. High energy. Anime style throughout.'
+  ];
+
+  const clips = [];
+  for (let i = 0; i < Math.min(characterImages.length, 3); i++) {
+    await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7 + i, 10) + '\n_🎬 Animando ' + characterImages[i].character + '..._');
+    const vid = await runwayVideo(characterImages[i].url, motions[i]);
+    if (vid) { clips.push(vid); await video(chatId, vid, '🎬 ' + characterImages[i].character); }
+  }
+
+  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(10, 10) + '\n✅ *Completado*');
+  await send(chatId, '✅ *Anime listo*\n🎨 Personajes: ' + characterImages.length + '/3\n🎬 Clips: ' + clips.length + '/3\n_Une en CapCut para el video final._');
+}
+
+// ── COMMANDS ──────────────────────────────────────────
 async function handle(msg) {
   const chatId = msg.chat.id;
   const text = msg.text || '';
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory*\n\n`/post [tema]` — contenido completo\n`/buscar [query]` — busca en X/Twitter\n`/chat [pregunta]` — habla con el agente\n`/digest` — digest semanal');
-    return;
-  }
-
-
-  if (text.startsWith('/anime ')) {
-    const concept = text.replace('/anime ', '');
-    runAnime(chatId, concept).catch(e => send(chatId, '❌ ' + e.message));
+    await send(chatId, '🎨 *maarmapa factory*\n\n`/post [tema]` — contenido completo\n`/anime [concepto]` — video anime\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest semanal');
     return;
   }
 
   if (text.startsWith('/post ')) {
     runFactory(chatId, text.replace('/post ', '')).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/anime ')) {
+    runAnime(chatId, text.replace('/anime ', '')).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
 
@@ -270,105 +323,13 @@ async function handle(msg) {
   }
 
   if (text && !text.startsWith('/')) {
-    await send(chatId, '💡 `/post ' + text.slice(0,30) + '` para contenido\n`/buscar ' + text.slice(0,30) + '` para noticias\n`/chat ' + text.slice(0,30) + '` para preguntar');
+    await send(chatId, '💡 `/post ' + text.slice(0, 30) + '` — contenido\n`/anime ' + text.slice(0, 30) + '` — video\n`/buscar ' + text.slice(0, 30) + '` — noticias');
   }
 }
 
-
-// ── ANIME FACTORY ─────────────────────────────────────
-async function runAnime(chatId, concept) {
-  const msgId = await send(chatId, '🎬 *maarmapa anime factory*
-[░░░░░░░░░░] 0%
-_Iniciando..._');
-
-  // Step 1: Claude genera personajes + prompts
-  await edit(chatId, msgId, '🎬 *maarmapa anime factory*
-[██░░░░░░░░] 20%
-_Claude diseñando personajes..._');
-
-  let characters;
-  try {
-    const res = await fetch(AGENT_URL + '/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: `Generate 3 anime character image prompts for this concept: "${concept}". 
-        
-        Return ONLY valid JSON array with 3 objects, no markdown:
-        [
-          {"character": "name", "role": "role description", "prompt": "detailed grok image prompt for 2D anime cel-shading character, thick black outlines, full body, white background, urban streetwear ninja style, dark palette with neon accents"},
-          {"character": "name", "role": "role description", "prompt": "..."},
-          {"character": "name", "role": "role description", "prompt": "..."}
-        ]
-        
-        Each prompt must be detailed, in English, specify: 2D anime cel-shading, thick black outlines, full body character, white background, specific colors and accessories matching the concept.` }]
-      })
-    });
-    const data = await res.json();
-    const raw = (data.reply || '').replace(/```json|```/g, '').trim();
-    characters = JSON.parse(raw);
-  } catch(e) {
-    await edit(chatId, msgId, '❌ Error generando personajes: ' + e.message);
-    return;
-  }
-
-  await edit(chatId, msgId, '🎬 *maarmapa anime factory*
-[████░░░░░░] 40%
-_' + characters.length + ' personajes diseñados ✅_');
-  await send(chatId, '🎨 *Personajes:*
-' + characters.map((c,i) => (i+1) + '. *' + c.character + '* — ' + c.role).join('
-'));
-
-  // Step 2: Grok genera imágenes de los personajes
-  const characterImages = [];
-  for (let i = 0; i < characters.length; i++) {
-    await edit(chatId, msgId, '🎬 *maarmapa anime factory*
-[' + '█'.repeat(4+i) + '░'.repeat(6-i) + '] ' + (40+i*15) + '%
-_🎨 Generando ' + characters[i].character + '..._');
-    const url = await grokImg(characters[i].prompt);
-    if (url) {
-      characterImages.push({ ...characters[i], url });
-      await photo(chatId, url, '🎨 ' + characters[i].character + ' — ' + characters[i].role);
-    }
-  }
-
-  await edit(chatId, msgId, '🎬 *maarmapa anime factory*
-[███████░░░] 70%
-_' + characterImages.length + ' imágenes listas ✅_');
-
-  // Step 3: Runway anima cada personaje
-  const motionPrompts = [
-    'Anime character animation. Character starts in static pose fully visible. After 1 second: dramatic movement begins — fast action with motion blur on limbs, energy lines radiating outward, cel-shading style maintained. Urban hip-hop energy. Beat-driven motion. Character stays in frame.',
-    'Anime character animation. Character holds mic or instrument pose clearly visible. After 1 second: performance animation — head nodding to beat, arm gestures, steam/smoke effects appear around character. Cinematic urban noir mood. Fluid anime motion.',
-    'Anime character animation. Character in ready stance fully visible. After 1 second: explosive movement — spin, jump or breakdance move with dramatic motion blur, particles and energy burst effects. High energy finale. Anime style maintained throughout.'
-  ];
-
-  const clips = [];
-  for (let i = 0; i < Math.min(characterImages.length, 3); i++) {
-    await edit(chatId, msgId, '🎬 *maarmapa anime factory*
-[████████░░] ' + (70+i*10) + '%
-_🎬 Animando ' + characterImages[i].character + ' con Runway..._');
-    const vid = await runwayVideo(characterImages[i].url, motionPrompts[i]);
-    if (vid) {
-      clips.push(vid);
-      await video(chatId, vid, '🎬 ' + characterImages[i].character);
-    }
-  }
-
-  await edit(chatId, msgId, '🎬 *maarmapa anime factory*
-[██████████] 100%
-✅ *Completado*');
-  await send(chatId, '✅ *Anime listo*
-
-🎨 Personajes: ' + characterImages.length + '/3
-🎬 Clips: ' + clips.length + '/3
-
-_Une los clips en CapCut para el video final. Ratio: 720:1280_');
-}
-
-// Polling
+// ── POLLING ───────────────────────────────────────────
 async function poll() {
-  console.log('maarmapa bot v3 started');
+  console.log('maarmapa bot v4 started');
   let offset = 0;
   while (true) {
     try {
@@ -385,6 +346,6 @@ async function poll() {
   }
 }
 
-// HTTP server for Render
-require('http').createServer((q, s) => { s.writeHead(200); s.end('ok'); }).listen(process.env.PORT || 3000);
+// ── HTTP SERVER ───────────────────────────────────────
+require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v4 online'); }).listen(process.env.PORT || 3000);
 poll();
