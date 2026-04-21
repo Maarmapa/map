@@ -257,9 +257,9 @@ async function runAnime(chatId, concept) {
   // Runway anima
   // 3 image prompts for Grok — cinematic scene each character
   const scenePrompts = [
-    '2D anime cinematic style cel-shading thick black outlines. Vertical 9:16 format. ALL characters and elements MUST stay strictly inside 120px safe margin from every edge — nothing touches borders. Andino the beatmaker with light blonde hair black polo hoodie red headphones centered in frame, MPC turntable in front of him, urban city lights far below. Low angle shot. Red neon lightning flash illuminates his face. Dark palette rain smoke South Side urban noir atmosphere. Character fully visible inside safe margins. No cropping.',
-    '2D anime cinematic style cel-shading thick black outlines. Vertical 9:16 format. ALL characters strictly inside 120px safe margin from every edge. Piero the MC with tight wool beanie glasses stands center, microphone raised high, steam rising around him. Kinny the dancer in five panel cap joggers mid-breakdance spin left side of frame, motion blur on arms. Both characters fully inside safe margins. Rain-soaked alley graffiti background. No cropping.',
-    '2D anime cinematic style cel-shading thick black outlines. Vertical 9:16 format. ALL elements strictly inside 120px safe margin from every edge. Top-down view. Three characters — Andino, Piero, Kinny — triangle formation on wet black asphalt reflecting neon red, fully centered inside safe margins. Piero raises fist to sky. Energy burst radiates outward. Red glitch title text SOUTH SIDE CRIMINI centered inside safe zone. Cinematic anime poster. No cropping.'
+    'Akira-style anime illustration, Katsuhiro Otomo aesthetic, hyper-detailed cel-shading, thick bold ink outlines, extreme cinematic perspective. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. Andino the beatmaker — light hair, black polo hoodie, red professional headphones — dramatic low angle shot looking up, massive MPC turntable in foreground, neon-drenched cyberpunk city sprawl far below, red and yellow neon reflections on wet surfaces. Hard shadows, film grain, smoke and rain particles. Dark dystopian Latin urban atmosphere. Mature gritty style — NOT kawaii, NOT chibi, NOT cute. Cinematic IMAX poster quality. Character fully visible no cropping.',
+    'Akira-style anime illustration, Katsuhiro Otomo aesthetic, hyper-detailed cel-shading, thick bold ink outlines, dynamic action perspective. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. Piero the MC — tight condor beanie, glasses, raised microphone — center frame in rain-soaked graffiti alley, steam rising dramatically from street grates, intense spotlight from above. Kinny the dancer — five panel cap, joggers, fresh sneakers — explosive breakdance spin on left, jacket flying, speed lines and motion blur. Both characters fully inside safe margins. Gritty urban noir Latin hip-hop. Hard shadows, film grain. Mature style NOT kawaii. Cinematic quality.',
+    'Akira-style anime illustration, Katsuhiro Otomo aesthetic, hyper-detailed cel-shading, extreme top-down drone perspective. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. Top-down aerial view descending. Three figures — Andino, Piero, Kinny — in tight triangle formation on wet black asphalt, neon red reflections rippling around them, steam rising. Piero fist raised to sky, energy burst corona radiating outward. Massive bold red glitch typography SOUTH SIDE CRIMINI centered in safe zone above figures. Dark cyberpunk Latin city atmosphere. Hard shadows dramatic. Mature gritty style NOT kawaii. Cinematic poster.'
   ];
 
   // Runway motion prompts for each scene
@@ -363,4 +363,6 @@ async function poll() {
 
 // ── HTTP SERVER ───────────────────────────────────────
 require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v4 online'); }).listen(process.env.PORT || 3000);
-poll();
+poll();git add bot.js
+git commit -m "akira style prompts south side crimini"
+git push origin main
