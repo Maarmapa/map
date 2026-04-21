@@ -204,7 +204,6 @@ async function runFactory(chatId, topic) {
        'Instagram Reel editorial transition. White slide starts static — question text fully legible centered. After 1 second: letters scatter outward from center like an explosion. Question mark stays last. Clean kinetic typography. Legible at start frame.',
        'Instagram Reel editorial transition. Dark finale slide starts static — handle and hashtags legible. After 1 second: background city pattern brightens and pulses. Text holds sharp. Slow cinematic fade. Editorial brand moment. @maarmapa.eth clear and readable throughout.'
      ];
-    ];
     for (let i = 0; i < Math.min(slideUrls.length, 7); i++) {
       await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i+1) + '/' + slideUrls.length + ' Runway..._');
       const vid = await runwayVideo(slideUrls[i], motions[i]);
