@@ -219,24 +219,26 @@ async function runAnime(chatId, concept) {
 
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(2, 10) + '\n_Claude diseñando personajes..._');
 
-  // Personajes fijos del squad
-  const characters = [
-    {
-      character: 'Andino',
-      role: 'Beatmaker',
-      prompt: '2D anime cel-shading style, thick black outlines, full body character, white background. Male character with light/blonde hair, wearing black polo hoodie, red headphones around neck. Standing behind MPC drum machine and turntable setup. Urban streetwear ninja aesthetic. Dark color palette with red neon accents. Sharp confident pose of a master beatmaker. South Side urban noir Latin hip-hop style. Clean character sheet illustration.'
-    },
-    {
-      character: 'Piero',
-      role: 'MC',
-      prompt: '2D anime cel-shading style, thick black outlines, full body character, white background. Male character wearing tight fitted wool beanie hat, glasses/sunglasses, holding microphone raised. Urban streetwear ninja aesthetic. Dark color palette with yellow neon accents. Confident MC performance pose, one hand on mic one hand gesturing. South Side urban noir Latin hip-hop style. Clean character sheet illustration.'
-    },
-    {
-      character: 'Kinny',
-      role: 'DJ Dancer',
-      prompt: '2D anime cel-shading style, thick black outlines, full body character, white background. Male character wearing five panel flat brim cap, jogger pants, fresh sneakers/zapatillas. Athletic build dancer stance, one hand raised. Urban streetwear ninja aesthetic. Dark color palette with cyan neon accents. Dynamic breakdance ready pose. South Side urban noir Latin hip-hop style. Clean character sheet illustration.'
-    }
-  ];
+   // CHARACTER BIBLES — Wu-Tang x Shaolin x Ninja Gaiden x Akira
+   // Katsuhiro Otomo style — consistent across ALL content
+   const BASE_CHAR = 'Wu-Tang Shaolin Ninja Gaiden Akira crossover anime. Katsuhiro Otomo hyper-detailed cel-shading thick bold ink outlines. Full body character sheet front and 3/4 view. White background. Mature gritty dark style NOT kawaii NOT chibi NOT cute. Hard ink shadows dramatic lighting.';
+   const characters = [
+     {
+       character: 'Andino',
+       role: 'Beatmaker',
+       prompt: BASE_CHAR + ' ANDINO the beatmaker — male, light blonde hair, black polo hoodie, oversized crimson red professional headphones around neck, MPC drum machine at his side. Calm focused warrior expression. Athletic build. Confident low stance. Crimson red neon accent. Wu-Tang warrior energy. South Side Latin urban ninja.'
+     },
+     {
+       character: 'Piero',
+       role: 'MC',
+       prompt: BASE_CHAR + ' PIERO the MC — male, tight condor wool beanie pulled low, round glasses, sharp angular face, slim athletic build. Microphone raised high with conviction, other hand gesturing. Fierce battle rap expression. Gold neon accent. Wu-Tang warrior energy. South Side Latin urban ninja.'
+     },
+     {
+       character: 'Kinny',
+       role: 'DJ Dancer',
+       prompt: BASE_CHAR + ' KINNY the DJ dancer — male, five panel flat brim cap, slim jogger pants, fresh sneakers. Athletic muscular build, explosive stance one hand raised to sky. Pure kinetic warrior energy. Electric blue neon accent. Wu-Tang warrior energy. South Side Latin urban ninja.'
+     }
+   ];
 
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(3, 10) + '\n_' + characters.length + ' personajes ✅_');
   await send(chatId, '🎨 *Personajes:*\n' + characters.map((c, i) => (i + 1) + '. *' + c.character + '* — ' + c.role).join('\n'));
@@ -255,18 +257,20 @@ async function runAnime(chatId, concept) {
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7, 10) + '\n_' + characterImages.length + ' imágenes listas ✅_');
 
   // Runway anima
-  // 3 image prompts for Grok — cinematic scene each character
+  // 3 CINEMATIC SCENES — Wu-Tang x Shaolin x Ninja Gaiden x Akira
+  // Each scene uses character bibles for consistency
+  const BASE_STYLE = 'Wu-Tang Shaolin Ninja Gaiden Akira crossover anime. Katsuhiro Otomo hyper-detailed cel-shading thick bold ink outlines. Mature gritty dark style NOT kawaii NOT chibi NOT cute. Hard shadows film grain neon reflections on wet surfaces. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. No cropping.';
   const scenePrompts = [
-    'Akira-style anime illustration, Katsuhiro Otomo aesthetic, hyper-detailed cel-shading, thick bold ink outlines, extreme cinematic perspective. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. Andino the beatmaker — light hair, black polo hoodie, red professional headphones — dramatic low angle shot looking up, massive MPC turntable in foreground, neon-drenched cyberpunk city sprawl far below, red and yellow neon reflections on wet surfaces. Hard shadows, film grain, smoke and rain particles. Dark dystopian Latin urban atmosphere. Mature gritty style — NOT kawaii, NOT chibi, NOT cute. Cinematic IMAX poster quality. Character fully visible no cropping.',
-    'Akira-style anime illustration, Katsuhiro Otomo aesthetic, hyper-detailed cel-shading, thick bold ink outlines, dynamic action perspective. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. Piero the MC — tight condor beanie, glasses, raised microphone — center frame in rain-soaked graffiti alley, steam rising dramatically from street grates, intense spotlight from above. Kinny the dancer — five panel cap, joggers, fresh sneakers — explosive breakdance spin on left, jacket flying, speed lines and motion blur. Both characters fully inside safe margins. Gritty urban noir Latin hip-hop. Hard shadows, film grain. Mature style NOT kawaii. Cinematic quality.',
-    'Akira-style anime illustration, Katsuhiro Otomo aesthetic, hyper-detailed cel-shading, extreme top-down drone perspective. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. Top-down aerial view descending. Three figures — Andino, Piero, Kinny — in tight triangle formation on wet black asphalt, neon red reflections rippling around them, steam rising. Piero fist raised to sky, energy burst corona radiating outward. Massive bold red glitch typography SOUTH SIDE CRIMINI centered in safe zone above figures. Dark cyberpunk Latin city atmosphere. Hard shadows dramatic. Mature gritty style NOT kawaii. Cinematic poster.'
+    BASE_STYLE + ' SHOT 1 — ANDINO THE BEATMAKER. 360 orbit low angle shot rotating around him. ANDINO: light blonde hair, black polo hoodie, oversized red headphones, MPC drum machine. Dramatic low angle looking up, camera rotating around character showing multiple angles. Rooftop at night, neon-drenched South Side cityscape below, rain particles, red lightning flash illuminates his face. Crimson and gold neon reflections. Shaolin temple silhouette merged with Latin barrio skyline in background. Cinematic IMAX quality.',
+    BASE_STYLE + ' SHOT 2 — PIERO AND KINNY. Dynamic tracking shot 180 degree arc. PIERO: tight condor beanie, round glasses, microphone raised high — center frame. KINNY: five panel cap, joggers, fresh sneakers — explosive breakdance spin from left, full body visible, motion blur speed lines. Rain-soaked alley with kanji graffiti murals and Latin street art merged. Steam rising from grates. Spotlight beam from above hits both characters. Gold and electric blue neon clash. Wu-Tang W symbol merged with Shaolin logo in background graffiti. Both characters fully visible inside safe margins.',
+    BASE_STYLE + ' SHOT 3 — SOUTH SIDE CRIMINI SQUAD. Epic top-down drone descent. ANDINO + PIERO + KINNY in tight triangle formation on wet black asphalt. Neon red crimson reflections ripple around them from multiple light sources. Piero raises fist to sky — energy corona burst radiates outward in concentric rings. Shaolin dragon symbol glowing beneath their feet in the asphalt. Massive bold red glitch typography SOUTH SIDE CRIMINI centered above squad inside safe zone. Dark Latin cyberpunk city grid below. Ultimate anime poster composition.'
   ];
 
-  // Runway motion prompts for each scene
+  // Runway motion prompts — Wu-Tang energy, Akira cinematics
   const motions = [
-    'Cinematic anime push-in from low angle. Camera slowly rises from ground level up toward rooftop. Character stays centered and sharp. Neon red lightning flashes once dramatically. Rain particles fall in foreground. Vinyl needle drops in slow motion. Dark atmospheric urban noir. Beat-driven camera movement.',
-    'Cinematic anime 180-degree tracking arc. Camera sweeps around the two characters in the alley. Steam rises from grates in foreground. MC raises microphone higher during arc. Dancer spin accelerates with motion blur. Graffiti walls visible throughout. Fast hip-hop energy. Urban Latin mood.',
-    'Cinematic anime top-down drone descent. Camera falls fast from above toward the three characters below. Neon red reflections ripple on wet asphalt. MC raises fist slowly as camera descends. Energy burst expands outward from center. White flash freeze frame at end. Title text glitches in red. Anime poster finale.'
+    'Akira-style cinematic. Camera orbits slowly around the beatmaker in a 360-degree arc, rising from low angle. Red neon lightning strikes dramatically once. Rain particles streak across frame. MPC drum machine glows red. Urban city below pulses with neon. Beat-driven rhythmic camera movement. Hard cuts on the beat.',
+    'Dynamic 180-degree tracking arc. Camera sweeps fast around both characters. Dancer spin accelerates with extreme motion blur. MC raises mic higher as camera passes. Steam jets from grates in slow motion bursts. Kanji graffiti on walls illuminated briefly by passing spotlight. Fast Wu-Tang hip-hop energy. Rapid kinetic movement.',
+    'Epic top-down drone descent. Camera plunges fast from high above. Three warriors below get larger as camera falls. Energy burst corona expands outward in rings. Neon reflections ripple on wet asphalt. Shaolin symbol glows beneath feet. White flash freeze frame. Title text SOUTH SIDE CRIMINI glitches in red. Anime poster hold.'
   ];
 
   const clips = [];
@@ -363,6 +367,4 @@ async function poll() {
 
 // ── HTTP SERVER ───────────────────────────────────────
 require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v4 online'); }).listen(process.env.PORT || 3000);
-poll();git add bot.js
-git commit -m "akira style prompts south side crimini"
-git push origin main
+poll();
