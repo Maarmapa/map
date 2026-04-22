@@ -219,27 +219,25 @@ async function runAnime(chatId, concept) {
 
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(2, 10) + '\n_Claude diseñando personajes..._');
 
-   // CHARACTER BIBLES — Wu-Tang x Shaolin x Ninja Gaiden x Akira
-   // Katsuhiro Otomo style — consistent across ALL content
-   const BASE_CHAR = 'Wu-Tang Shaolin Ninja Gaiden Akira crossover anime. Katsuhiro Otomo hyper-detailed cel-shading thick bold ink outlines. Full body character sheet front and 3/4 view. White background. Mature gritty dark style NOT kawaii NOT chibi NOT cute. Hard ink shadows dramatic lighting.';
+   // CHARACTER BIBLES — Shaolin Ninja Distópico Tokio/Kyoto 80s
+   const BASE_CHAR = 'Hyper-detailed anime illustration. Katsuhiro Otomo Akira meets Ninja Gaiden meets Shaw Brothers kung fu films. Cel-shading thick bold ink outlines. Full body character sheet front and 3/4 view. White background. Mature dark gritty cinematic style. NOT kawaii NOT chibi NOT cute. Hard dramatic shadows. Dystopian 1980s Tokyo Kyoto Osaka neon atmosphere embedded in character design.';
    const characters = [
      {
        character: 'Andino',
-       role: 'Beatmaker',
-       prompt: BASE_CHAR + ' ANDINO the beatmaker — male, light blonde hair, black polo hoodie, oversized crimson red professional headphones around neck, MPC drum machine at his side. Calm focused warrior expression. Athletic build. Confident low stance. Crimson red neon accent. Wu-Tang warrior energy. South Side Latin urban ninja.'
+       role: 'Beatmaker Ninja',
+       prompt: BASE_CHAR + ' ANDINO — full black ninja suit covering entire body and face, only eyes visible, crimson red clan markings on chest and arms, oversized red headphones worn over ninja hood, portable MPC drum machine strapped to forearm like a weapon. Calm focused assassin expression through mask. Athletic warrior build. Shuriken stars attached to belt. Crimson red neon accent color. Clan symbol: red circle on chest.'
      },
      {
        character: 'Piero',
-       role: 'MC',
-       prompt: BASE_CHAR + ' PIERO the MC — male, tight condor wool beanie pulled low, round glasses, sharp angular face, slim athletic build. Microphone raised high with conviction, other hand gesturing. Fierce battle rap expression. Gold neon accent. Wu-Tang warrior energy. South Side Latin urban ninja.'
+       role: 'MC Ninja',
+       prompt: BASE_CHAR + ' PIERO — full dark navy ninja suit covering entire body and face, only sharp eyes visible behind round wire glasses worn over mask, gold clan markings on shoulders, holding microphone like a ceremonial weapon raised high. Slim agile warrior build. Scrolls and throwing stars at waist. Gold neon accent color. Clan symbol: gold diamond on chest. Battle stance, one hand forward.'
      },
      {
        character: 'Kinny',
-       role: 'DJ Dancer',
-       prompt: BASE_CHAR + ' KINNY the DJ dancer — male, five panel flat brim cap, slim jogger pants, fresh sneakers. Athletic muscular build, explosive stance one hand raised to sky. Pure kinetic warrior energy. Electric blue neon accent. Wu-Tang warrior energy. South Side Latin urban ninja.'
+       role: 'Dancer Ninja',
+       prompt: BASE_CHAR + ' KINNY — full deep teal ninja suit covering entire body and face, only fierce eyes visible, electric blue clan markings on legs and arms, athletic explosive build, mid-air breakdance kick pose — one leg extended, arms out, pure kinetic energy. Shuriken stars orbiting around him. Electric blue neon accent. Clan symbol: blue lightning bolt on chest. Maximum dynamic movement.'
      }
    ];
-
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(3, 10) + '\n_' + characters.length + ' personajes ✅_');
   await send(chatId, '🎨 *Personajes:*\n' + characters.map((c, i) => (i + 1) + '. *' + c.character + '* — ' + c.role).join('\n'));
 
@@ -259,11 +257,11 @@ async function runAnime(chatId, concept) {
   // Runway anima
   // 3 CINEMATIC SCENES — Wu-Tang x Shaolin x Ninja Gaiden x Akira
   // Each scene uses character bibles for consistency
-  const BASE_STYLE = 'Wu-Tang Shaolin Ninja Gaiden Akira crossover anime. Katsuhiro Otomo hyper-detailed cel-shading thick bold ink outlines. Mature gritty dark style NOT kawaii NOT chibi NOT cute. Hard shadows film grain neon reflections on wet surfaces. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. No cropping.';
+  const BASE_STYLE = 'Hyper-detailed anime. Katsuhiro Otomo Akira meets Ninja Gaiden meets Shaw Brothers. Cel-shading thick bold ink outlines. Mature dark gritty cinematic. NOT kawaii NOT chibi NOT cute. Hard shadows film grain. Dystopian 1980s Tokyo Kyoto Osaka — neon kanji signs, rain-soaked stone streets, pagoda rooftops meets cyberpunk towers, paper lanterns mixed with neon billboards, ancient temple gates under electric rain. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. No cropping.';
   const scenePrompts = [
-    BASE_STYLE + ' SHOT 1 — ANDINO THE BEATMAKER. 360 orbit low angle shot rotating around him. ANDINO: light blonde hair, black polo hoodie, oversized red headphones, MPC drum machine. Dramatic low angle looking up, camera rotating around character showing multiple angles. Rooftop at night, neon-drenched South Side cityscape below, rain particles, red lightning flash illuminates his face. Crimson and gold neon reflections. Shaolin temple silhouette merged with Latin barrio skyline in background. Cinematic IMAX quality.',
-    BASE_STYLE + ' SHOT 2 — PIERO AND KINNY. Dynamic tracking shot 180 degree arc. PIERO: tight condor beanie, round glasses, microphone raised high — center frame. KINNY: five panel cap, joggers, fresh sneakers — explosive breakdance spin from left, full body visible, motion blur speed lines. Rain-soaked alley with kanji graffiti murals and Latin street art merged. Steam rising from grates. Spotlight beam from above hits both characters. Gold and electric blue neon clash. Wu-Tang W symbol merged with Shaolin logo in background graffiti. Both characters fully visible inside safe margins.',
-    BASE_STYLE + ' SHOT 3 — SOUTH SIDE CRIMINI SQUAD. Epic top-down drone descent. ANDINO + PIERO + KINNY in tight triangle formation on wet black asphalt. Neon red crimson reflections ripple around them from multiple light sources. Piero raises fist to sky — energy corona burst radiates outward in concentric rings. Shaolin dragon symbol glowing beneath their feet in the asphalt. Massive bold red glitch typography SOUTH SIDE CRIMINI centered above squad inside safe zone. Dark Latin cyberpunk city grid below. Ultimate anime poster composition.'
+    BASE_STYLE + ' SHOT 1 — ANDINO THE BEATMAKER NINJA. Low angle orbit shot. Full black ninja suit face covered, crimson red headphones over ninja hood, MPC strapped to forearm glowing red. Crouching on ancient temple rooftop in dystopian Kyoto, neon kanji signs and pagoda towers below in the rain, red lightning strikes. Shuriken stars orbiting around him slowly. Camera rotates 360 degrees around him at low angle. Crimson red neon light. Epic cinematic IMAX quality.',
+    BASE_STYLE + ' SHOT 2 — PIERO AND KINNY NINJA ACTION. 180 degree tracking arc. PIERO: dark navy ninja suit face covered, glasses over mask, microphone raised as weapon — center frame. KINNY: teal ninja suit face covered, mid-air explosive breakdance kick, shuriken stars orbiting, motion blur speed lines. Both fully inside safe margins. Rain-soaked narrow Osaka stone alley at night, paper lanterns overhead, neon kanji billboards on walls reflecting on wet cobblestones. Gold and electric blue neon clash. Ancient temple gate visible at end of alley. Epic kinetic warrior energy.',
+    BASE_STYLE + ' SHOT 3 — SOUTH SIDE CRIMINI SQUAD FINALE. Epic top-down descent. ANDINO + PIERO + KINNY — all in full ninja suits — tight triangle on ancient wet stone plaza, neon reflections rippling, shuriken stars spinning around all three. Piero raises fist — massive energy corona burst. Shaolin dragon symbol glowing in the stone beneath them. Yin yang symbol expanding outward. Massive bold red glitch kanji typography SOUTH SIDE CRIMINI 南 centered inside safe zone. Dystopian Tokyo pagoda towers surrounding the plaza. Ultimate anime poster.'
   ];
 
   // Runway motion prompts — Wu-Tang energy, Akira cinematics
