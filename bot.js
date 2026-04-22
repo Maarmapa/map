@@ -330,8 +330,36 @@ async function handle(msg) {
   const chatId = msg.chat.id;
   const text = msg.text || '';
 
+  // Handle photo sent directly — animate with Runway
+  if (msg.photo) {
+    const photo = msg.photo[msg.photo.length - 1]; // highest res
+    const caption = msg.caption || '';
+    const msgId = await send(chatId, '📸 Foto recibida — preparando Runway...');
+    try {
+      // Get file URL from Telegram
+      const fileRes = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/getFile?file_id=' + photo.file_id);
+      const fileData = await fileRes.json();
+      const filePath = fileData.result?.file_path;
+      const imageUrl = 'https://api.telegram.org/file/bot' + TELEGRAM_TOKEN + '/' + filePath;
+
+      const motionPrompt = caption || 'Slow 360 product rotation. Clean studio lighting. Professional product video. Smooth continuous rotation showing all angles. Dark background with subtle neon reflection on surface below.';
+
+      await edit(chatId, msgId, '🎬 Runway generando video... (~2 min)');
+      const vid = await runwayVideo(imageUrl, motionPrompt);
+      if (vid) {
+        await video(chatId, vid, '🎬 Video listo');
+        await edit(chatId, msgId, '✅ Listo');
+      } else {
+        await edit(chatId, msgId, '❌ Runway no generó el video. Intenta de nuevo.');
+      }
+    } catch(e) {
+      await edit(chatId, msgId, '❌ Error: ' + e.message);
+    }
+    return;
+  }
+
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory*\n\n`/post [tema]` — contenido completo\n`/anime [concepto]` — video anime\n`/squad` — multi-ángulo Andino+Piero+Kinny\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest semanal');
+    await send(chatId, '🎨 *maarmapa factory*\n\n`/post [tema]` — contenido completo\n`/anime [concepto]` — video anime\n`/squad` — multi-ángulo squad\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n📸 *Manda una foto* — Runway la anima directo');
     return;
   }
 
