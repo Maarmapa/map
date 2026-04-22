@@ -235,7 +235,7 @@ async function runAnime(chatId, concept) {
      {
        character: 'Kinny',
        role: 'Dancer Ninja',
-       prompt: BASE_CHAR + ' KINNY — full deep teal ninja suit covering entire body and face, only fierce eyes visible, electric blue clan markings on legs and arms, athletic explosive build, mid-air breakdance kick pose — one leg extended, arms out, pure kinetic energy. Shuriken stars orbiting around him. Electric blue neon accent. Clan symbol: blue lightning bolt on chest. Maximum dynamic movement.'
+       prompt: BASE_CHAR + ' KINNY — full deep teal ninja suit covering entire body and face, ONLY fierce intense eyes visible through narrow slit. Electric blue lightning bolt clan markings running down BOTH arms and BOTH legs — highly detailed pattern. Five panel flat brim cap worn OVER ninja hood, tilted slightly. POWERFUL athletic muscular build — broad shoulders, defined arms visible through tight suit. EXPLOSIVE mid-air pose: right leg fully extended sideways kick at head height, left leg bent, right arm thrusting forward palm open, left arm pulled back — full diagonal dynamic line of maximum power. THREE shuriken stars spinning in tight orbit around his body. Speed lines radiating outward in ALL directions from his body showing extreme velocity. Electric blue neon glow emanating from markings. Clan symbol: blue lightning bolt on chest. SHOW FULL BODY head to toe clearly. Hard dramatic ink shadows. Extreme detail definition. Ultimate kinetic warrior dancer.'
      }
    ];
   await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(3, 10) + '\n_' + characters.length + ' personajes ✅_');
@@ -287,18 +287,61 @@ async function runAnime(chatId, concept) {
   await send(chatId, '✅ *Anime listo*\n🎨 Personajes: ' + characterImages.length + '/3\n🎬 Clips: ' + clips.length + '/3\n_Une en CapCut para el video final._');
 }
 
+
+// ── SQUAD MULTI-ANGLE ────────────────────────────────
+async function runSquad(chatId, subject) {
+  const msgId = await send(chatId, '🥷 *SQUAD factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+
+  const BASE = 'Hyper-detailed anime. Katsuhiro Otomo Akira meets Ninja Gaiden meets Shaw Brothers. Cel-shading thick bold ink outlines. Mature dark gritty cinematic. NOT kawaii NOT chibi NOT cute. Hard shadows film grain. Dystopian Santiago de Chile — Gran Torre Costanera, Cerro San Cristóbal, Barrio Italia cobblestones, Plaza de Armas, Mapocho river, Andes mountains under electric storm, neon signs in Spanish. ALL elements strictly inside 120px safe margin. Vertical 9:16 format. No cropping.';
+
+  const KINNY_DESC = 'KINNY — full deep teal ninja suit, ONLY fierce intense eyes visible, electric blue lightning bolt clan markings on both arms and legs, five panel cap over ninja hood, powerful muscular build, electric blue neon glow, shuriken stars orbiting, blue lightning bolt clan symbol on chest';
+  const ANDINO_DESC = 'ANDINO — full black ninja suit, ONLY calm focused eyes visible, crimson red headphones over ninja hood, MPC drum machine strapped to forearm glowing red, athletic build, crimson red neon, shuriken stars on belt, red circle clan symbol';
+  const PIERO_DESC = 'PIERO — full dark navy ninja suit, ONLY sharp eyes visible behind round glasses over mask, microphone raised as ceremonial weapon, slim agile build, gold neon accent, gold diamond clan symbol on chest';
+
+  const angles = [
+    { label: 'Kinny — Action', prompt: BASE + ' ' + KINNY_DESC + '. EXPLOSIVE mid-air breakdance kick — right leg fully extended sideways, left arm back right arm forward, full diagonal power line. Speed lines radiating ALL directions. Maximum kinetic energy. Full body visible.' },
+    { label: 'Kinny — Low angle', prompt: BASE + ' ' + KINNY_DESC + '. Dramatic low angle looking up. Standing in wide warrior stance, both hands raised, electric blue energy corona expanding outward. Rain falling around him. Barrio Italia alley behind. Dominant powerful presence.' },
+    { label: 'Kinny — Portrait', prompt: BASE + ' ' + KINNY_DESC + '. Close-up 3/4 angle portrait from waist up. Intense eyes through mask. One hand holding spinning shuriken at eye level. Electric blue energy crackling around hand. Dark Santiago street behind, neon reflections on wet surface.' },
+    { label: 'Andino — Beat', prompt: BASE + ' ' + ANDINO_DESC + '. Crouched over MPC drum machine on Santiago rooftop, Gran Torre Costanera behind, both hands on MPC glowing red, head slightly bowed in concentration. Red lightning in storm clouds. Crimson energy emanating from MPC.' },
+    { label: 'Andino — Rooftop', prompt: BASE + ' ' + ANDINO_DESC + '. Standing on rooftop edge, wind blowing, Andes mountains and Santiago skyline behind, one arm raised holding spinning record/vinyl disc glowing red. Cinematic low angle. Red neon rain.' },
+    { label: 'Piero — Battle', prompt: BASE + ' ' + PIERO_DESC + '. Center of Plaza de Armas Santiago, microphone thrust forward like weapon, other hand in open palm strike position. Gold energy burst radiating from microphone. Colonial cathedral behind, cyberpunk neon reflections on wet cobblestones.' },
+    { label: 'Squad — Triangle', prompt: BASE + ' Epic wide shot. ' + ANDINO_DESC + ' on left. ' + PIERO_DESC + ' center. ' + KINNY_DESC + ' on right — mid-air kick. All three in tight formation on wet Plaza de Armas. Shuriken stars orbiting all three. Yin yang symbol glowing beneath. SOUTH SIDE CRIMINI text in red glitch above. ALL three fully visible inside safe margins.' }
+  ];
+
+  const clips = [];
+  for (let i = 0; i < angles.length; i++) {
+    await edit(chatId, msgId, '🥷 *SQUAD factory*\n' + bar(i + 1, angles.length + 1) + '\n_🎨 ' + angles[i].label + '..._');
+    const url = await grokImg(angles[i].prompt);
+    if (url) {
+      await photo(chatId, url, '🎨 ' + angles[i].label);
+      // Animate with Runway
+      await edit(chatId, msgId, '🥷 *SQUAD factory*\n' + bar(i + 1, angles.length + 1) + '\n_🎬 Runway: ' + angles[i].label + '..._');
+      const vid = await runwayVideo(url, 'Akira anime cinematic. Character animation — dramatic movement, speed lines, neon glow intensifies. Camera holds then slowly pushes in. Dark dystopian Santiago atmosphere. Beat-driven energy pulse.');
+      if (vid) { clips.push(vid); await video(chatId, vid, '🎬 ' + angles[i].label); }
+    }
+  }
+
+  await edit(chatId, msgId, '🥷 *SQUAD factory*\n' + bar(10, 10) + '\n✅ *Completado*');
+  await send(chatId, '✅ *Squad listo*\n🎨 ' + angles.length + ' imágenes\n🎬 ' + clips.length + ' clips\n_Une en CapCut._');
+}
+
 // ── COMMANDS ──────────────────────────────────────────
 async function handle(msg) {
   const chatId = msg.chat.id;
   const text = msg.text || '';
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory*\n\n`/post [tema]` — contenido completo\n`/anime [concepto]` — video anime\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest semanal');
+    await send(chatId, '🎨 *maarmapa factory*\n\n`/post [tema]` — contenido completo\n`/anime [concepto]` — video anime\n`/squad` — multi-ángulo Andino+Piero+Kinny\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest semanal');
     return;
   }
 
   if (text.startsWith('/post ')) {
     runFactory(chatId, text.replace('/post ', '')).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/squad')) {
+    runSquad(chatId, 'south side crimini').catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
 
