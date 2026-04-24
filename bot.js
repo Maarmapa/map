@@ -75,6 +75,8 @@ async function runwayVideo(imageUrl, prompt, duration) {
 }
 
 // ── SEEDANCE via OPENROUTER ───────────────────────────
+const SOUTH_SIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH_SIDE_CRIMINI.mp3';
+
 async function seedanceVideo(prompt, imageUrl, audioUrl) {
   if (!OPENROUTER_KEY) return null;
   try {
@@ -90,7 +92,8 @@ async function seedanceVideo(prompt, imageUrl, audioUrl) {
 
     const res = await fetch('https://openrouter.ai/api/v1/videos', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY }
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY },
+      body: JSON.stringify(body)
     });
     const d = await res.json();
     if (!d.id) { console.error('Seedance no id:', JSON.stringify(d).slice(0,200)); return null; }
@@ -328,24 +331,18 @@ async function runSquad(chatId) {
 }
 
 // ── SEEDANCE FACTORY ──────────────────────────────────
-async function runSeedance(chatId, concept, imageUrl) {
+async function runSeedance(chatId, concept, imageUrl, audioUrl) {
   const msgId = await send(chatId, '🌱 *Seedance factory*\n' + bar(0, 10) + '\n_Iniciando..._');
-
-  if (!OPENROUTER_KEY) {
-    await edit(chatId, msgId, '❌ OPENROUTER_KEY no configurada en Render.');
-    return;
-  }
-
-  await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(3, 10) + '\n_Generando video con Seedance 2.0..._');
-
-  const prompt = concept || 'Cinematic anime ninja squad in dystopian city. Wu-Tang Shaolin aesthetic. Dark neon atmosphere. Beat-driven motion.';
-  const vid = await seedanceVideo(prompt, imageUrl, null);
-
+  if (!OPENROUTER_KEY) { await edit(chatId, msgId, '❌ OPENROUTER_KEY no configurada.'); return; }
+  const prompt = concept || 'Cinematic anime ninja squad dystopian Santiago Chile. Akira aesthetic. Dark neon rain. Wu-Tang Shaolin energy. Beat-driven motion. 3 ninja warriors beatmaker MC dancer. Epic cinematics.';
+  const useAudio = audioUrl || SOUTH_SIDE_AUDIO;
+  await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(3, 10) + '\n_🎵 SOUTH SIDE CRIMINI + Seedance 2.0..._');
+  const vid = await seedanceVideo(prompt, imageUrl, useAudio);
   if (vid) {
     await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(10, 10) + '\n✅ *Completado*');
-    await video(chatId, vid, '🎬 Seedance 2.0');
+    await video(chatId, vid, '🎬 Seedance 2.0 — South Side Crimini');
   } else {
-    await edit(chatId, msgId, '❌ Seedance no generó el video. Verifica créditos en OpenRouter.');
+    await edit(chatId, msgId, '❌ Seedance no generó video. Verifica créditos en OpenRouter.');
   }
 }
 
@@ -429,7 +426,7 @@ async function handle(msg) {
 
   if (text.startsWith('/seedance')) {
     const concept = text.replace('/seedance', '').trim();
-    runSeedance(chatId, concept, null).catch(e => send(chatId, '❌ ' + e.message));
+    runSeedance(chatId, concept, null, SOUTH_SIDE_AUDIO).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
 
@@ -496,6 +493,4 @@ async function poll() {
 }
 
 require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v5 online'); }).listen(process.env.PORT || 3000);
-poll();git add bot.js
-git commit -m "fix photo handler base64 runway"
-git push origin main
+poll();
