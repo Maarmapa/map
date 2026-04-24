@@ -87,27 +87,31 @@ async function seedanceVideo(prompt, imageUrl, audioUrl) {
       aspect_ratio: '9:16',
       resolution: '1080p'
     };
-    if (imageUrl) body.image_url = imageUrl;
-    if (audioUrl) body.audio_url = audioUrl;
+    if (imageUrl) body.image = imageUrl;
 
-    const res = await fetch('https://openrouter.ai/api/v1/videos', {
+    const res = await fetch('https://openrouter.ai/api/v1/videos/generations', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo', 'X-Title': 'maarmapa' },
       body: JSON.stringify(body)
     });
-    const d = await res.json();
-    if (!d.id) { console.error('Seedance no id:', JSON.stringify(d).slice(0,200)); return null; }
+    const text = await res.text();
+    console.log('Seedance response:', text.slice(0, 300));
+    let d; try { d = JSON.parse(text); } catch(e) { console.error('Seedance parse error:', text.slice(0,100)); return null; }
+    
+    // OpenRouter returns a URL to poll
+    const pollUrl = d.url || ('https://openrouter.ai/api/v1/videos/generations/' + d.id);
+    if (!d.id && !d.url) { console.error('Seedance no id/url:', JSON.stringify(d).slice(0,200)); return null; }
 
     // Poll
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       await new Promise(r => setTimeout(r, 10000));
-      const p = await fetch('https://openrouter.ai/api/v1/videos/' + d.id, {
+      const p = await fetch(pollUrl, {
         headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY }
       });
       const t = await p.json();
-      console.log('Seedance poll:', t.status);
-      if (t.status === 'succeeded') return t.output?.url || null;
-      if (t.status === 'failed') return null;
+      console.log('Seedance poll ' + i + ':', t.status);
+      if (t.status === 'succeeded' || t.status === 'completed') return t.data?.[0]?.url || t.url || t.output?.url || null;
+      if (t.status === 'failed' || t.status === 'error') { console.error('Seedance failed:', JSON.stringify(t).slice(0,200)); return null; }
     }
     return null;
   } catch(e) { console.error('Seedance error:', e.message); return null; }
