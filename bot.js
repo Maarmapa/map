@@ -354,20 +354,54 @@ async function handle(msg) {
   const chatId = msg.chat.id;
   const text = msg.text || '';
 
-  // Photo → Runway direct
+  // Photo → download → Runway
   if (msg.photo) {
     const p = msg.photo[msg.photo.length - 1];
     const caption = msg.caption || '';
-    const msgId = await send(chatId, '📸 Foto recibida — enviando a Runway...');
+    const msgId = await send(chatId, '📸 Foto recibida — descargando...');
     try {
+      // Get file path from Telegram
       const fileRes = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/getFile?file_id=' + p.file_id);
       const fileData = await fileRes.json();
-      const imageUrl = 'https://api.telegram.org/file/bot' + TELEGRAM_TOKEN + '/' + fileData.result?.file_path;
+      const filePath = fileData.result?.file_path;
+      const telegramUrl = 'https://api.telegram.org/file/bot' + TELEGRAM_TOKEN + '/' + filePath;
+
+      // Download image from Telegram
+      const imgRes = await fetch(telegramUrl);
+      const imgBuffer = await imgRes.arrayBuffer();
+      const base64 = Buffer.from(imgBuffer).toString('base64');
+      const dataUrl = 'data:image/jpeg;base64,' + base64;
+
       const motionPrompt = caption || 'Slow 360 product rotation. Professional studio lighting. Dark background subtle neon reflection. Smooth continuous rotation. Commercial product video.';
+
       await edit(chatId, msgId, '🎬 Runway generando... (~2 min)');
-      const vid = await runwayVideo(imageUrl, motionPrompt, 5);
-      if (vid) { await video(chatId, vid, '🎬 Video listo'); await edit(chatId, msgId, '✅ Listo'); }
-      else await edit(chatId, msgId, '❌ Runway no generó el video. Intenta de nuevo.');
+
+      // Send to Runway as base64
+      const res = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
+        body: JSON.stringify({ model: 'gen4_turbo', promptImage: dataUrl, promptText: motionPrompt, ratio: '720:1280', duration: 5 })
+      });
+      const text = await res.text();
+      let d; try { d = JSON.parse(text); } catch(e) { await edit(chatId, msgId, '❌ Runway error: ' + text.slice(0,100)); return; }
+      if (!d.id) { await edit(chatId, msgId, '❌ Runway: ' + JSON.stringify(d).slice(0,150)); return; }
+
+      // Poll
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 10000));
+        const poll = await fetch('https://api.dev.runwayml.com/v1/tasks/' + d.id, {
+          headers: { 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' }
+        });
+        const t = await poll.json();
+        if (t.status === 'SUCCEEDED') {
+          const vid = t.output?.[0];
+          if (vid) { await video(chatId, vid, '🎬 Video listo'); await edit(chatId, msgId, '✅ Listo'); }
+          return;
+        }
+        if (t.status === 'FAILED') { await edit(chatId, msgId, '❌ Runway falló: ' + (t.failure || '')); return; }
+        await edit(chatId, msgId, '🎬 Runway procesando... ' + (i * 10) + 's');
+      }
+      await edit(chatId, msgId, '❌ Timeout — intenta de nuevo.');
     } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
     return;
   }
@@ -462,4 +496,6 @@ async function poll() {
 }
 
 require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v5 online'); }).listen(process.env.PORT || 3000);
-poll();
+poll();git add bot.js
+git commit -m "fix photo handler base64 runway"
+git push origin main
