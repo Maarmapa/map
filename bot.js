@@ -1,10 +1,35 @@
-// maarmapa — Telegram Bot v5
-// Claude + Grok + Runway + Seedance + DeepSeek
+// maarmapa — Telegram Bot v6
+// Claude + Grok + Runway + Seedance + DeepSeek V4 + Veo 3.1
 const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
+const SOUTH_SIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH_SIDE_CRIMINI.mp3';
 
-// ── TELEGRAM ──────────────────────────────────────────
+// Model config
+const MODELS = {
+  text: {
+    fast: 'deepseek/deepseek-v4-flash',
+    pro: 'deepseek/deepseek-v4-pro',
+    gpt: 'openai/gpt-5.4',
+    default: 'deepseek/deepseek-v4-flash'
+  },
+  video: {
+    seedance_fast: 'bytedance/seedance-2.0-fast',
+    seedance: 'bytedance/seedance-2.0',
+    veo: 'google/veo-3.1',
+    default: 'bytedance/seedance-2.0-fast'
+  }
+};
+let currentTextModel = MODELS.text.default;
+let currentVideoModel = MODELS.video.default;
+
+// Character bibles
+const BASE_CHAR = 'Hyper-cinematic anime Katsuhiro Otomo Akira aesthetic cel-shading thick bold ink outlines. Mature dark gritty NOT kawaii NOT chibi NOT cute. Hard dramatic shadows.';
+const ANDINO_P = BASE_CHAR + ' ANDINO full black ninja suit ONLY calm eyes visible crimson red headphones over hood MPC drum machine strapped to forearm glowing red. Crimson red neon. Red circle clan symbol.';
+const PIERO_P = BASE_CHAR + ' PIERO full dark navy ninja suit ONLY sharp eyes behind round glasses over mask microphone raised as weapon. Gold neon. Gold diamond clan symbol.';
+const KINNY_P = BASE_CHAR + ' KINNY full teal ninja suit ONLY fierce intense eyes electric blue lightning markings on arms and legs. EXPLOSIVE right leg full kick extended left arm back right arm forward THREE shuriken orbiting speed lines everywhere. Electric blue. Lightning bolt clan symbol.';
+
+// Telegram helpers
 async function tg(method, body) {
   const res = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/' + method, {
     method: 'POST',
@@ -27,15 +52,12 @@ async function photo(chatId, url, caption) {
 async function video(chatId, url, caption) {
   try { await tg('sendVideo', { chat_id: chatId, video: url, caption }); } catch(e) {}
 }
-async function sendDoc(chatId, url, caption) {
-  try { await tg('sendDocument', { chat_id: chatId, document: url, caption }); } catch(e) {}
-}
 function bar(n, total) {
   const f = Math.round((n / total) * 10);
   return '[' + '█'.repeat(f) + '░'.repeat(10 - f) + '] ' + Math.round((n / total) * 100) + '%';
 }
 
-// ── GROK IMAGE ────────────────────────────────────────
+// Grok image
 async function grokImg(prompt) {
   if (!process.env.GROK_KEY) return null;
   try {
@@ -46,10 +68,10 @@ async function grokImg(prompt) {
     });
     const d = await res.json();
     return d.data?.[0]?.url || null;
-  } catch(e) { console.error('Grok error:', e.message); return null; }
+  } catch(e) { return null; }
 }
 
-// ── RUNWAY ────────────────────────────────────────────
+// Runway
 async function runwayVideo(imageUrl, prompt, duration) {
   if (!process.env.RUNWAY_KEY) return null;
   try {
@@ -60,7 +82,7 @@ async function runwayVideo(imageUrl, prompt, duration) {
     });
     const text = await res.text();
     let d; try { d = JSON.parse(text); } catch(e) { return null; }
-    if (!d.id) { console.error('Runway no id:', JSON.stringify(d).slice(0, 100)); return null; }
+    if (!d.id) return null;
     for (let i = 0; i < 30; i++) {
       await new Promise(r => setTimeout(r, 10000));
       const p = await fetch('https://api.dev.runwayml.com/v1/tasks/' + d.id, {
@@ -68,82 +90,49 @@ async function runwayVideo(imageUrl, prompt, duration) {
       });
       const t = await p.json();
       if (t.status === 'SUCCEEDED') return t.output?.[0] || null;
-      if (t.status === 'FAILED') { console.error('Runway failed:', t.failure); return null; }
+      if (t.status === 'FAILED') return null;
     }
     return null;
-  } catch(e) { console.error('Runway error:', e.message); return null; }
+  } catch(e) { return null; }
 }
 
-// ── SEEDANCE via OPENROUTER ───────────────────────────
-const SOUTH_SIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH_SIDE_CRIMINI.mp3';
-
-async function seedanceVideo(prompt, imageUrl, audioUrl) {
-  if (!OPENROUTER_KEY) { console.error('No OPENROUTER_KEY'); return null; }
+// Seedance via OpenRouter
+async function seedanceVideo(prompt, imageUrl) {
+  if (!OPENROUTER_KEY) return null;
   try {
-    // Build request body per OpenRouter docs
-    const body = {
-      model: 'bytedance/seedance-2.0-fast',
-      prompt,
-      aspect_ratio: '9:16',
-      duration: 5,
-      resolution: '720p'
-    };
-    // Image as first_frame if provided
-    if (imageUrl) {
-      body.frame_images = [{ url: imageUrl, frame_type: 'first_frame' }];
-    }
-
-    console.log('Seedance request:', JSON.stringify(body).slice(0, 200));
-
+    const body = { model: currentVideoModel, prompt, aspect_ratio: '9:16', duration: 5, resolution: '720p' };
+    if (imageUrl) body.frame_images = [{ url: imageUrl, frame_type: 'first_frame' }];
     const res = await fetch('https://openrouter.ai/api/v1/videos', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + OPENROUTER_KEY,
-        'HTTP-Referer': 'https://maarmapa.eth.limo',
-        'X-Title': 'maarmapa'
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo', 'X-Title': 'maarmapa' },
       body: JSON.stringify(body)
     });
     const text = await res.text();
-    console.log('Seedance response:', text.slice(0, 300));
-    let d;
-    try { d = JSON.parse(text); } catch(e) { console.error('Parse error:', text.slice(0,100)); return null; }
-    if (!d.id) { console.error('No id in response:', JSON.stringify(d)); return null; }
-
-    console.log('Seedance job ID:', d.id);
-
-    // Poll using polling_url
+    console.log('Seedance response:', text.slice(0, 200));
+    let d; try { d = JSON.parse(text); } catch(e) { return null; }
+    if (!d.id) { console.error('No id:', JSON.stringify(d)); return null; }
     const pollUrl = d.polling_url || ('https://openrouter.ai/api/v1/videos/' + d.id);
     for (let i = 0; i < 40; i++) {
       await new Promise(r => setTimeout(r, 10000));
-      const p = await fetch(pollUrl, {
-        headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY }
-      });
+      const p = await fetch(pollUrl, { headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY } });
       const t = await p.json();
       console.log('Seedance poll ' + i + ':', t.status);
-      if (t.status === 'completed') {
-        // Video available at content endpoint
-        const videoUrl = 'https://openrouter.ai/api/v1/videos/' + d.id + '/content?index=0';
-        console.log('Seedance done:', videoUrl);
-        return videoUrl;
-      }
-      if (t.status === 'failed') { console.error('Seedance failed:', JSON.stringify(t)); return null; }
+      if (t.status === 'completed') return 'https://openrouter.ai/api/v1/videos/' + d.id + '/content?index=0';
+      if (t.status === 'failed') return null;
     }
-    console.error('Seedance timeout');
     return null;
   } catch(e) { console.error('Seedance error:', e.message); return null; }
 }
 
-// ── DEEPSEEK via OPENROUTER ───────────────────────────
+// DeepSeek via OpenRouter
 async function deepseek(prompt, system) {
   if (!OPENROUTER_KEY) return null;
   try {
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo', 'X-Title': 'maarmapa' },
       body: JSON.stringify({
-        model: 'deepseek/deepseek-v4-pro',
+        model: currentTextModel,
         max_tokens: 4096,
         messages: [
           ...(system ? [{ role: 'system', content: system }] : []),
@@ -153,10 +142,10 @@ async function deepseek(prompt, system) {
     });
     const d = await res.json();
     return d.choices?.[0]?.message?.content || null;
-  } catch(e) { console.error('DeepSeek error:', e.message); return null; }
+  } catch(e) { return null; }
 }
 
-// ── WAKE AGENT ────────────────────────────────────────
+// Wake agent
 async function wakeAgent(chatId, msgId) {
   for (let i = 0; i < 10; i++) {
     try {
@@ -164,53 +153,39 @@ async function wakeAgent(chatId, msgId) {
       const t = await r.text();
       if (t.includes('maarmapa agent')) return true;
     } catch(e) {}
-    await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(1, 10) + '\n_Despertando agente ' + (i + 1) + '/10..._');
+    await edit(chatId, msgId, '🏭 *factory*\n' + bar(1, 10) + '\n_Despertando agente ' + (i + 1) + '/10..._');
     await new Promise(r => setTimeout(r, 8000));
   }
   return false;
 }
 
-// ── POST FACTORY ──────────────────────────────────────
+// POST FACTORY
 async function runFactory(chatId, topic) {
   const msgId = await send(chatId, '🏭 *maarmapa factory*\n' + bar(0, 10) + '\n_Iniciando..._');
-
   const awake = await wakeAgent(chatId, msgId);
-  if (!awake) { await edit(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto.'); return; }
-
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Generando post..._');
+  if (!awake) { await edit(chatId, msgId, '❌ Agente no responde.'); return; }
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Generando post con ' + currentTextModel.split('/')[1] + '..._');
 
   let postData;
   try {
-    // Try DeepSeek first (cheaper), fallback to agent
-    const dsSystem = 'Eres un escritor editorial experto para maarmapa — artista urbano chileno contemporáneo. Genera posts completos para Substack sobre arte, cultura, marketing, blockchain y ciudades. Busca información real y actual. Escribe en español, estilo editorial inteligente. Devuelve JSON: {"title":"...","body":"...","instagram_caption":"...","thumbnail_prompt":"..."}';
-    let raw = await deepseek('Genera un post completo de Substack sobre: ' + topic, dsSystem);
-
+    const dsSystem = 'Eres escritor editorial para maarmapa — artista urbano chileno. Genera posts completos para Substack sobre arte, cultura, marketing, blockchain y ciudades. Responde JSON: {"title":"...","body":"...","instagram_caption":"...","thumbnail_prompt":"..."}';
+    let raw = await deepseek('Genera post completo sobre: ' + topic, dsSystem);
     if (raw) {
-      try {
-        raw = raw.replace(/```json|```/g, '').trim();
-        postData = JSON.parse(raw);
-        await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_✅ Post generado con DeepSeek_');
-      } catch(e) { postData = { title: topic, body: raw, instagram_caption: '' }; }
-    } else {
-      // Fallback to agent
-      const res = await fetch(AGENT_URL + '/post', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic })
-      });
+      try { postData = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
+      catch(e) { postData = { title: topic, body: raw, instagram_caption: '' }; }
+    }
+    if (!postData) {
+      const res = await fetch(AGENT_URL + '/post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
       const r = await res.json();
       postData = r.post || r;
-      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_✅ Post generado_');
     }
   } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); return; }
 
-  // Send text
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_✅ Texto listo_');
+
   const title = (postData.title || topic).slice(0, 120);
-  const body = (postData.body || '')
-    .replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '')
-    .replace(/## [^\n]+\n?/g, '\n').replace(/# [^\n]+\n?/g, '\n')
-    .replace(/\*\*/g, '').replace(/\s{3,}/g, '\n\n').trim().slice(0, 900);
-  const caption = (postData.instagram_caption || '').replace(/<[^>]*>/g, '').slice(0, 250);
+  const body = (postData.body || '').replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '').replace(/## [^\n]+\n?/g, '\n').replace(/\*\*/g, '').trim().slice(0, 900);
+  const caption = (postData.instagram_caption || '').slice(0, 250);
   await send(chatId, '📝 *' + title + '*\n\n' + body + '...');
   if (caption) await send(chatId, '📌 _Caption:_\n' + caption);
 
@@ -224,36 +199,28 @@ async function runFactory(chatId, topic) {
   // 7 Slides
   const T = (postData.title || topic).toUpperCase().slice(0, 38);
   const TL = postData.title || topic;
-  const defaultPrompts = [
-    'Square 1:1 editorial Instagram. Dark #080808. Safe zone 120px all sides. Ghost image related to ' + TL + ' 12% opacity film grain vignette. Bebas Neue white left-aligned: ' + T + ' 3 lines massive. 01/07 faint. Dark cinematic editorial.',
-    'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px all sides. Film grain. Bebas Neue black: key paradox about ' + TL + ' 3 lines massive. 02/07. High contrast editorial.',
-    'Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Architecture 10% opacity film grain. Vertical white line left. Massive Bebas Neue white stat from ' + TL + '. 03/07. Dark cinematic.',
-    'Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Quotation mark 3% opacity. Italic serif quote light gray about ' + TL + '. Attribution small dark gray. 04/07. Cinematic.',
-    'Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. 2x2 brutalist grid 4 dark cells. Bold white condensed key concepts from ' + TL + '. 05/07. Brutalist.',
-    'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px all sides. Centered Bebas Neue 4 lines provocative question about ' + TL + ' black and italic gray. 06/07. Minimalist.',
-    'Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Urban pattern 5% opacity. Bebas Neue white conclusion 2 lines. @maarmapa.eth bottom left. Hashtags bottom right. 07/07.'
+  const slidePrompts = [
+    'Square 1:1 editorial Instagram. Dark #080808. Safe zone 120px all sides. Ghost image 12% opacity film grain vignette. Bebas Neue white: ' + T + ' 3 lines massive. 01/07 faint. Dark cinematic.',
+    'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. Film grain. Bebas Neue black: key paradox about ' + TL + ' 3 lines. 02/07. High contrast editorial.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px. Architecture 10% film grain. Vertical white line. Massive Bebas Neue white stat from ' + TL + '. 03/07.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px. Quote mark 3%. Italic serif light gray about ' + TL + '. Attribution dark gray. 04/07.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px. 2x2 brutalist grid. Bold white condensed concepts from ' + TL + '. 05/07.',
+    'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. Bebas Neue 4 lines question about ' + TL + ' black italic gray. 06/07.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px. Urban pattern 5%. Bebas Neue white conclusion. @maarmapa.eth bottom left. Hashtags right. 07/07.'
   ];
   const slideUrls = [];
   for (let i = 0; i < 7; i++) {
     await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i + 1) + '/7..._');
-    const url = await grokImg(defaultPrompts[i]);
+    const url = await grokImg(slidePrompts[i]);
     if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i + 1) + '/7'); }
   }
 
   // Runway clips
   let clips = 0;
   if (process.env.RUNWAY_KEY && slideUrls.length > 0) {
-    const motions = [
-      'Instagram Reel. Static then text slides left with motion blur. Dark cinematic.',
-      'Editorial reel. White slide sharp. Text scales up blurs out. Clean impact.',
-      'Dark slide. Numbers animate fast then blur. Vertical line slides in.',
-      'Quote fades drifts upward like smoke. Contemplative mood.',
-      'Grid cells flash sequentially. Brutalist rhythm.',
-      'Letters scatter outward explosion. Kinetic typography.',
-      'Fade deeper black. Background pulses. @maarmapa.eth sharp. Cinematic finale.'
-    ];
+    const motions = ['Text slides left motion blur. Cinematic.', 'Text scales up blurs. Clean impact.', 'Numbers animate blur. Vertical line.', 'Quote fades upward smoke.', 'Grid cells flash sequential.', 'Letters scatter explosion.', 'Fade deeper black. Handle sharp.'];
     for (let i = 0; i < Math.min(slideUrls.length, 7); i++) {
-      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/' + slideUrls.length + ' Runway..._');
+      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/' + slideUrls.length + '..._');
       const vid = await runwayVideo(slideUrls[i], motions[i], 3);
       if (vid) { await video(chatId, vid, '🎬 Clip ' + (i + 1)); clips++; }
     }
@@ -263,47 +230,32 @@ async function runFactory(chatId, topic) {
   await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips);
 }
 
-// ── ANIME FACTORY ─────────────────────────────────────
-const BASE_CHAR = 'Hyper-cinematic anime. Katsuhiro Otomo Akira aesthetic. Cel-shading thick bold ink outlines. Mature dark gritty. NOT kawaii NOT chibi NOT cute. Hard dramatic shadows.';
-const ANDINO_P = BASE_CHAR + ' ANDINO — full black ninja suit, ONLY calm eyes visible, crimson red headphones over ninja hood, MPC drum machine strapped to forearm glowing red. Crimson red neon. Red circle clan symbol.';
-const PIERO_P = BASE_CHAR + ' PIERO — full dark navy ninja suit, ONLY sharp eyes behind round glasses over mask, microphone raised as weapon. Gold neon. Gold diamond clan symbol.';
-const KINNY_P = BASE_CHAR + ' KINNY — full teal ninja suit, ONLY fierce intense eyes, electric blue lightning markings on arms and legs. EXPLOSIVE: right leg full kick extended, left arm back right arm forward, THREE shuriken orbiting, speed lines everywhere. Electric blue. Lightning bolt clan symbol.';
-
+// ANIME FACTORY
 async function runAnime(chatId, concept) {
   const msgId = await send(chatId, '🎬 *anime factory*\n' + bar(0, 10) + '\n_Iniciando..._');
-
-  const BASE_STYLE = 'Hyper-cinematic anime still frame. Katsuhiro Otomo Akira aesthetic. Cel-shading thick bold ink outlines. Mature dark gritty. NOT kawaii NOT chibi. Hard shadows film grain. Dystopian city — Tokyo Osaka Kyoto density fused with Andes silhouette on horizon and Spanish colonial archway glimpsed — kanji and Spanish neon signs mixed, wet cobblestones, electric storm. Vertical 9:16. ALL inside 120px safe margins. No cropping.';
-
-  const scenePrompts = [
-    BASE_STYLE + ' SHOT 1. ' + ANDINO_P + ' Rooftop low angle 360. Neon red lightning. Rain. Andes silhouette behind.',
-    BASE_STYLE + ' SHOT 2. ' + PIERO_P + ' + ' + KINNY_P + ' Alley 180 arc. Steam grates. Kanji graffiti walls. Gold blue neon clash.',
-    BASE_STYLE + ' SHOT 3. All three triangle formation top-down. ANDINO left PIERO center KINNY right mid-kick. Yin yang glowing ground. SOUTH SIDE CRIMINI red glitch text top. Ultimate poster.'
-  ];
-
-  const motions = [
-    'Akira anime. Camera orbits 360 rising from low angle. Red lightning strikes. Rain streaks. Beat-driven.',
-    'Dynamic 180 arc. Dancer spin accelerates motion blur. MC raises mic. Steam jets slow motion. Fast energy.',
-    'Top-down drone descent fast. Energy burst expands. Neon ripples. White flash freeze. Title glitches red.'
-  ];
-
-  await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(2, 10) + '\n_Generando personajes..._');
-
-  // Character sheets
+  const BASE_STYLE = 'Hyper-cinematic anime Katsuhiro Otomo Akira aesthetic. Cel-shading thick ink outlines. Mature dark NOT kawaii. Dystopian city Tokyo Osaka fused Andes silhouette Spanish colonial archway wet cobblestones neon signs. 9:16 vertical ALL 120px safe margins.';
   const chars = [
-    { character: 'Andino', role: 'Beatmaker', prompt: ANDINO_P + ' Full body character sheet front and 3/4. White background.' },
-    { character: 'Piero', role: 'MC', prompt: PIERO_P + ' Full body character sheet front and 3/4. White background.' },
-    { character: 'Kinny', role: 'Dancer', prompt: KINNY_P + ' Full body clearly visible. White background.' }
+    { character: 'Andino', role: 'Beatmaker', prompt: ANDINO_P + ' Full body character sheet front 3/4. White background.' },
+    { character: 'Piero', role: 'MC', prompt: PIERO_P + ' Full body character sheet front 3/4. White background.' },
+    { character: 'Kinny', role: 'Dancer', prompt: KINNY_P + ' Full body visible. White background.' }
+  ];
+  const scenePrompts = [
+    BASE_STYLE + ' SHOT 1. ' + ANDINO_P + ' Rooftop 360 orbit low angle. Red lightning rain. Andes silhouette.',
+    BASE_STYLE + ' SHOT 2. ' + PIERO_P + ' + ' + KINNY_P + ' Alley 180 arc. Steam grates. Kanji graffiti. Gold blue neon.',
+    BASE_STYLE + ' SHOT 3. All three triangle top-down. SOUTH SIDE CRIMINI red glitch text. Yin yang glowing. Ultimate poster.'
+  ];
+  const motions = [
+    'Akira anime. 360 orbit rising low angle. Red lightning. Rain streaks. Beat-driven.',
+    '180 arc. Dancer spin motion blur. MC raises mic. Steam jets. Fast energy.',
+    'Top-down drone descent. Energy burst. Neon ripples. White flash freeze. Title glitches.'
   ];
 
   await send(chatId, '🎨 *Squad:*\n1. *Andino* — Beatmaker\n2. *Piero* — MC\n3. *Kinny* — Dancer');
-
   for (let i = 0; i < chars.length; i++) {
     await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(2 + i, 10) + '\n_🎨 ' + chars[i].character + '..._');
     const url = await grokImg(chars[i].prompt);
     if (url) await photo(chatId, url, '🎨 ' + chars[i].character + ' — ' + chars[i].role);
   }
-
-  // 3 cinematic scenes
   const clips = [];
   for (let i = 0; i < 3; i++) {
     await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(5 + i, 10) + '\n_🎨 Shot ' + (i + 1) + '/3 Grok..._');
@@ -315,27 +267,23 @@ async function runAnime(chatId, concept) {
       if (vid) { clips.push(vid); await video(chatId, vid, '🎬 Shot ' + (i + 1) + '/3'); }
     }
   }
-
   await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(10, 10) + '\n✅ *Completado*');
-  await send(chatId, '✅ *Anime listo*\n🎬 Clips: ' + clips.length + '/3\n_Une en CapCut para el video final._');
+  await send(chatId, '✅ *Anime listo*\n🎬 Clips: ' + clips.length + '/3');
 }
 
-// ── SQUAD MULTI-ANGLE ─────────────────────────────────
+// SQUAD MULTI-ANGLE
 async function runSquad(chatId) {
   const msgId = await send(chatId, '🥷 *SQUAD factory*\n' + bar(0, 10) + '\n_Iniciando..._');
-
-  const BASE = 'Hyper-cinematic anime still frame. Katsuhiro Otomo Akira aesthetic. Cel-shading thick bold ink outlines. Mature dark gritty. NOT kawaii NOT chibi. Hard shadows film grain. Dystopian city Tokyo Osaka Kyoto fused with Andes silhouette and Spanish colonial archway, kanji and Spanish neon mixed, wet cobblestones electric storm. Vertical 9:16. ALL inside 120px safe margins. No cropping.';
-
+  const BASE = 'Hyper-cinematic anime Katsuhiro Otomo Akira aesthetic. Cel-shading thick ink outlines. Mature dark NOT kawaii. Dystopian Tokyo Osaka fused Andes silhouette Spanish colonial archway wet cobblestones neon signs. 9:16 vertical ALL 120px safe margins.';
   const angles = [
-    { label: 'Kinny — Action', prompt: BASE + ' ' + KINNY_P + ' FROZEN MID-AIR right leg full roundhouse kick, diagonal power line. THREE shuriken orbit. Speed lines all directions. Electric blue trails. Dramatic underlighting.' },
-    { label: 'Kinny — Low Angle', prompt: BASE + ' ' + KINNY_P + ' EXTREME LOW ANGLE from ground. Wide warrior stance both arms raised 45deg. Blue corona shockwave. Shuriken wide arc. Rain falling. Mountain silhouette behind.' },
-    { label: 'Kinny — Portrait', prompt: BASE + ' ' + KINNY_P + ' WAIST UP 3/4. Right hand spinning shuriken eye level motion blur blue energy crackling. Single neon blue light from left. Wet stone wall neon sign behind.' },
-    { label: 'Andino — Beat', prompt: BASE + ' ' + ANDINO_P + ' MEDIUM SHOT low angle. Both hands on MPC mid-strike red energy pulses. Face bowed concentration. Crimson particles float up like incense. Red neon rain outside window.' },
-    { label: 'Andino — Rooftop', prompt: BASE + ' ' + ANDINO_P + ' FULL BODY rooftop edge wind pressing suit. Right arm raised holding vinyl disc glowing red weapon. Left arm balance. City below mountain silhouette red storm sky. Extreme silhouette.' },
-    { label: 'Piero — Battle', prompt: BASE + ' ' + PIERO_P + ' HERO SHOT center. Microphone thrust toward camera gold energy beam from tip. Other hand open palm strike. Wet cobblestones. Colonial archway gold neon behind. Steam manholes. Puddle reflection.' },
-    { label: 'Squad — Final', prompt: BASE + ' EPIC WIDE. ' + ANDINO_P + ' left. ' + PIERO_P + ' center. ' + KINNY_P + ' right. Triangle formation ALL inside 120px. Three coronas red gold blue merge white center. Yin yang glowing ground. SOUTH SIDE CRIMINI red glitch top.' }
+    { label: 'Kinny — Action', prompt: BASE + ' ' + KINNY_P + ' FROZEN MID-AIR right leg full kick diagonal power. THREE shuriken orbit. Speed lines all directions. Blue energy trails. Dramatic underlighting.' },
+    { label: 'Kinny — Low Angle', prompt: BASE + ' ' + KINNY_P + ' EXTREME LOW ANGLE from ground. Wide warrior stance both arms raised. Blue corona shockwave. Shuriken wide arc. Rain. Mountain silhouette.' },
+    { label: 'Kinny — Portrait', prompt: BASE + ' ' + KINNY_P + ' WAIST UP 3/4. Right hand spinning shuriken eye level. Blue energy crackling. Single neon blue light from left. Wet stone wall behind.' },
+    { label: 'Andino — Beat', prompt: BASE + ' ' + ANDINO_P + ' MEDIUM SHOT low angle. Both hands on MPC red energy pulses. Face bowed concentration. Crimson particles float up. Red neon rain window behind.' },
+    { label: 'Andino — Rooftop', prompt: BASE + ' ' + ANDINO_P + ' FULL BODY rooftop edge. Right arm raised vinyl disc glowing red. Left arm balance. City below mountain silhouette red storm sky.' },
+    { label: 'Piero — Battle', prompt: BASE + ' ' + PIERO_P + ' HERO SHOT center. Microphone thrust toward camera gold energy beam. Other hand open palm strike. Wet cobblestones. Colonial archway gold neon. Steam manholes.' },
+    { label: 'Squad — Final', prompt: BASE + ' EPIC WIDE. ' + ANDINO_P + ' left. ' + PIERO_P + ' center. ' + KINNY_P + ' right. Triangle ALL inside 120px. Three coronas red gold blue merge white. Yin yang ground. SOUTH SIDE CRIMINI red glitch top.' }
   ];
-
   const clips = [];
   for (let i = 0; i < angles.length; i++) {
     await edit(chatId, msgId, '🥷 *SQUAD factory*\n' + bar(i + 1, angles.length + 1) + '\n_🎨 ' + angles[i].label + '..._');
@@ -343,112 +291,94 @@ async function runSquad(chatId) {
     if (url) {
       await photo(chatId, url, '🎨 ' + angles[i].label);
       await edit(chatId, msgId, '🥷 *SQUAD factory*\n' + bar(i + 1, angles.length + 1) + '\n_🎬 Runway: ' + angles[i].label + '..._');
-      const vid = await runwayVideo(url, 'Akira anime. Character animation dramatic movement speed lines neon glow. Camera slow push-in. Dark dystopian atmosphere. Beat-driven energy.', 3);
+      const vid = await runwayVideo(url, 'Akira anime character animation dramatic movement speed lines neon glow. Slow push-in. Dark dystopian. Beat-driven.', 3);
       if (vid) { clips.push(vid); await video(chatId, vid, '🎬 ' + angles[i].label); }
     }
   }
-
   await edit(chatId, msgId, '🥷 *SQUAD factory*\n' + bar(10, 10) + '\n✅ *Completado*');
-  await send(chatId, '✅ *Squad listo*\n🎨 ' + angles.length + ' imágenes\n🎬 ' + clips.length + ' clips\n_Une en CapCut._');
+  await send(chatId, '✅ *Squad listo*\n🎨 ' + angles.length + ' imágenes\n🎬 ' + clips.length + ' clips');
 }
 
-// ── SEEDANCE FACTORY ──────────────────────────────────
-async function runSeedance(chatId, concept, imageUrl, audioUrl) {
+// SEEDANCE FACTORY
+async function runSeedance(chatId, concept, imageUrl) {
   const msgId = await send(chatId, '🌱 *Seedance factory*\n' + bar(0, 10) + '\n_Iniciando..._');
   if (!OPENROUTER_KEY) { await edit(chatId, msgId, '❌ OPENROUTER_KEY no configurada.'); return; }
-  const prompt = concept || 'Cinematic anime ninja squad dystopian Santiago Chile. Akira aesthetic. Dark neon rain. Wu-Tang Shaolin energy. Beat-driven motion. 3 ninja warriors beatmaker MC dancer. Epic cinematics.';
-  const useAudio = audioUrl || SOUTH_SIDE_AUDIO;
-  await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(3, 10) + '\n_🎵 SOUTH SIDE CRIMINI + Seedance 2.0..._');
-  const vid = await seedanceVideo(prompt, imageUrl, useAudio);
-  if (vid) {
-    await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(9, 10) + '\n_Descargando video..._');
-    try {
-      // Download video from OpenRouter (requires auth header)
-      const vidRes = await fetch(vid, {
-        headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY }
-      });
-      const vidBuffer = await vidRes.arrayBuffer();
+  const prompt = concept || 'Cinematic anime ninja squad dystopian Santiago Chile Akira aesthetic dark neon rain Wu-Tang Shaolin energy 3 ninja warriors beatmaker MC dancer epic cinematics beat-driven motion';
 
-      // Send as video using native FormData (Node 25)
+  // Generate Grok reference image if no imageUrl provided
+  let firstFrame = imageUrl;
+  if (!firstFrame) {
+    await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(2, 10) + '\n_🎨 Generando frame con Grok..._');
+    const squadPrompt = 'Hyper-cinematic anime Katsuhiro Otomo Akira aesthetic cel-shading thick ink. Mature dark NOT kawaii. Dystopian city Tokyo fused Andes silhouette wet cobblestones neon. 9:16 vertical ALL 120px safe margins. ' + ANDINO_P + ' left. ' + PIERO_P + ' center mic raised. ' + KINNY_P + ' right mid-air kick. Triangle formation. Yin yang glowing ground. SOUTH SIDE CRIMINI red glitch text top. Epic anime poster.';
+    firstFrame = await grokImg(squadPrompt);
+    if (firstFrame) await photo(chatId, firstFrame, '🎨 Frame referencia');
+  }
+
+  await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(4, 10) + '\n_🎬 ' + currentVideoModel.split('/')[1] + ' generando..._');
+  const vid = await seedanceVideo(prompt, firstFrame);
+
+  if (vid) {
+    await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(9, 10) + '\n_📥 Descargando..._');
+    try {
+      const vidRes = await fetch(vid, { headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY } });
+      const vidBuffer = await vidRes.arrayBuffer();
       const form = new FormData();
       form.append('chat_id', String(chatId));
       form.append('video', new Blob([vidBuffer], { type: 'video/mp4' }), 'south_side_crimini.mp4');
-      form.append('caption', '🎬 Seedance 2.0 — South Side Crimini');
-
-      await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', {
-        method: 'POST',
-        body: form
-      });
-
+      form.append('caption', '🎬 ' + currentVideoModel.split('/')[1] + ' — South Side Crimini');
+      await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
       await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(10, 10) + '\n✅ *Completado*');
     } catch(e) {
-      // Fallback: send URL directly
-      await edit(chatId, msgId, '✅ Video generado:\n' + vid);
+      await edit(chatId, msgId, '✅ Video listo:\n' + vid);
     }
   } else {
-    await edit(chatId, msgId, '❌ Seedance no generó video. Verifica créditos en OpenRouter.');
+    await edit(chatId, msgId, '❌ No generó video. Verifica créditos en openrouter.ai');
   }
 }
 
-// ── COMMANDS ──────────────────────────────────────────
+// COMMAND HANDLER
 async function handle(msg) {
   const chatId = msg.chat.id;
   const text = msg.text || '';
 
-  // Photo → download → Runway
+  // Photo → Runway
   if (msg.photo) {
     const p = msg.photo[msg.photo.length - 1];
     const caption = msg.caption || '';
-    const msgId = await send(chatId, '📸 Foto recibida — descargando...');
+    const msgId = await send(chatId, '📸 Foto recibida — enviando a Runway...');
     try {
-      // Get file path from Telegram
       const fileRes = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/getFile?file_id=' + p.file_id);
       const fileData = await fileRes.json();
-      const filePath = fileData.result?.file_path;
-      const telegramUrl = 'https://api.telegram.org/file/bot' + TELEGRAM_TOKEN + '/' + filePath;
-
-      // Download image from Telegram
-      const imgRes = await fetch(telegramUrl);
+      const imageUrl = 'https://api.telegram.org/file/bot' + TELEGRAM_TOKEN + '/' + fileData.result?.file_path;
+      const imgRes = await fetch(imageUrl);
       const imgBuffer = await imgRes.arrayBuffer();
-      const base64 = Buffer.from(imgBuffer).toString('base64');
-      const dataUrl = 'data:image/jpeg;base64,' + base64;
-
+      const dataUrl = 'data:image/jpeg;base64,' + Buffer.from(imgBuffer).toString('base64');
       const motionPrompt = caption || 'Slow 360 product rotation. Professional studio lighting. Dark background subtle neon reflection. Smooth continuous rotation. Commercial product video.';
-
       await edit(chatId, msgId, '🎬 Runway generando... (~2 min)');
-
-      // Send to Runway as base64
       const res = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
         body: JSON.stringify({ model: 'gen4_turbo', promptImage: dataUrl, promptText: motionPrompt, ratio: '720:1280', duration: 5 })
       });
-      const text = await res.text();
-      let d; try { d = JSON.parse(text); } catch(e) { await edit(chatId, msgId, '❌ Runway error: ' + text.slice(0,100)); return; }
+      const t = await res.text();
+      let d; try { d = JSON.parse(t); } catch(e) { await edit(chatId, msgId, '❌ Error: ' + t.slice(0,100)); return; }
       if (!d.id) { await edit(chatId, msgId, '❌ Runway: ' + JSON.stringify(d).slice(0,150)); return; }
-
-      // Poll
       for (let i = 0; i < 30; i++) {
         await new Promise(r => setTimeout(r, 10000));
         const poll = await fetch('https://api.dev.runwayml.com/v1/tasks/' + d.id, {
           headers: { 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' }
         });
-        const t = await poll.json();
-        if (t.status === 'SUCCEEDED') {
-          const vid = t.output?.[0];
-          if (vid) { await video(chatId, vid, '🎬 Video listo'); await edit(chatId, msgId, '✅ Listo'); }
-          return;
-        }
-        if (t.status === 'FAILED') { await edit(chatId, msgId, '❌ Runway falló: ' + (t.failure || '')); return; }
-        await edit(chatId, msgId, '🎬 Runway procesando... ' + (i * 10) + 's');
+        const task = await poll.json();
+        if (task.status === 'SUCCEEDED') { await video(chatId, task.output?.[0], '🎬 Video listo'); await edit(chatId, msgId, '✅ Listo'); return; }
+        if (task.status === 'FAILED') { await edit(chatId, msgId, '❌ Runway falló.'); return; }
+        await edit(chatId, msgId, '🎬 Runway... ' + (i * 10) + 's');
       }
-      await edit(chatId, msgId, '❌ Timeout — intenta de nuevo.');
     } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
     return;
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v5*\n\n`/post [tema]` — post completo\n`/anime [concepto]` — video anime squad\n`/squad` — multi-ángulo Andino+Piero+Kinny\n`/seedance [concepto]` — Seedance 2.0\n`/buscar [query]` — noticias X/Twitter\n`/chat [pregunta]` — agente\n`/digest` — digest semanal\n📸 *Manda una foto* — Runway la anima');
+    await send(chatId, '🎨 *maarmapa factory v6*\n\n`/post [tema]` — post completo\n`/anime [concepto]` — video anime squad\n`/squad` — multi-ángulo squad\n`/seedance [concepto]` — Seedance+Grok\n`/model` — cambiar modelo AI\n`/buscar [query]` — noticias X\n`/chat [pregunta]` — agente\n`/digest` — digest semanal\n📸 *Foto* — Runway la anima');
     return;
   }
 
@@ -457,7 +387,7 @@ async function handle(msg) {
     return;
   }
 
-  if (text.startsWith('/anime ') || text === '/anime') {
+  if (text.startsWith('/anime') || text === '/anime') {
     const concept = text.replace('/anime', '').trim() || 'south side crimini';
     runAnime(chatId, concept).catch(e => send(chatId, '❌ ' + e.message));
     return;
@@ -470,7 +400,19 @@ async function handle(msg) {
 
   if (text.startsWith('/seedance')) {
     const concept = text.replace('/seedance', '').trim();
-    runSeedance(chatId, concept, null, SOUTH_SIDE_AUDIO).catch(e => send(chatId, '❌ ' + e.message));
+    runSeedance(chatId, concept, null).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/model')) {
+    const arg = text.replace('/model', '').trim().toLowerCase();
+    if (arg === 'fast' || arg === 'flash') { currentTextModel = MODELS.text.fast; await send(chatId, '✅ Texto: *DeepSeek V4 Flash*'); }
+    else if (arg === 'pro') { currentTextModel = MODELS.text.pro; await send(chatId, '✅ Texto: *DeepSeek V4 Pro*'); }
+    else if (arg === 'gpt') { currentTextModel = MODELS.text.gpt; await send(chatId, '✅ Texto: *GPT-5.4*'); }
+    else if (arg === 'veo') { currentVideoModel = MODELS.video.veo; await send(chatId, '✅ Video: *Veo 3.1*'); }
+    else if (arg === 'seedance') { currentVideoModel = MODELS.video.seedance; await send(chatId, '✅ Video: *Seedance 2.0*'); }
+    else if (arg === 'seedance-fast') { currentVideoModel = MODELS.video.seedance_fast; await send(chatId, '✅ Video: *Seedance 2.0 Fast*'); }
+    else { await send(chatId, '📋 *Modelos:*\n\n*Texto:*\n`/model fast` — DeepSeek V4 Flash\n`/model pro` — DeepSeek V4 Pro\n`/model gpt` — GPT-5.4\n\n*Video:*\n`/model seedance-fast` — Seedance Fast\n`/model seedance` — Seedance 2.0\n`/model veo` — Veo 3.1\n\n_Texto: ' + currentTextModel + '_\n_Video: ' + currentVideoModel + '_'); }
     return;
   }
 
@@ -489,10 +431,8 @@ async function handle(msg) {
     const q = text.replace('/chat ', '');
     const msgId = await send(chatId, '💬 _Pensando..._');
     try {
-      // Try DeepSeek first
-      const reply = await deepseek(q, 'Eres maarmapa — artista urbano chileno contemporáneo con conocimiento profundo de arte, cultura, blockchain y ciudades. Responde en español.');
+      const reply = await deepseek(q, 'Eres maarmapa — artista urbano chileno con conocimiento de arte, cultura, blockchain y ciudades. Responde en español.');
       if (reply) { await edit(chatId, msgId, reply.slice(0, 4000)); return; }
-      // Fallback to agent
       const res = await fetch(AGENT_URL + '/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: q }] }) });
       const d = await res.json();
       await edit(chatId, msgId, (d.reply || '...').slice(0, 4000));
@@ -503,7 +443,7 @@ async function handle(msg) {
   if (text === '/digest') {
     const msgId = await send(chatId, '📰 _Generando digest..._');
     try {
-      const reply = await deepseek('Genera un digest semanal de las noticias más importantes de arte contemporáneo, marketing viral, blockchain y AI de esta semana. Busca información actual. Formato: título + 5-7 noticias con descripción breve. En español.', null);
+      const reply = await deepseek('Genera digest semanal de noticias de arte contemporáneo, marketing viral, blockchain y AI esta semana. 5-7 noticias con descripción. En español.', null);
       if (reply) { await edit(chatId, msgId, reply.slice(0, 4000)); return; }
       const res = await fetch(AGENT_URL + '/digest');
       const d = await res.json();
@@ -513,13 +453,13 @@ async function handle(msg) {
   }
 
   if (text && !text.startsWith('/')) {
-    await send(chatId, '💡 `/post ' + text.slice(0, 25) + '` — post\n`/anime ' + text.slice(0, 25) + '` — anime\n`/buscar ' + text.slice(0, 25) + '` — noticias\n`/chat ' + text.slice(0, 25) + '` — pregunta');
+    await send(chatId, '💡 `/post ' + text.slice(0, 20) + '` — post\n`/anime ' + text.slice(0, 20) + '` — anime\n`/buscar ' + text.slice(0, 20) + '` — noticias');
   }
 }
 
-// ── POLLING ───────────────────────────────────────────
+// POLLING
 async function poll() {
-  console.log('maarmapa bot v5 started — Claude+Grok+Runway+Seedance+DeepSeek');
+  console.log('maarmapa bot v6 — DeepSeek V4 + Grok + Runway + Seedance + Veo 3.1');
   let offset = 0;
   while (true) {
     try {
@@ -527,7 +467,7 @@ async function poll() {
       const d = await res.json();
       for (const u of d.result || []) {
         offset = u.update_id + 1;
-        if (u.message) handle(u.message).catch(e => console.error('Handle error:', e.message));
+        if (u.message) handle(u.message).catch(e => console.error('Error:', e.message));
       }
     } catch(e) {
       console.error('Poll error:', e.message);
@@ -536,5 +476,5 @@ async function poll() {
   }
 }
 
-require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v5 online'); }).listen(process.env.PORT || 3000);
+require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v6 online'); }).listen(process.env.PORT || 3000);
 poll();
