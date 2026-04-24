@@ -306,16 +306,16 @@ async function runSeedance(chatId, concept, imageUrl) {
   const prompt = concept || 'Cinematic anime ninja squad dystopian Santiago Chile Akira aesthetic dark neon rain Wu-Tang Shaolin energy 3 ninja warriors beatmaker MC dancer epic cinematics beat-driven motion';
 
   // Generate Grok reference image if no imageUrl provided
-  let firstFrame = imageUrl;
-  if (!firstFrame) {
-    await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(2, 10) + '\n_🎨 Generando frame con Grok..._');
-    const squadPrompt = 'Hyper-cinematic anime Katsuhiro Otomo Akira aesthetic cel-shading thick ink. Mature dark NOT kawaii. Dystopian city Tokyo fused Andes silhouette wet cobblestones neon. 9:16 vertical ALL 120px safe margins. ' + ANDINO_P + ' left. ' + PIERO_P + ' center mic raised. ' + KINNY_P + ' right mid-air kick. Triangle formation. Yin yang glowing ground. SOUTH SIDE CRIMINI red glitch text top. Epic anime poster.';
-    firstFrame = await grokImg(squadPrompt);
-    if (firstFrame) await photo(chatId, firstFrame, '🎨 Frame referencia');
+  // Show Grok reference image but use text prompt for Seedance (Grok URLs expire)
+  if (!imageUrl) {
+    await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(2, 10) + '\n_🎨 Generando frame referencia..._');
+    const squadPrompt = 'Hyper-cinematic anime Katsuhiro Otomo Akira cel-shading thick ink mature dark NOT kawaii. Dystopian Tokyo fused Andes silhouette wet cobblestones neon. 9:16 ALL 120px safe margins. ' + ANDINO_P + ' left. ' + PIERO_P + ' center. ' + KINNY_P + ' right mid-air. Triangle. Yin yang ground. SOUTH SIDE CRIMINI red text. Epic poster.';
+    const refImg = await grokImg(squadPrompt);
+    if (refImg) await photo(chatId, refImg, '🎨 Frame referencia — Seedance generará el video');
   }
-
+  const seedancePrompt = prompt + ' Katsuhiro Otomo Akira anime aesthetic. Three ninja warriors — black suit beatmaker red headphones MPC, navy suit MC glasses microphone, teal suit dancer mid-air kick shuriken. Dystopian Santiago Tokyo neon wet cobblestones Andes. Dark cinematic epic anime. 9:16 vertical.';
   await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(4, 10) + '\n_🎬 ' + currentVideoModel.split('/')[1] + ' generando..._');
-  const vid = await seedanceVideo(prompt, firstFrame);
+  const vid = await seedanceVideo(seedancePrompt, null);
 
   if (vid) {
     await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(9, 10) + '\n_📥 Descargando..._');
