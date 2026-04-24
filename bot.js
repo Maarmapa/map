@@ -1,6 +1,8 @@
-// maarmapa — Telegram Bot v4
+// maarmapa — Telegram Bot v5
+// Claude + Grok + Runway + Seedance + DeepSeek
 const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
 
 // ── TELEGRAM ──────────────────────────────────────────
 async function tg(method, body) {
@@ -12,24 +14,22 @@ async function tg(method, body) {
   const d = await res.json();
   return d.result;
 }
-
 async function send(chatId, text) {
   const r = await tg('sendMessage', { chat_id: chatId, text, parse_mode: 'Markdown' });
   return r?.message_id;
 }
-
 async function edit(chatId, msgId, text) {
   try { await tg('editMessageText', { chat_id: chatId, message_id: msgId, text, parse_mode: 'Markdown' }); } catch(e) {}
 }
-
 async function photo(chatId, url, caption) {
   try { await tg('sendPhoto', { chat_id: chatId, photo: url, caption }); } catch(e) {}
 }
-
 async function video(chatId, url, caption) {
   try { await tg('sendVideo', { chat_id: chatId, video: url, caption }); } catch(e) {}
 }
-
+async function sendDoc(chatId, url, caption) {
+  try { await tg('sendDocument', { chat_id: chatId, document: url, caption }); } catch(e) {}
+}
 function bar(n, total) {
   const f = Math.round((n / total) * 10);
   return '[' + '█'.repeat(f) + '░'.repeat(10 - f) + '] ' + Math.round((n / total) * 100) + '%';
@@ -46,26 +46,20 @@ async function grokImg(prompt) {
     });
     const d = await res.json();
     return d.data?.[0]?.url || null;
-  } catch(e) { return null; }
+  } catch(e) { console.error('Grok error:', e.message); return null; }
 }
 
 // ── RUNWAY ────────────────────────────────────────────
-async function runwayVideo(imageUrl, prompt) {
+async function runwayVideo(imageUrl, prompt, duration) {
   if (!process.env.RUNWAY_KEY) return null;
   try {
     const res = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + process.env.RUNWAY_KEY,
-        'X-Runway-Version': '2024-11-06'
-      },
-      body: JSON.stringify({ model: 'gen4_turbo', promptImage: imageUrl, promptText: prompt, ratio: '720:1280', duration: 3 })
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
+      body: JSON.stringify({ model: 'gen4_turbo', promptImage: imageUrl, promptText: prompt, ratio: '720:1280', duration: duration || 3 })
     });
     const text = await res.text();
-    console.log('Runway:', text.slice(0, 150));
-    let d;
-    try { d = JSON.parse(text); } catch(e) { return null; }
+    let d; try { d = JSON.parse(text); } catch(e) { return null; }
     if (!d.id) { console.error('Runway no id:', JSON.stringify(d).slice(0, 100)); return null; }
     for (let i = 0; i < 30; i++) {
       await new Promise(r => setTimeout(r, 10000));
@@ -73,12 +67,68 @@ async function runwayVideo(imageUrl, prompt) {
         headers: { 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' }
       });
       const t = await p.json();
-      console.log('Runway poll ' + i + ':', t.status);
       if (t.status === 'SUCCEEDED') return t.output?.[0] || null;
       if (t.status === 'FAILED') { console.error('Runway failed:', t.failure); return null; }
     }
     return null;
   } catch(e) { console.error('Runway error:', e.message); return null; }
+}
+
+// ── SEEDANCE via OPENROUTER ───────────────────────────
+async function seedanceVideo(prompt, imageUrl, audioUrl) {
+  if (!OPENROUTER_KEY) return null;
+  try {
+    const body = {
+      model: 'bytedance/seedance-2.0-fast',
+      prompt,
+      duration: 8,
+      aspect_ratio: '9:16',
+      resolution: '1080p'
+    };
+    if (imageUrl) body.image_url = imageUrl;
+    if (audioUrl) body.audio_url = audioUrl;
+
+    const res = await fetch('https://openrouter.ai/api/v1/videos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY }
+    });
+    const d = await res.json();
+    if (!d.id) { console.error('Seedance no id:', JSON.stringify(d).slice(0,200)); return null; }
+
+    // Poll
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 10000));
+      const p = await fetch('https://openrouter.ai/api/v1/videos/' + d.id, {
+        headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY }
+      });
+      const t = await p.json();
+      console.log('Seedance poll:', t.status);
+      if (t.status === 'succeeded') return t.output?.url || null;
+      if (t.status === 'failed') return null;
+    }
+    return null;
+  } catch(e) { console.error('Seedance error:', e.message); return null; }
+}
+
+// ── DEEPSEEK via OPENROUTER ───────────────────────────
+async function deepseek(prompt, system) {
+  if (!OPENROUTER_KEY) return null;
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-v4-pro',
+        max_tokens: 4096,
+        messages: [
+          ...(system ? [{ role: 'system', content: system }] : []),
+          { role: 'user', content: prompt }
+        ]
+      })
+    });
+    const d = await res.json();
+    return d.choices?.[0]?.message?.content || null;
+  } catch(e) { console.error('DeepSeek error:', e.message); return null; }
 }
 
 // ── WAKE AGENT ────────────────────────────────────────
@@ -100,104 +150,86 @@ async function runFactory(chatId, topic) {
   const msgId = await send(chatId, '🏭 *maarmapa factory*\n' + bar(0, 10) + '\n_Iniciando..._');
 
   const awake = await wakeAgent(chatId, msgId);
-  if (!awake) {
-    await edit(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto.');
-    return;
-  }
+  if (!awake) { await edit(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto.'); return; }
 
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Claude generando texto..._');
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Generando post..._');
 
   let postData;
   try {
-    const fetchPost = fetch(AGENT_URL + '/post', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic })
-    });
-    const labels = ['Claude buscando', 'Claude escribiendo', 'Claude refinando', 'Claude terminando'];
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 8000));
-      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_' + labels[i % labels.length] + '..._');
+    // Try DeepSeek first (cheaper), fallback to agent
+    const dsSystem = 'Eres un escritor editorial experto para maarmapa — artista urbano chileno contemporáneo. Genera posts completos para Substack sobre arte, cultura, marketing, blockchain y ciudades. Busca información real y actual. Escribe en español, estilo editorial inteligente. Devuelve JSON: {"title":"...","body":"...","instagram_caption":"...","thumbnail_prompt":"..."}';
+    let raw = await deepseek('Genera un post completo de Substack sobre: ' + topic, dsSystem);
+
+    if (raw) {
       try {
-        const res = await fetchPost;
-        const raw = await res.json();
-        postData = raw.post || raw;
-        break;
-      } catch(e) {}
+        raw = raw.replace(/```json|```/g, '').trim();
+        postData = JSON.parse(raw);
+        await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_✅ Post generado con DeepSeek_');
+      } catch(e) { postData = { title: topic, body: raw, instagram_caption: '' }; }
+    } else {
+      // Fallback to agent
+      const res = await fetch(AGENT_URL + '/post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic })
+      });
+      const r = await res.json();
+      postData = r.post || r;
+      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_✅ Post generado_');
     }
-    if (!postData) {
-      const res = await fetchPost;
-      const raw = await res.json();
-      postData = raw.post || raw;
-    }
-  } catch(e) {
-    await edit(chatId, msgId, '❌ Error: ' + e.message);
-    return;
-  }
+  } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); return; }
 
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_✅ Texto listo_');
-
+  // Send text
   const title = (postData.title || topic).slice(0, 120);
   const body = (postData.body || '')
     .replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '')
-    .replace(/## [^\n]+\n?/g, '\n')
-    .replace(/# [^\n]+\n?/g, '\n')
-    .replace(/\*\*/g, '')
-    .replace(/\s{3,}/g, '\n\n')
-    .trim()
-    .slice(0, 900);
+    .replace(/## [^\n]+\n?/g, '\n').replace(/# [^\n]+\n?/g, '\n')
+    .replace(/\*\*/g, '').replace(/\s{3,}/g, '\n\n').trim().slice(0, 900);
   const caption = (postData.instagram_caption || '').replace(/<[^>]*>/g, '').slice(0, 250);
-
   await send(chatId, '📝 *' + title + '*\n\n' + body + '...');
-  await new Promise(r => setTimeout(r, 500));
   if (caption) await send(chatId, '📌 _Caption:_\n' + caption);
 
   // Thumbnail
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4, 10) + '\n_Generando thumbnail..._');
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4, 10) + '\n_🖼 Thumbnail..._');
   if (postData.thumbnail_prompt) {
     const thumbUrl = await grokImg(postData.thumbnail_prompt);
     if (thumbUrl) await photo(chatId, thumbUrl, '🖼 Thumbnail Substack');
   }
 
-  // Slides
-  const slideUrls = [];
-  const apiSlides = (postData.slides || []).map(s => s?.prompt).filter(Boolean);
+  // 7 Slides
   const T = (postData.title || topic).toUpperCase().slice(0, 38);
-  const TL = (postData.title || topic);
+  const TL = postData.title || topic;
   const defaultPrompts = [
-    'Square 1:1 format editorial Instagram slide. Dark background #080808. ALL text strictly inside 120px safe margin from every edge. Background: faint ghost image related to ' + TL + ' 12% opacity blurred film grain cinematic vignette. Top-left small caps dark gray ARTE CONTEMPORANEO ABRIL 2026. Bold condensed Bebas Neue white text left-aligned: ' + T + ' 3 lines massive. Bottom left small muted gray subtext. Bottom right 01/07 faint. No watermarks. Dark cinematic editorial.',
-    'Square 1:1 format editorial Instagram slide. White background #f5f5f0. ALL text strictly inside 120px safe margin. Background: faint decorative symbol 4% opacity dark gray. Film grain. Bold condensed Bebas Neue black text left-aligned: key paradox about ' + TL + ' 3 lines massive. Bottom left small caps light gray. Bottom right 02/07 faint. No watermarks. High contrast editorial.',
-    'Square 1:1 format editorial Instagram slide. Near black background. ALL text strictly inside 120px safe margin. Background: faint architecture 10% opacity film grain vignette. Thin vertical white line left side. Top small caps dark gray. Massive Bebas Neue white: key stat or number from ' + TL + '. Bottom small gray text. 03/07 faint. Dark cinematic.',
-    'Square 1:1 format editorial Instagram slide. Near black background. ALL text strictly inside 120px safe margin. Background: faint quotation mark 3% opacity. Film grain. Large italic serif quote light gray centered about ' + TL + '. Bottom attribution small caps dark gray. 04/07 faint. Cinematic editorial.',
-    'Square 1:1 format editorial Instagram slide. Near black background. ALL inside 120px safe margins. Film grain. 2x2 brutalist grid 4 dark gray cells 3px gap. Each cell: small label, bold condensed white text key concept from ' + TL + '. No watermarks. Brutalist editorial.',
-    'Square 1:1 format editorial Instagram slide. White background #f5f5f0. ALL text strictly inside 120px safe margin. Light film grain. Centered: massive Bebas Neue 4 lines — provocative question about ' + TL + ' alternating black and italic gray. Below small gray text. 06/07 faint. Minimalist powerful.',
-    'Square 1:1 format editorial Instagram slide. Near black background. ALL text strictly inside 120px safe margin. Background: faint urban pattern 5% opacity film grain vignette. Top left small caps REFLEXION. Bold Bebas Neue white: final statement 2 lines. Bottom left @maarmapa.eth dark gray. Bottom right hashtags very dark. 07/07. Dark cinematic finale.'
+    'Square 1:1 editorial Instagram. Dark #080808. Safe zone 120px all sides. Ghost image related to ' + TL + ' 12% opacity film grain vignette. Bebas Neue white left-aligned: ' + T + ' 3 lines massive. 01/07 faint. Dark cinematic editorial.',
+    'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px all sides. Film grain. Bebas Neue black: key paradox about ' + TL + ' 3 lines massive. 02/07. High contrast editorial.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Architecture 10% opacity film grain. Vertical white line left. Massive Bebas Neue white stat from ' + TL + '. 03/07. Dark cinematic.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Quotation mark 3% opacity. Italic serif quote light gray about ' + TL + '. Attribution small dark gray. 04/07. Cinematic.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. 2x2 brutalist grid 4 dark cells. Bold white condensed key concepts from ' + TL + '. 05/07. Brutalist.',
+    'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px all sides. Centered Bebas Neue 4 lines provocative question about ' + TL + ' black and italic gray. 06/07. Minimalist.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Urban pattern 5% opacity. Bebas Neue white conclusion 2 lines. @maarmapa.eth bottom left. Hashtags bottom right. 07/07.'
   ];
-  const finalPrompts = apiSlides.length >= 7 ? apiSlides : defaultPrompts;
-
-  for (let i = 0; i < Math.min(finalPrompts.length, 7); i++) {
+  const slideUrls = [];
+  for (let i = 0; i < 7; i++) {
     await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i + 1) + '/7..._');
-    const url = await grokImg(finalPrompts[i]);
+    const url = await grokImg(defaultPrompts[i]);
     if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i + 1) + '/7'); }
   }
-
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_' + slideUrls.length + ' slides listos_');
 
   // Runway clips
   let clips = 0;
   if (process.env.RUNWAY_KEY && slideUrls.length > 0) {
     const motions = [
-      'Instagram Reel editorial. Slide starts static fully legible. Text slides out left with motion blur after 1s. Dark cinematic editorial.',
-      'Editorial reel. White slide sharp. Text scales up dramatically then blurs. Clean typographic impact.',
-      'Editorial reel. Dark slide static legible. Numbers animate fast then blur. Vertical line slides in with energy.',
-      'Editorial reel. Quote static readable. Text fades upward like smoke. Contemplative cinematic mood.',
-      'Editorial reel. Grid static legible. Cells flash sequentially. Brutalist editorial rhythm.',
-      'Editorial reel. White slide static. Letters scatter outward like explosion. Kinetic typography.',
-      'Editorial reel. Dark finale. Background pulses. Text sharp throughout. @maarmapa.eth clear. Cinematic fade.'
+      'Instagram Reel. Static then text slides left with motion blur. Dark cinematic.',
+      'Editorial reel. White slide sharp. Text scales up blurs out. Clean impact.',
+      'Dark slide. Numbers animate fast then blur. Vertical line slides in.',
+      'Quote fades drifts upward like smoke. Contemplative mood.',
+      'Grid cells flash sequentially. Brutalist rhythm.',
+      'Letters scatter outward explosion. Kinetic typography.',
+      'Fade deeper black. Background pulses. @maarmapa.eth sharp. Cinematic finale.'
     ];
     for (let i = 0; i < Math.min(slideUrls.length, 7); i++) {
       await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/' + slideUrls.length + ' Runway..._');
-      const vid = await runwayVideo(slideUrls[i], motions[i]);
+      const vid = await runwayVideo(slideUrls[i], motions[i], 3);
       if (vid) { await video(chatId, vid, '🎬 Clip ' + (i + 1)); clips++; }
     }
   }
@@ -207,105 +239,76 @@ async function runFactory(chatId, topic) {
 }
 
 // ── ANIME FACTORY ─────────────────────────────────────
+const BASE_CHAR = 'Hyper-cinematic anime. Katsuhiro Otomo Akira aesthetic. Cel-shading thick bold ink outlines. Mature dark gritty. NOT kawaii NOT chibi NOT cute. Hard dramatic shadows.';
+const ANDINO_P = BASE_CHAR + ' ANDINO — full black ninja suit, ONLY calm eyes visible, crimson red headphones over ninja hood, MPC drum machine strapped to forearm glowing red. Crimson red neon. Red circle clan symbol.';
+const PIERO_P = BASE_CHAR + ' PIERO — full dark navy ninja suit, ONLY sharp eyes behind round glasses over mask, microphone raised as weapon. Gold neon. Gold diamond clan symbol.';
+const KINNY_P = BASE_CHAR + ' KINNY — full teal ninja suit, ONLY fierce intense eyes, electric blue lightning markings on arms and legs. EXPLOSIVE: right leg full kick extended, left arm back right arm forward, THREE shuriken orbiting, speed lines everywhere. Electric blue. Lightning bolt clan symbol.';
+
 async function runAnime(chatId, concept) {
-  const msgId = await send(chatId, '🎬 *maarmapa anime factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+  const msgId = await send(chatId, '🎬 *anime factory*\n' + bar(0, 10) + '\n_Iniciando..._');
 
-  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(1, 10) + '\n_Despertando agente..._');
-  const awake = await wakeAgent(chatId, msgId);
-  if (!awake) {
-    await edit(chatId, msgId, '❌ Agente no responde.');
-    return;
-  }
+  const BASE_STYLE = 'Hyper-cinematic anime still frame. Katsuhiro Otomo Akira aesthetic. Cel-shading thick bold ink outlines. Mature dark gritty. NOT kawaii NOT chibi. Hard shadows film grain. Dystopian city — Tokyo Osaka Kyoto density fused with Andes silhouette on horizon and Spanish colonial archway glimpsed — kanji and Spanish neon signs mixed, wet cobblestones, electric storm. Vertical 9:16. ALL inside 120px safe margins. No cropping.';
 
-  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(2, 10) + '\n_Claude diseñando personajes..._');
-
-   // CHARACTER BIBLES — Shaolin Ninja Distópico Tokio/Kyoto 80s
-   const BASE_CHAR = 'Hyper-detailed anime illustration. Katsuhiro Otomo Akira meets Ninja Gaiden meets Shaw Brothers kung fu films. Cel-shading thick bold ink outlines. Full body character sheet front and 3/4 view. White background. Mature dark gritty cinematic style. NOT kawaii NOT chibi NOT cute. Hard dramatic shadows. Dystopian 1980s Tokyo Kyoto Osaka neon atmosphere embedded in character design.';
-   const characters = [
-     {
-       character: 'Andino',
-       role: 'Beatmaker Ninja',
-       prompt: BASE_CHAR + ' ANDINO — full black ninja suit covering entire body and face, only eyes visible, crimson red clan markings on chest and arms, oversized red headphones worn over ninja hood, portable MPC drum machine strapped to forearm like a weapon. Calm focused assassin expression through mask. Athletic warrior build. Shuriken stars attached to belt. Crimson red neon accent color. Clan symbol: red circle on chest.'
-     },
-     {
-       character: 'Piero',
-       role: 'MC Ninja',
-       prompt: BASE_CHAR + ' PIERO — full dark navy ninja suit covering entire body and face, only sharp eyes visible behind round wire glasses worn over mask, gold clan markings on shoulders, holding microphone like a ceremonial weapon raised high. Slim agile warrior build. Scrolls and throwing stars at waist. Gold neon accent color. Clan symbol: gold diamond on chest. Battle stance, one hand forward.'
-     },
-     {
-       character: 'Kinny',
-       role: 'Dancer Ninja',
-       prompt: BASE_CHAR + ' KINNY — full deep teal ninja suit covering entire body and face, ONLY fierce intense eyes visible through narrow slit. Electric blue lightning bolt clan markings running down BOTH arms and BOTH legs — highly detailed pattern. Five panel flat brim cap worn OVER ninja hood, tilted slightly. POWERFUL athletic muscular build — broad shoulders, defined arms visible through tight suit. EXPLOSIVE mid-air pose: right leg fully extended sideways kick at head height, left leg bent, right arm thrusting forward palm open, left arm pulled back — full diagonal dynamic line of maximum power. THREE shuriken stars spinning in tight orbit around his body. Speed lines radiating outward in ALL directions from his body showing extreme velocity. Electric blue neon glow emanating from markings. Clan symbol: blue lightning bolt on chest. SHOW FULL BODY head to toe clearly. Hard dramatic ink shadows. Extreme detail definition. Ultimate kinetic warrior dancer.'
-     }
-   ];
-  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(3, 10) + '\n_' + characters.length + ' personajes ✅_');
-  await send(chatId, '🎨 *Personajes:*\n' + characters.map((c, i) => (i + 1) + '. *' + c.character + '* — ' + c.role).join('\n'));
-
-  // Grok genera imágenes
-  const characterImages = [];
-  for (let i = 0; i < characters.length; i++) {
-    await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(3 + i, 10) + '\n_🎨 ' + characters[i].character + '..._');
-    const url = await grokImg(characters[i].prompt);
-    if (url) {
-      characterImages.push({ ...characters[i], url });
-      await photo(chatId, url, '🎨 ' + characters[i].character + ' — ' + characters[i].role);
-    }
-  }
-
-  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7, 10) + '\n_' + characterImages.length + ' imágenes listas ✅_');
-
-  // Runway anima
-  // 3 CINEMATIC SCENES — Wu-Tang x Shaolin x Ninja Gaiden x Akira
-  // Each scene uses character bibles for consistency
-  const BASE_STYLE = 'Hyper-detailed anime. Katsuhiro Otomo Akira meets Ninja Gaiden meets Shaw Brothers. Cel-shading thick bold ink outlines. Mature dark gritty cinematic. NOT kawaii NOT chibi NOT cute. Hard shadows film grain. Dystopian Santiago de Chile — Gran Torre Costanera skyscraper in background, Cerro San Cristóbal with neon lights, Barrio Italia wet cobblestone streets, Plaza de Armas colonial arches meets cyberpunk neon, Mapocho river reflecting neon lights at night, Andes mountain silhouette on horizon under electric storm, Spanish colonial architecture mixed with brutalist towers and neon signs in Spanish. Vertical 9:16 format. ALL elements strictly inside 120px safe margin every edge. No cropping.';
   const scenePrompts = [
-    BASE_STYLE + ' SHOT 1 — ANDINO THE BEATMAKER NINJA. Low angle 360 orbit shot. Full black ninja suit face covered, crimson red headphones over ninja hood, MPC strapped to forearm glowing red. Crouching on rooftop in dystopian Santiago de Chile — Gran Torre Costanera glowing behind him, Cerro San Cristóbal with red neon cross visible, Andes mountains under electric storm. Rain pours down, neon signs in Spanish reflect on wet surfaces. Shuriken stars orbit slowly. Camera rotates 360 around him. Crimson red neon. Epic IMAX quality.',
-    BASE_STYLE + ' SHOT 2 — PIERO AND KINNY NINJA ACTION. 180 degree tracking arc. PIERO: dark navy ninja suit face covered, glasses over mask, microphone raised as weapon — center frame. KINNY: teal ninja suit face covered, mid-air explosive breakdance kick, shuriken stars orbiting, motion blur speed lines. Both fully inside safe margins. Rain-soaked Barrio Italia cobblestone alley at night, Santiago — colonial archways, graffiti murals in Spanish, neon signs mixing with old street lamps. Mapocho river visible at alley end. Gold and electric blue neon clash. Epic kinetic warrior energy.',
-    BASE_STYLE + ' SHOT 3 — SOUTH SIDE CRIMINI SQUAD FINALE. Epic top-down descent. ANDINO + PIERO + KINNY — all in full ninja suits — tight triangle on wet Plaza de Armas Santiago cobblestones, neon reflections rippling around them, shuriken stars spinning around all three. Piero raises fist — massive energy corona burst. Yin yang symbol glowing in the stone beneath them. Massive bold red glitch typography SOUTH SIDE CRIMINI centered inside safe zone. Gran Torre Costanera and Andes mountains surrounding the plaza. Colonial cathedral meets cyberpunk skyline. Ultimate anime poster.'
+    BASE_STYLE + ' SHOT 1. ' + ANDINO_P + ' Rooftop low angle 360. Neon red lightning. Rain. Andes silhouette behind.',
+    BASE_STYLE + ' SHOT 2. ' + PIERO_P + ' + ' + KINNY_P + ' Alley 180 arc. Steam grates. Kanji graffiti walls. Gold blue neon clash.',
+    BASE_STYLE + ' SHOT 3. All three triangle formation top-down. ANDINO left PIERO center KINNY right mid-kick. Yin yang glowing ground. SOUTH SIDE CRIMINI red glitch text top. Ultimate poster.'
   ];
 
-  // Runway motion prompts — Wu-Tang energy, Akira cinematics
   const motions = [
-    'Akira-style cinematic. Camera orbits slowly around the beatmaker in a 360-degree arc, rising from low angle. Red neon lightning strikes dramatically once. Rain particles streak across frame. MPC drum machine glows red. Urban city below pulses with neon. Beat-driven rhythmic camera movement. Hard cuts on the beat.',
-    'Dynamic 180-degree tracking arc. Camera sweeps fast around both characters. Dancer spin accelerates with extreme motion blur. MC raises mic higher as camera passes. Steam jets from grates in slow motion bursts. Kanji graffiti on walls illuminated briefly by passing spotlight. Fast Wu-Tang hip-hop energy. Rapid kinetic movement.',
-    'Epic top-down drone descent. Camera plunges fast from high above. Three warriors below get larger as camera falls. Energy burst corona expands outward in rings. Neon reflections ripple on wet asphalt. Shaolin symbol glows beneath feet. White flash freeze frame. Title text SOUTH SIDE CRIMINI glitches in red. Anime poster hold.'
+    'Akira anime. Camera orbits 360 rising from low angle. Red lightning strikes. Rain streaks. Beat-driven.',
+    'Dynamic 180 arc. Dancer spin accelerates motion blur. MC raises mic. Steam jets slow motion. Fast energy.',
+    'Top-down drone descent fast. Energy burst expands. Neon ripples. White flash freeze. Title glitches red.'
   ];
 
+  await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(2, 10) + '\n_Generando personajes..._');
+
+  // Character sheets
+  const chars = [
+    { character: 'Andino', role: 'Beatmaker', prompt: ANDINO_P + ' Full body character sheet front and 3/4. White background.' },
+    { character: 'Piero', role: 'MC', prompt: PIERO_P + ' Full body character sheet front and 3/4. White background.' },
+    { character: 'Kinny', role: 'Dancer', prompt: KINNY_P + ' Full body clearly visible. White background.' }
+  ];
+
+  await send(chatId, '🎨 *Squad:*\n1. *Andino* — Beatmaker\n2. *Piero* — MC\n3. *Kinny* — Dancer');
+
+  for (let i = 0; i < chars.length; i++) {
+    await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(2 + i, 10) + '\n_🎨 ' + chars[i].character + '..._');
+    const url = await grokImg(chars[i].prompt);
+    if (url) await photo(chatId, url, '🎨 ' + chars[i].character + ' — ' + chars[i].role);
+  }
+
+  // 3 cinematic scenes
   const clips = [];
   for (let i = 0; i < 3; i++) {
-    await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7 + i, 10) + '\n_🎨 Shot ' + (i + 1) + '/3 — Grok generando escena..._');
+    await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(5 + i, 10) + '\n_🎨 Shot ' + (i + 1) + '/3 Grok..._');
     const sceneUrl = await grokImg(scenePrompts[i]);
     if (sceneUrl) {
-      await photo(chatId, sceneUrl, '🎨 Shot ' + (i + 1) + '/3');
-      await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(7 + i, 10) + '\n_🎬 Shot ' + (i + 1) + '/3 — Runway animando..._');
-      const vid = await runwayVideo(sceneUrl, motions[i]);
+      await photo(chatId, sceneUrl, '🎬 Shot ' + (i + 1) + '/3');
+      await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(6 + i, 10) + '\n_🎬 Shot ' + (i + 1) + '/3 Runway..._');
+      const vid = await runwayVideo(sceneUrl, motions[i], 5);
       if (vid) { clips.push(vid); await video(chatId, vid, '🎬 Shot ' + (i + 1) + '/3'); }
     }
   }
 
-  await edit(chatId, msgId, '🎬 *maarmapa anime factory*\n' + bar(10, 10) + '\n✅ *Completado*');
-  await send(chatId, '✅ *Anime listo*\n🎨 Personajes: ' + characterImages.length + '/3\n🎬 Clips: ' + clips.length + '/3\n_Une en CapCut para el video final._');
+  await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(10, 10) + '\n✅ *Completado*');
+  await send(chatId, '✅ *Anime listo*\n🎬 Clips: ' + clips.length + '/3\n_Une en CapCut para el video final._');
 }
 
-
-// ── SQUAD MULTI-ANGLE ────────────────────────────────
-async function runSquad(chatId, subject) {
+// ── SQUAD MULTI-ANGLE ─────────────────────────────────
+async function runSquad(chatId) {
   const msgId = await send(chatId, '🥷 *SQUAD factory*\n' + bar(0, 10) + '\n_Iniciando..._');
 
-  const BASE = 'Hyper-cinematic anime still frame. Katsuhiro Otomo Akira aesthetic. Cel-shading thick bold ink outlines. Mature dark gritty cinematic. NOT kawaii NOT chibi NOT cute. Hard dramatic shadows film grain. Dystopian city — Tokyo Osaka Kyoto urban density fused subtly with Andes mountain silhouette on horizon and Spanish colonial archway glimpsed in background — neon signs mix kanji and Spanish, wet cobblestones reflecting neon, electric storm sky. Vertical 9:16 format. ALL elements strictly inside 120px safe margin. No cropping.';
-
-  const KINNY_DESC = 'KINNY — full deep teal ninja suit, ONLY fierce intense eyes visible, electric blue lightning bolt clan markings on both arms and legs, five panel cap over ninja hood, powerful muscular build, electric blue neon glow, shuriken stars orbiting, blue lightning bolt clan symbol on chest';
-  const ANDINO_DESC = 'ANDINO — full black ninja suit, ONLY calm focused eyes visible, crimson red headphones over ninja hood, MPC drum machine strapped to forearm glowing red, athletic build, crimson red neon, shuriken stars on belt, red circle clan symbol';
-  const PIERO_DESC = 'PIERO — full dark navy ninja suit, ONLY sharp eyes visible behind round glasses over mask, microphone raised as ceremonial weapon, slim agile build, gold neon accent, gold diamond clan symbol on chest';
+  const BASE = 'Hyper-cinematic anime still frame. Katsuhiro Otomo Akira aesthetic. Cel-shading thick bold ink outlines. Mature dark gritty. NOT kawaii NOT chibi. Hard shadows film grain. Dystopian city Tokyo Osaka Kyoto fused with Andes silhouette and Spanish colonial archway, kanji and Spanish neon mixed, wet cobblestones electric storm. Vertical 9:16. ALL inside 120px safe margins. No cropping.';
 
   const angles = [
-    { label: 'Kinny — Action', prompt: BASE + ' ' + KINNY_DESC + '. FROZEN MID-AIR: right leg fully extended roundhouse kick, left leg bent, right arm thrusting forward, left arm pulled back — perfect diagonal power line across frame. THREE shuriken orbiting. Extreme speed lines from every limb. Electric blue energy trails. Dramatic underlighting from wet ground below.' },
-    { label: 'Kinny — Low Angle', prompt: BASE + ' ' + KINNY_DESC + '. EXTREME LOW ANGLE from ground looking up — figure dominates upper frame. Wide warrior stance, both arms raised 45 degrees, electric blue corona expanding like shockwave. Shuriken stars in wide arc. Rain falling. Andes silhouette and storm clouds behind.' },
-    { label: 'Kinny — Portrait', prompt: BASE + ' ' + KINNY_DESC + '. WAIST UP 3/4 angle. Right hand holds spinning shuriken at eye level — motion blur on star, electric blue crackling around fist. Left hand gripping own forearm. Single neon blue light source from left casting hard mask shadow. Wet stone wall with faint neon sign behind.' },
-    { label: 'Andino — Beat', prompt: BASE + ' ' + ANDINO_DESC + '. MEDIUM SHOT low angle. Both hands on MPC pads mid-strike, red energy pulses from each pad hit. Face bowed in deep concentration. Crimson energy particles floating upward like incense smoke. Red neon rain outside floor-to-ceiling window behind him. Rooftop setting.' },
-    { label: 'Andino — Rooftop', prompt: BASE + ' ' + ANDINO_DESC + '. FULL BODY on rooftop edge, wind pressing suit against body. Right arm raised high holding glowing vinyl record disc — crimson red weapon. Left arm extended for balance. City sprawl far below, mountain silhouette against electric red storm sky. Extreme dramatic silhouette.' },
-    { label: 'Piero — Battle', prompt: BASE + ' ' + PIERO_DESC + '. HERO SHOT center frame. Microphone thrust forward like spear toward camera — gold energy beam from mic tip. Other hand open palm strike sideways. Wide warrior stance on wet cobblestones. Colonial archway illuminated gold from below behind him. Steam rising from manholes. Puddles doubling the reflection.' },
-    { label: 'Squad — Final', prompt: BASE + ' EPIC WIDE SHOT. ' + ANDINO_DESC + ' left. ' + PIERO_DESC + ' center mic raised. ' + KINNY_DESC + ' right mid-air kick. Perfect triangle, all fully visible inside 120px margins. Three colored coronas red gold blue merging into white center. Yin yang glowing in wet ground. Bold red glitch typography SOUTH SIDE CRIMINI top inside safe zone.' }
+    { label: 'Kinny — Action', prompt: BASE + ' ' + KINNY_P + ' FROZEN MID-AIR right leg full roundhouse kick, diagonal power line. THREE shuriken orbit. Speed lines all directions. Electric blue trails. Dramatic underlighting.' },
+    { label: 'Kinny — Low Angle', prompt: BASE + ' ' + KINNY_P + ' EXTREME LOW ANGLE from ground. Wide warrior stance both arms raised 45deg. Blue corona shockwave. Shuriken wide arc. Rain falling. Mountain silhouette behind.' },
+    { label: 'Kinny — Portrait', prompt: BASE + ' ' + KINNY_P + ' WAIST UP 3/4. Right hand spinning shuriken eye level motion blur blue energy crackling. Single neon blue light from left. Wet stone wall neon sign behind.' },
+    { label: 'Andino — Beat', prompt: BASE + ' ' + ANDINO_P + ' MEDIUM SHOT low angle. Both hands on MPC mid-strike red energy pulses. Face bowed concentration. Crimson particles float up like incense. Red neon rain outside window.' },
+    { label: 'Andino — Rooftop', prompt: BASE + ' ' + ANDINO_P + ' FULL BODY rooftop edge wind pressing suit. Right arm raised holding vinyl disc glowing red weapon. Left arm balance. City below mountain silhouette red storm sky. Extreme silhouette.' },
+    { label: 'Piero — Battle', prompt: BASE + ' ' + PIERO_P + ' HERO SHOT center. Microphone thrust toward camera gold energy beam from tip. Other hand open palm strike. Wet cobblestones. Colonial archway gold neon behind. Steam manholes. Puddle reflection.' },
+    { label: 'Squad — Final', prompt: BASE + ' EPIC WIDE. ' + ANDINO_P + ' left. ' + PIERO_P + ' center. ' + KINNY_P + ' right. Triangle formation ALL inside 120px. Three coronas red gold blue merge white center. Yin yang glowing ground. SOUTH SIDE CRIMINI red glitch top.' }
   ];
 
   const clips = [];
@@ -314,9 +317,8 @@ async function runSquad(chatId, subject) {
     const url = await grokImg(angles[i].prompt);
     if (url) {
       await photo(chatId, url, '🎨 ' + angles[i].label);
-      // Animate with Runway
       await edit(chatId, msgId, '🥷 *SQUAD factory*\n' + bar(i + 1, angles.length + 1) + '\n_🎬 Runway: ' + angles[i].label + '..._');
-      const vid = await runwayVideo(url, 'Akira anime cinematic. Character animation — dramatic movement, speed lines, neon glow intensifies. Camera holds then slowly pushes in. Dark dystopian Santiago atmosphere. Beat-driven energy pulse.');
+      const vid = await runwayVideo(url, 'Akira anime. Character animation dramatic movement speed lines neon glow. Camera slow push-in. Dark dystopian atmosphere. Beat-driven energy.', 3);
       if (vid) { clips.push(vid); await video(chatId, vid, '🎬 ' + angles[i].label); }
     }
   }
@@ -325,41 +327,53 @@ async function runSquad(chatId, subject) {
   await send(chatId, '✅ *Squad listo*\n🎨 ' + angles.length + ' imágenes\n🎬 ' + clips.length + ' clips\n_Une en CapCut._');
 }
 
+// ── SEEDANCE FACTORY ──────────────────────────────────
+async function runSeedance(chatId, concept, imageUrl) {
+  const msgId = await send(chatId, '🌱 *Seedance factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+
+  if (!OPENROUTER_KEY) {
+    await edit(chatId, msgId, '❌ OPENROUTER_KEY no configurada en Render.');
+    return;
+  }
+
+  await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(3, 10) + '\n_Generando video con Seedance 2.0..._');
+
+  const prompt = concept || 'Cinematic anime ninja squad in dystopian city. Wu-Tang Shaolin aesthetic. Dark neon atmosphere. Beat-driven motion.';
+  const vid = await seedanceVideo(prompt, imageUrl, null);
+
+  if (vid) {
+    await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(10, 10) + '\n✅ *Completado*');
+    await video(chatId, vid, '🎬 Seedance 2.0');
+  } else {
+    await edit(chatId, msgId, '❌ Seedance no generó el video. Verifica créditos en OpenRouter.');
+  }
+}
+
 // ── COMMANDS ──────────────────────────────────────────
 async function handle(msg) {
   const chatId = msg.chat.id;
   const text = msg.text || '';
 
-  // Handle photo sent directly — animate with Runway
+  // Photo → Runway direct
   if (msg.photo) {
-    const photo = msg.photo[msg.photo.length - 1]; // highest res
+    const p = msg.photo[msg.photo.length - 1];
     const caption = msg.caption || '';
-    const msgId = await send(chatId, '📸 Foto recibida — preparando Runway...');
+    const msgId = await send(chatId, '📸 Foto recibida — enviando a Runway...');
     try {
-      // Get file URL from Telegram
-      const fileRes = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/getFile?file_id=' + photo.file_id);
+      const fileRes = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/getFile?file_id=' + p.file_id);
       const fileData = await fileRes.json();
-      const filePath = fileData.result?.file_path;
-      const imageUrl = 'https://api.telegram.org/file/bot' + TELEGRAM_TOKEN + '/' + filePath;
-
-      const motionPrompt = caption || 'Slow 360 product rotation. Clean studio lighting. Professional product video. Smooth continuous rotation showing all angles. Dark background with subtle neon reflection on surface below.';
-
-      await edit(chatId, msgId, '🎬 Runway generando video... (~2 min)');
-      const vid = await runwayVideo(imageUrl, motionPrompt);
-      if (vid) {
-        await video(chatId, vid, '🎬 Video listo');
-        await edit(chatId, msgId, '✅ Listo');
-      } else {
-        await edit(chatId, msgId, '❌ Runway no generó el video. Intenta de nuevo.');
-      }
-    } catch(e) {
-      await edit(chatId, msgId, '❌ Error: ' + e.message);
-    }
+      const imageUrl = 'https://api.telegram.org/file/bot' + TELEGRAM_TOKEN + '/' + fileData.result?.file_path;
+      const motionPrompt = caption || 'Slow 360 product rotation. Professional studio lighting. Dark background subtle neon reflection. Smooth continuous rotation. Commercial product video.';
+      await edit(chatId, msgId, '🎬 Runway generando... (~2 min)');
+      const vid = await runwayVideo(imageUrl, motionPrompt, 5);
+      if (vid) { await video(chatId, vid, '🎬 Video listo'); await edit(chatId, msgId, '✅ Listo'); }
+      else await edit(chatId, msgId, '❌ Runway no generó el video. Intenta de nuevo.');
+    } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
     return;
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory*\n\n`/post [tema]` — contenido completo\n`/anime [concepto]` — video anime\n`/squad` — multi-ángulo squad\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n📸 *Manda una foto* — Runway la anima directo');
+    await send(chatId, '🎨 *maarmapa factory v5*\n\n`/post [tema]` — post completo\n`/anime [concepto]` — video anime squad\n`/squad` — multi-ángulo Andino+Piero+Kinny\n`/seedance [concepto]` — Seedance 2.0\n`/buscar [query]` — noticias X/Twitter\n`/chat [pregunta]` — agente\n`/digest` — digest semanal\n📸 *Manda una foto* — Runway la anima');
     return;
   }
 
@@ -368,13 +382,20 @@ async function handle(msg) {
     return;
   }
 
-  if (text.startsWith('/squad')) {
-    runSquad(chatId, 'south side crimini').catch(e => send(chatId, '❌ ' + e.message));
+  if (text.startsWith('/anime ') || text === '/anime') {
+    const concept = text.replace('/anime', '').trim() || 'south side crimini';
+    runAnime(chatId, concept).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
 
-  if (text.startsWith('/anime ')) {
-    runAnime(chatId, text.replace('/anime ', '')).catch(e => send(chatId, '❌ ' + e.message));
+  if (text === '/squad') {
+    runSquad(chatId).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/seedance')) {
+    const concept = text.replace('/seedance', '').trim();
+    runSeedance(chatId, concept, null).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
 
@@ -393,6 +414,10 @@ async function handle(msg) {
     const q = text.replace('/chat ', '');
     const msgId = await send(chatId, '💬 _Pensando..._');
     try {
+      // Try DeepSeek first
+      const reply = await deepseek(q, 'Eres maarmapa — artista urbano chileno contemporáneo con conocimiento profundo de arte, cultura, blockchain y ciudades. Responde en español.');
+      if (reply) { await edit(chatId, msgId, reply.slice(0, 4000)); return; }
+      // Fallback to agent
       const res = await fetch(AGENT_URL + '/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: q }] }) });
       const d = await res.json();
       await edit(chatId, msgId, (d.reply || '...').slice(0, 4000));
@@ -403,6 +428,8 @@ async function handle(msg) {
   if (text === '/digest') {
     const msgId = await send(chatId, '📰 _Generando digest..._');
     try {
+      const reply = await deepseek('Genera un digest semanal de las noticias más importantes de arte contemporáneo, marketing viral, blockchain y AI de esta semana. Busca información actual. Formato: título + 5-7 noticias con descripción breve. En español.', null);
+      if (reply) { await edit(chatId, msgId, reply.slice(0, 4000)); return; }
       const res = await fetch(AGENT_URL + '/digest');
       const d = await res.json();
       await edit(chatId, msgId, (d.digest || 'Error').slice(0, 4000));
@@ -411,13 +438,13 @@ async function handle(msg) {
   }
 
   if (text && !text.startsWith('/')) {
-    await send(chatId, '💡 `/post ' + text.slice(0, 30) + '` — contenido\n`/anime ' + text.slice(0, 30) + '` — video\n`/buscar ' + text.slice(0, 30) + '` — noticias');
+    await send(chatId, '💡 `/post ' + text.slice(0, 25) + '` — post\n`/anime ' + text.slice(0, 25) + '` — anime\n`/buscar ' + text.slice(0, 25) + '` — noticias\n`/chat ' + text.slice(0, 25) + '` — pregunta');
   }
 }
 
 // ── POLLING ───────────────────────────────────────────
 async function poll() {
-  console.log('maarmapa bot v4 started');
+  console.log('maarmapa bot v5 started — Claude+Grok+Runway+Seedance+DeepSeek');
   let offset = 0;
   while (true) {
     try {
@@ -434,6 +461,5 @@ async function poll() {
   }
 }
 
-// ── HTTP SERVER ───────────────────────────────────────
-require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v4 online'); }).listen(process.env.PORT || 3000);
+require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v5 online'); }).listen(process.env.PORT || 3000);
 poll();
