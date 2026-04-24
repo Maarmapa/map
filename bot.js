@@ -78,38 +78,59 @@ async function runwayVideo(imageUrl, prompt, duration) {
 const SOUTH_SIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH_SIDE_CRIMINI.mp3';
 
 async function seedanceVideo(prompt, imageUrl, audioUrl) {
-  if (!OPENROUTER_KEY) return null;
+  if (!OPENROUTER_KEY) { console.error('No OPENROUTER_KEY'); return null; }
   try {
+    // Build request body per OpenRouter docs
     const body = {
       model: 'bytedance/seedance-2.0-fast',
       prompt,
-      duration: 8,
       aspect_ratio: '9:16',
-      resolution: '1080p'
+      duration: 5,
+      resolution: '720p'
     };
-    if (imageUrl) body.image = imageUrl;
+    // Image as first_frame if provided
+    if (imageUrl) {
+      body.frame_images = [{ url: imageUrl, frame_type: 'first_frame' }];
+    }
+
+    console.log('Seedance request:', JSON.stringify(body).slice(0, 200));
 
     const res = await fetch('https://openrouter.ai/api/v1/videos', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo', 'X-Title': 'maarmapa' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + OPENROUTER_KEY,
+        'HTTP-Referer': 'https://maarmapa.eth.limo',
+        'X-Title': 'maarmapa'
+      },
       body: JSON.stringify(body)
     });
     const text = await res.text();
     console.log('Seedance response:', text.slice(0, 300));
-    let d; try { d = JSON.parse(text); } catch(e) { console.error('Seedance parse error:', text.slice(0,100)); return null; }
-    if (!d.id) { console.error('Seedance no id:', JSON.stringify(d).slice(0,300)); return null; }
+    let d;
+    try { d = JSON.parse(text); } catch(e) { console.error('Parse error:', text.slice(0,100)); return null; }
+    if (!d.id) { console.error('No id in response:', JSON.stringify(d)); return null; }
 
-    // Poll for completion
+    console.log('Seedance job ID:', d.id);
+
+    // Poll using polling_url
+    const pollUrl = d.polling_url || ('https://openrouter.ai/api/v1/videos/' + d.id);
     for (let i = 0; i < 40; i++) {
       await new Promise(r => setTimeout(r, 10000));
-      const p = await fetch('https://openrouter.ai/api/v1/videos/' + d.id, {
+      const p = await fetch(pollUrl, {
         headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY }
       });
       const t = await p.json();
       console.log('Seedance poll ' + i + ':', t.status);
-      if (t.status === 'completed') return t.unsigned_urls?.[0] || ('https://openrouter.ai/api/v1/videos/' + d.id + '/content?index=0') || null;
-      if (t.status === 'failed') { console.error('Seedance failed:', JSON.stringify(t).slice(0,200)); return null; }
+      if (t.status === 'completed') {
+        // Video available at content endpoint
+        const videoUrl = 'https://openrouter.ai/api/v1/videos/' + d.id + '/content?index=0';
+        console.log('Seedance done:', videoUrl);
+        return videoUrl;
+      }
+      if (t.status === 'failed') { console.error('Seedance failed:', JSON.stringify(t)); return null; }
     }
+    console.error('Seedance timeout');
     return null;
   } catch(e) { console.error('Seedance error:', e.message); return null; }
 }
