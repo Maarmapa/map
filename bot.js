@@ -361,8 +361,33 @@ async function runSeedance(chatId, concept, imageUrl, audioUrl) {
   await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(3, 10) + '\n_🎵 SOUTH SIDE CRIMINI + Seedance 2.0..._');
   const vid = await seedanceVideo(prompt, imageUrl, useAudio);
   if (vid) {
-    await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(10, 10) + '\n✅ *Completado*');
-    await video(chatId, vid, '🎬 Seedance 2.0 — South Side Crimini');
+    await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(9, 10) + '\n_Descargando video..._');
+    try {
+      // Download video from OpenRouter (requires auth header)
+      const vidRes = await fetch(vid, {
+        headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY }
+      });
+      const vidBuffer = await vidRes.arrayBuffer();
+      const vidBase64 = Buffer.from(vidBuffer).toString('base64');
+
+      // Send as document via Telegram API directly
+      const FormData = require('form-data');
+      const form = new FormData();
+      form.append('chat_id', chatId);
+      form.append('video', Buffer.from(vidBuffer), { filename: 'south_side_crimini.mp4', contentType: 'video/mp4' });
+      form.append('caption', '🎬 Seedance 2.0 — South Side Crimini');
+
+      await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', {
+        method: 'POST',
+        body: form,
+        headers: form.getHeaders()
+      });
+
+      await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(10, 10) + '\n✅ *Completado*');
+    } catch(e) {
+      // Fallback: send URL directly
+      await edit(chatId, msgId, '✅ Video generado:\n' + vid);
+    }
   } else {
     await edit(chatId, msgId, '❌ Seedance no generó video. Verifica créditos en OpenRouter.');
   }
