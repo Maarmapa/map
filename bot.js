@@ -107,7 +107,7 @@ async function seedanceVideo(prompt, imageUrl, audioUrl) {
       });
       const t = await p.json();
       console.log('Seedance poll ' + i + ':', t.status);
-      if (t.status === 'completed') return t.unsigned_urls?.[0] || t.data?.[0]?.url || null;
+      if (t.status === 'completed') return t.unsigned_urls?.[0] || ('https://openrouter.ai/api/v1/videos/' + d.id + '/content?index=0') || null;
       if (t.status === 'failed') { console.error('Seedance failed:', JSON.stringify(t).slice(0,200)); return null; }
     }
     return null;
