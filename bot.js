@@ -5,6 +5,17 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
 const SOUTH_SIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH_SIDE_CRIMINI.mp3';
 
+// Clip storage — auto-saves all generated video URLs per chat
+const clipStore = {};
+function saveClip(chatId, url) {
+  if (!clipStore[chatId]) clipStore[chatId] = [];
+  clipStore[chatId].push(url);
+  // Keep last 20 clips
+  if (clipStore[chatId].length > 20) clipStore[chatId].shift();
+}
+function getClips(chatId) { return clipStore[chatId] || []; }
+function clearClips(chatId) { clipStore[chatId] = []; }
+
 // Model config
 const MODELS = {
   text: {
@@ -53,7 +64,10 @@ async function photo(chatId, url, caption) {
   try { await tg('sendPhoto', { chat_id: chatId, photo: url, caption }); } catch(e) {}
 }
 async function video(chatId, url, caption) {
-  try { await tg('sendVideo', { chat_id: chatId, video: url, caption }); } catch(e) {}
+  try {
+    await tg('sendVideo', { chat_id: chatId, video: url, caption });
+    if (url && url.startsWith('http')) saveClip(chatId, url);
+  } catch(e) {}
 }
 function bar(n, total) {
   const f = Math.round((n / total) * 10);
@@ -303,8 +317,27 @@ async function runSquad(chatId) {
   await send(chatId, '✅ *Squad listo*\n🎨 ' + angles.length + ' imágenes\n🎬 ' + clips.length + ' clips');
 }
 
+
+// ── CINEMATIC SCENE PRESETS ───────────────────────────
+const SCENES = {
+  intro: 'SHOT 1: Extreme low angle ground level — crumbling ancient Shaolin temple at night, black smoke rolling across wet stone floor, blood moon through broken arch. A single pair of crimson eyes opens slowly in the darkness — ANDINO materializes from shadow crouched over glowing MPC altar, red runes pulse on every pad. CAMERA rises slowly from floor to medium shot. CUT TO SHOT 2: Stone corridor — heavy footsteps approach, candlelight flickers violently. PIERO steps into frame from pure darkness, glasses glint, raises iron microphone skyward — gold smoke erupts from tip, stone walls crack and crumble outward. CAMERA rapid push-in to face. CUT TO SHOT 3: Empty courtyard — total silence then KINNY drops from above frame, lands in Shaolin crouch, obsidian shuriken orbit him slowly, dark teal energy pulses through his suit veins. CAMERA tracks around him 90 degrees. Text burns into frame: SOUTH SIDE CRIMINI. Wu-Tang dark black magic aesthetic. Blood red and deep shadow color palette.',
+
+  battle: 'SHOT 1: KINNY launches into explosive spinning aerial kick — CAMERA follows rotation 360 degrees around him, world blurs, shuriken orbit like satellites, dark energy trails. SLOW MOTION mid-spin. CUT TO SHOT 2: PIERO battle rap stance in rain-soaked alley — CAMERA extreme close-up on eyes behind glasses, rain drops fall in slow motion, he thrusts mic forward — shockwave of gold energy shatters everything in frame. RAPID CUT. SHOT 3: All three engaged — ANDINO behind elevated on ruins, MPC runes firing red beams, PIERO center commanding, KINNY foreground spinning. CAMERA pulls back fast revealing scale. Black smoke and energy fill frame. Wu-Tang dark intense battle energy.',
+
+  ritual: 'SHOT 1: Top-down aerial — three figures kneeling in triangle formation around a glowing yin-yang symbol carved in ancient stone floor. Black smoke rises around them. Blood moon reflected in wet stone. CAMERA descends slowly from above. SHOT 2: Close on ANDINO hands striking MPC pads — each strike sends red energy pulse through the stone, the yin-yang symbol brightens. Low rumble building. CAMERA circles slowly. SHOT 3: All three stand simultaneously — energy corona expands outward in concentric rings from the yin-yang center, stone shatters at the edges, blood moon blazes red. SOUTH SIDE CRIMINI burns into stone. Ancient ritual dark magic. No color but black, deep crimson, tarnished gold.',
+
+  finale: 'OPENING: Total darkness. A single blood-red light source activates — reveals ANDINO in silhouette behind destroyed altar, smoke everywhere. CAMERA slow push-in. SHOT 2: PIERO appears from left darkness, KINNY from right — both moving toward camera in parallel. CAMERA tracks backward retreating as they advance. SHOT 3: All three stop simultaneously — PERFECT TRIANGLE FORMATION — PIERO center raises mic, KINNY and ANDINO flank. Blood moon BLAZES above. Yin-yang symbol erupts from ground beneath their feet — massive glowing gold ring expanding outward. CAMERA cranes up dramatically revealing full apocalyptic scene. SOUTH SIDE CRIMINI in massive glitch red typography. FREEZE FRAME. Cinematic finale. Epic Wu-Tang dark power.',
+
+  street: 'SHOT 1: Wet cobblestone alley Santiago barrio at 3am — steam from manholes, distant sounds. ANDINO visible at end of alley partially illuminated, MPC glowing. CAMERA long lens pushing in slowly. SHOT 2: PIERO materializes from steam rising at left, KINNY from right — they move in parallel toward camera, faces partially hidden. CAMERA tracks backward. SHOT 3: Street intersection — all three stop. A crumbling colonial archway frames them against blood-red storm sky and barely visible Andes silhouette. Moment of stillness. Wind moves their suits. CAMERA slowly orbits full 360. Dark Santiago night energy. Wu-Tang meets South American urban ritual.'
+};
+
 // SEEDANCE FACTORY
 async function runSeedance(chatId, concept, imageUrl) {
+  // Check for scene preset keywords
+  const sceneKey = concept?.toLowerCase().trim();
+  if (SCENES[sceneKey]) {
+    concept = SCENES[sceneKey];
+  }
   const msgId = await send(chatId, '🌱 *Seedance factory*\n' + bar(0, 10) + '\n_Iniciando..._');
   if (!OPENROUTER_KEY) { await edit(chatId, msgId, '❌ OPENROUTER_KEY no configurada.'); return; }
   const prompt = concept || 'Cinematic anime ninja squad dystopian Santiago Chile Akira aesthetic dark neon rain Wu-Tang Shaolin energy 3 ninja warriors beatmaker MC dancer epic cinematics beat-driven motion';
@@ -382,7 +415,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v6*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot.cl\n`/contacto [consulta]` — respuesta Boykot\n`/anime [concepto]` — video anime\n`/squad` — multi-ángulo squad\n`/seedance [concepto]` — Seedance\n`/model` — cambiar modelo\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest\n📸 *Foto* — Runway');
+    await send(chatId, '🎨 *maarmapa factory v6*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot\n`/anime` — video anime squad\n`/squad` — multi-angulo squad\n`/seedance intro|battle|ritual|finale|street` — video\n`/sync` — mezcla clips con cancion\n`/clips` — ver clips guardados\n`/model` — cambiar modelo\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n📸 Foto — Runway');
     return;
   }
 
@@ -404,6 +437,11 @@ async function handle(msg) {
 
   if (text.startsWith('/seedance')) {
     const concept = text.replace('/seedance', '').trim();
+    if (!concept || concept === 'help' || concept === 'escenas') {
+      await send(chatId, '🎬 *Seedance — Escenas:*\n\n`/seedance intro` — apertura del templo\n`/seedance battle` — secuencia de batalla\n`/seedance ritual` — ritual oscuro\n`/seedance finale` — cierre epico\n`/seedance street` — calles Santiago\n\nO describe tu escena: `/seedance [descripcion]`');
+      await send(chatId, '🎬 *Seedance Escenas:*\n`/seedance intro` `/seedance battle` `/seedance ritual` `/seedance finale` `/seedance street`\nO: `/seedance [tu descripcion]`');
+      return;
+    }
     runSeedance(chatId, concept, null).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
@@ -434,7 +472,26 @@ async function handle(msg) {
 
   if (text.startsWith('/sync')) {
     const args = text.replace('/sync', '').trim().split(' ').filter(u => u.startsWith('http'));
-    runSync(chatId, args.length > 0 ? args : null, null).catch(e => send(chatId, '❌ ' + e.message));
+    const clips = args.length > 0 ? args : getClips(chatId);
+    if (clips.length === 0) {
+      await send(chatId, '❌ No hay clips guardados.\nGenera clips con `/squad`, `/anime` o `/seedance` primero.');
+      return;
+    }
+    await send(chatId, '🎵 Sincronizando ' + clips.length + ' clips con SOUTH SIDE CRIMINI...');
+    runSync(chatId, clips, null).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text === '/clips') {
+    const clips = getClips(chatId);
+    if (clips.length === 0) await send(chatId, '📋 No hay clips guardados todavía.');
+    else await send(chatId, '📋 *' + clips.length + ' clips guardados:*\n' + clips.map((u,i) => (i+1) + '. ' + u.slice(0,60) + '...').join('\n') + '\n\nUsa `/sync` para mezclarlos con la canción.\nUsa `/clearcl` para borrarlos.');
+    return;
+  }
+
+  if (text === '/clearclips') {
+    clearClips(chatId);
+    await send(chatId, '🗑 Clips borrados.');
     return;
   }
 
