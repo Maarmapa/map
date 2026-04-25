@@ -23,11 +23,14 @@ const MODELS = {
 let currentTextModel = MODELS.text.default;
 let currentVideoModel = MODELS.video.default;
 
-// Character bibles
-const BASE_CHAR = 'Hyper-cinematic anime Katsuhiro Otomo Akira aesthetic cel-shading thick bold ink outlines. Mature dark gritty NOT kawaii NOT chibi NOT cute. Hard dramatic shadows.';
-const ANDINO_P = BASE_CHAR + ' ANDINO full black ninja suit ONLY calm eyes visible crimson red headphones over hood MPC drum machine strapped to forearm glowing red. Crimson red neon. Red circle clan symbol.';
-const PIERO_P = BASE_CHAR + ' PIERO full dark navy ninja suit ONLY sharp eyes behind round glasses over mask microphone raised as weapon. Gold neon. Gold diamond clan symbol.';
-const KINNY_P = BASE_CHAR + ' KINNY full teal ninja suit ONLY fierce intense eyes electric blue lightning markings on arms and legs. EXPLOSIVE right leg full kick extended left arm back right arm forward THREE shuriken orbiting speed lines everywhere. Electric blue. Lightning bolt clan symbol.';
+// CHARACTER BIBLES — Trap Jamaican Chile vibes. Black magic. Dark ritual energy.
+// Vibe: smoke, ritual, dark spirits, jungle meets concrete, bass heavy atmosphere
+const BASE_STYLE = 'Hyper-cinematic dark anime. Katsuhiro Otomo Akira meets Wu-Tang Clan 36 Chambers album art. Thick rough brush ink outlines. Mature ultra-dark occult gritty. NOT kawaii NOT chibi. Crushing black ink shadows. Black incense smoke. Heavy film grain. Ancient Shaolin scroll art fused with Latin American street art. Black magic ritual trap energy. Blood moon. No bright colors — only deep blacks, blood crimsons, tarnished gold, shadow teal.';
+const CITY_BG = 'Background: abandoned Shaolin temple ruins in dark Santiago barrio night — crumbling stone arches with faded Chinese ink paintings and Spanish graffiti tags, thick black smoke at ground level, single blood-red lantern glowing far away, Andes mountain silhouette barely visible through storm clouds, wet black cobblestones with ancient symbols carved in them, no neon — only candlelight and blood-red moon through storm clouds. Total darkness aesthetic.';
+const ANDINO_P = 'ANDINO — full PITCH MATTE BLACK ninja suit, ONLY two calm predator eyes glowing faint crimson. Battle-scarred oversized crimson red headphones over ninja hood. Ancient MPC drum machine at feet like a ritual altar — red runes glowing on pads, dark smoke rising. Monk-still posture. BACKGROUND center partially in shadow. Ancient red Wu-clan tattoo on suit barely visible. Black smoke curls around him. Architect watching from darkness.';
+const PIERO_P = 'PIERO — full CHARCOAL BLACK ninja suit aged worn texture, ONLY sharp calculating eyes behind thick-frame scarred glasses over mask. Holding black iron microphone upward like ritual weapon, free hand in Shaolin open-palm strike. FOREGROUND LEFT. Tarnished gold clan seal on chest. Shadow falls across half his face. Voice of the clan.';
+const KINNY_P = 'KINNY — full DEEP SHADOW ninja suit with dark teal energy pulsing in markings like veins. ONLY fierce feral predator eyes. FOREGROUND RIGHT, body coiled in low explosive Shaolin stance — knees bent weight forward, one hand on wet ground, other arm cocked back. Three obsidian shuriken hanging from belt like talismans. Battle-worn. Dark smoke at feet. Pure kinetic black magic.';
+const SQUAD_COMP = 'COMPOSITION: PIERO foreground left, KINNY foreground right, ANDINO center-back partially in shadow smaller — three-point triangle depth. All three inside safe margins. Blood red moon above all three. Heavy black smoke atmosphere between them.';
 
 // Telegram helpers
 async function tg(method, body) {
@@ -239,15 +242,16 @@ async function runAnime(chatId, concept) {
     { character: 'Piero', role: 'MC', prompt: PIERO_P + ' Full body character sheet front 3/4. White background.' },
     { character: 'Kinny', role: 'Dancer', prompt: KINNY_P + ' Full body visible. White background.' }
   ];
+  const HORROR_BASE = 'Hyper-cinematic dark anime horror. Katsuhiro Otomo meets Junji Ito aesthetic. Cel-shading heavy brush ink. Ultra-dark mature NOT kawaii. VHS grain distortion. 103 BPM energy. Dancehall horror. Distorted violin string ghost apparitions. Blood moon. Black flooded Santiago cobblestones. ALL inside 120px safe margins. 9:16 vertical.';
   const scenePrompts = [
-    BASE_STYLE + ' SHOT 1. ' + ANDINO_P + ' Rooftop 360 orbit low angle. Red lightning rain. Andes silhouette.',
-    BASE_STYLE + ' SHOT 2. ' + PIERO_P + ' + ' + KINNY_P + ' Alley 180 arc. Steam grates. Kanji graffiti. Gold blue neon.',
-    BASE_STYLE + ' SHOT 3. All three triangle top-down. SOUTH SIDE CRIMINI red glitch text. Yin yang glowing. Ultimate poster.'
+    HORROR_BASE + ' SHOT 1. ' + ANDINO_P + ' Standing abandoned Plaza de Armas Santiago 3am. Colonial cathedral warped twisted nightmare behind. Black water flooding cobblestones. MPC altar glowing blood red, violin ghost apparitions rising from pads. Blood moon full massive low. Dancehall skeleton figures in shadows moving in rhythm.',
+    HORROR_BASE + ' SHOT 2. ' + PIERO_P + ' Flooded Barrio Italia alley. Black still water mirror. Violin string ghosts stretching between buildings. Iron microphone thrust toward blood moon, gold smoke forming kanji SOUTH SIDE CRIMINI. Dancehall zombie congregation moving at 103 BPM behind him.',
+    HORROR_BASE + ' SHOT 3. ' + SQUAD_COMP + ' Gran Torre Costanera as dark obelisk against blood moon. Cobblestone plaza flooded black water, squad reflected upside down in still water. Violin string apparitions between all three. Dancehall shadow congregation. SOUTH SIDE CRIMINI carved in stone glowing red inside safe zone top. Ultimate horror anime poster.'
   ];
   const motions = [
-    'Akira anime. 360 orbit rising low angle. Red lightning. Rain streaks. Beat-driven.',
-    '180 arc. Dancer spin motion blur. MC raises mic. Steam jets. Fast energy.',
-    'Top-down drone descent. Energy burst. Neon ripples. White flash freeze. Title glitches.'
+    'J-horror anime slow orbit. Camera circles slowly. Black water ripples. Violin ghost apparitions drift past frame. Blood moon pulses. 103 BPM freeze frame energy.',
+    'Slow tracking push-in. Dancehall zombie congregation sways in background. String ghosts stretch and vibrate. Mic gold smoke spirals. Haunted alley atmosphere.',
+    'Top-down horror descent. Black water reflection ripples. Three figures cast no shadow. Energy corona expands like a curse. Title glitches and cracks. Blood moon eclipses.'
   ];
 
   await send(chatId, '🎨 *Squad:*\n1. *Andino* — Beatmaker\n2. *Piero* — MC\n3. *Kinny* — Dancer');
@@ -313,7 +317,7 @@ async function runSeedance(chatId, concept, imageUrl) {
     const refImg = await grokImg(squadPrompt);
     if (refImg) await photo(chatId, refImg, '🎨 Frame referencia — Seedance generará el video');
   }
-  const seedancePrompt = prompt + ' Katsuhiro Otomo Akira anime aesthetic. Three ninja warriors — black suit beatmaker red headphones MPC, navy suit MC glasses microphone, teal suit dancer mid-air kick shuriken. Dystopian Santiago Tokyo neon wet cobblestones Andes. Dark cinematic epic anime. 9:16 vertical.';
+  const seedancePrompt = prompt + ' ' + BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Shuriken stars orbiting. Three energy coronas red gold blue. SOUTH SIDE CRIMINI red text. Epic cinematic anime 9:16 vertical.';
   await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(4, 10) + '\n_🎬 ' + currentVideoModel.split('/')[1] + ' generando..._');
   const vid = await seedanceVideo(seedancePrompt, null);
 
@@ -378,7 +382,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v6*\n\n`/post [tema]` — post completo\n`/anime [concepto]` — video anime squad\n`/squad` — multi-ángulo squad\n`/seedance [concepto]` — Seedance+Grok\n`/model` — cambiar modelo AI\n`/buscar [query]` — noticias X\n`/chat [pregunta]` — agente\n`/digest` — digest semanal\n📸 *Foto* — Runway la anima');
+    await send(chatId, '🎨 *maarmapa factory v6*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot.cl\n`/contacto [consulta]` — respuesta Boykot\n`/anime [concepto]` — video anime\n`/squad` — multi-ángulo squad\n`/seedance [concepto]` — Seedance\n`/model` — cambiar modelo\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest\n📸 *Foto* — Runway');
     return;
   }
 
@@ -413,6 +417,24 @@ async function handle(msg) {
     else if (arg === 'seedance') { currentVideoModel = MODELS.video.seedance; await send(chatId, '✅ Video: *Seedance 2.0*'); }
     else if (arg === 'seedance-fast') { currentVideoModel = MODELS.video.seedance_fast; await send(chatId, '✅ Video: *Seedance 2.0 Fast*'); }
     else { await send(chatId, '📋 *Modelos:*\n\n*Texto:*\n`/model fast` — DeepSeek V4 Flash\n`/model pro` — DeepSeek V4 Pro\n`/model gpt` — GPT-5.4\n\n*Video:*\n`/model seedance-fast` — Seedance Fast\n`/model seedance` — Seedance 2.0\n`/model veo` — Veo 3.1\n\n_Texto: ' + currentTextModel + '_\n_Video: ' + currentVideoModel + '_'); }
+    return;
+  }
+
+  if (text.startsWith('/boykot ')) {
+    const topic = text.replace('/boykot ', '');
+    runBoykotPost(chatId, topic).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/contacto ')) {
+    const info = text.replace('/contacto ', '');
+    runBoykotContact(chatId, info).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/sync')) {
+    const args = text.replace('/sync', '').trim().split(' ').filter(u => u.startsWith('http'));
+    runSync(chatId, args.length > 0 ? args : null, null).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
 
@@ -454,6 +476,159 @@ async function handle(msg) {
 
   if (text && !text.startsWith('/')) {
     await send(chatId, '💡 `/post ' + text.slice(0, 20) + '` — post\n`/anime ' + text.slice(0, 20) + '` — anime\n`/buscar ' + text.slice(0, 20) + '` — noticias');
+  }
+}
+
+
+// ── BOYKOT FACTORY ────────────────────────────────────
+const BOYKOT_STYLE = 'Editorial Instagram post for Boykot.cl — Chilean art supply store. Brand colors: black background #000000, acid yellow-green accent #CCFF00. Typography: Barlow Condensed bold. Clean minimal product editorial aesthetic. Urban art supplies. Target: artists, illustrators, muralists, designers in Chile.';
+
+async function runBoykotPost(chatId, topic) {
+  const msgId = await send(chatId, '🎨 *Boykot factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+  await edit(chatId, msgId, '🎨 *Boykot factory*\n' + bar(2, 10) + '\n_Generando contenido..._');
+  const system = 'Eres community manager de Boykot.cl tienda de materiales artisticos chilena. Genera contenido editorial en espanol tono cercano y apasionado por el arte. Devuelve SOLO JSON sin markdown: {"caption":"...","hashtags":"...","slide_prompts":["p1","p2","p3"]}';
+  let postData;
+  try {
+    const raw = await deepseek('Genera contenido Instagram Boykot.cl sobre: ' + topic + '. Caption impactante + 7 hashtags + 3 prompts de imagen para carrusel.', system);
+    if (raw) postData = JSON.parse(raw.replace(/```json|```/g, '').trim());
+  } catch(e) { postData = null; }
+  if (!postData) {
+    postData = {
+      caption: topic + ' — disponible en Boykot.cl',
+      hashtags: '#boykot #artesupplies #chile #arte #pintura #ilustracion #diseno #boykotcl',
+      slide_prompts: [
+        'Product hero shot ' + topic + ' centered pure black background. Acid yellow-green #CCFF00 accent rim lighting. Minimal editorial.',
+        'Detail close-up shot ' + topic + ' extreme macro. High contrast black and #CCFF00 accent. Sharp product photography.',
+        'Lifestyle dark studio. Artist hand using ' + topic + '. Moody dark. Chilean urban art energy. #CCFF00 accent light.'
+      ]
+    };
+  }
+  await edit(chatId, msgId, '🎨 *Boykot factory*\n' + bar(3, 10) + '\n_Copy listo_');
+  await send(chatId, '📝 *Caption Boykot:*\n\n' + postData.caption + '\n\n' + postData.hashtags);
+  const slides = postData.slide_prompts || [];
+
+  // 1:1 Carousel
+  await edit(chatId, msgId, '🎨 *Boykot factory*\n' + bar(4, 10) + '\n_Carrusel 1:1..._');
+  const carouselUrls = [];
+  for (let i = 0; i < Math.min(slides.length, 3); i++) {
+    await edit(chatId, msgId, '🎨 *Boykot factory*\n' + bar(4 + i, 10) + '\n_Carrusel ' + (i+1) + '/3..._');
+    const url = await grokImg('Square 1:1. Safe zone 100px all sides. ' + BOYKOT_STYLE + ' ' + slides[i] + ' ALL inside 100px margins. No watermarks.');
+    if (url) { carouselUrls.push(url); await photo(chatId, url, 'Carrusel ' + (i+1) + '/3 — Boykot.cl'); }
+  }
+
+  // 9:16 Reel
+  await edit(chatId, msgId, '🎨 *Boykot factory*\n' + bar(7, 10) + '\n_Reel 9:16..._');
+  const reelUrls = [];
+  for (let i = 0; i < Math.min(slides.length, 3); i++) {
+    await edit(chatId, msgId, '🎨 *Boykot factory*\n' + bar(7 + i, 10) + '\n_Reel ' + (i+1) + '/3..._');
+    const url = await grokImg('Vertical 9:16. Safe zone 120px all sides. ' + BOYKOT_STYLE + ' ' + slides[i] + ' ALL inside 120px margins. No watermarks.');
+    if (url) { reelUrls.push(url); await photo(chatId, url, 'Reel ' + (i+1) + '/3 — Boykot.cl'); }
+  }
+
+  // Runway animate reel slides
+  let clips = 0;
+  if (process.env.RUNWAY_KEY && reelUrls.length > 0) {
+    const motions = ['Product reveal slow push-in. Neon yellow-green light sweeps surface. Commercial editorial dark.','Detail zoom macro push-in. Acid yellow highlight traces edge. Professional product.','Lifestyle artist hand motion blur. Yellow-green neon glow pulses. Urban creative energy.'];
+    for (let i = 0; i < reelUrls.length; i++) {
+      const vid = await runwayVideo(reelUrls[i], motions[i], 3);
+      if (vid) { await video(chatId, vid, 'Reel clip ' + (i+1) + ' Boykot.cl'); clips++; }
+    }
+  }
+
+  await edit(chatId, msgId, '🎨 *Boykot factory*\n' + bar(10, 10) + '\n_Completado_');
+  await send(chatId, 'Boykot listo\nCarrusel: ' + carouselUrls.length + '/3\nReel frames: ' + reelUrls.length + '/3\nClips: ' + clips + '\n\nPara sync de audio usa /sync o CapCut');
+}
+
+async function runBoykotContact(chatId, info) {
+  const msgId = await send(chatId, '📋 *Boykot contacto*\n_Procesando..._');
+  const system = 'Eres asistente de ventas de Boykot.cl. Genera respuestas profesionales y cercanas para consultas de clientes sobre materiales artísticos. En español chileno.';
+  const reply = await deepseek('Genera respuesta para esta consulta de Boykot.cl: ' + info, system);
+  if (reply) {
+    await edit(chatId, msgId, '📋 *Respuesta Boykot:*\n\n' + reply.slice(0, 4000));
+  } else {
+    await edit(chatId, msgId, '❌ Error generando respuesta.');
+  }
+}
+
+
+// ── SHOTSTACK SYNC ────────────────────────────────────
+// Merges video clips with audio using Shotstack API
+async function runSync(chatId, clipUrls, audioUrl) {
+  const SHOTSTACK_KEY = process.env.SHOTSTACK_KEY;
+  const msgId = await send(chatId, '🎵 *Sync factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+
+  if (!SHOTSTACK_KEY) {
+    await edit(chatId, msgId, '❌ SHOTSTACK_KEY no configurada en Render.\n\n_Alternativa ahora: CapCut → importa clips → Auto Beat Sync_');
+    return;
+  }
+
+  if (!clipUrls || clipUrls.length === 0) {
+    await edit(chatId, msgId, '❌ No hay clips para sincronizar.\n\nUso: genera clips con /squad o /anime primero, luego /sync');
+    return;
+  }
+
+  const audio = audioUrl || SOUTH_SIDE_AUDIO;
+  const clipDuration = 3; // seconds per clip
+
+  await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(3, 10) + '\n_Construyendo timeline..._');
+
+  // Build Shotstack timeline
+  const clips = clipUrls.map((url, i) => ({
+    asset: { type: 'video', src: url },
+    start: i * clipDuration,
+    length: clipDuration,
+    transition: { in: 'fade', out: 'fade' }
+  }));
+
+  const timeline = {
+    soundtrack: { src: audio, effect: 'fadeOut' },
+    tracks: [{ clips }]
+  };
+
+  const output = { format: 'mp4', resolution: 'hd', aspectRatio: '9:16' };
+
+  try {
+    await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(4, 10) + '\n_Enviando a Shotstack..._');
+
+    const res = await fetch('https://api.shotstack.io/edit/stage/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': SHOTSTACK_KEY },
+      body: JSON.stringify({ timeline, output })
+    });
+    const d = await res.json();
+    const renderId = d.response?.id;
+    if (!renderId) { await edit(chatId, msgId, '❌ Shotstack error: ' + JSON.stringify(d).slice(0,200)); return; }
+
+    await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(5, 10) + '\n_Renderizando..._');
+
+    // Poll for result
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 10000));
+      const p = await fetch('https://api.shotstack.io/edit/stage/render/' + renderId, {
+        headers: { 'x-api-key': SHOTSTACK_KEY }
+      });
+      const t = await p.json();
+      const status = t.response?.status;
+      console.log('Shotstack poll:', status);
+      if (status === 'done') {
+        const videoUrl = t.response?.url;
+        await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(10, 10) + '\n_Descargando..._');
+        const vidRes = await fetch(videoUrl);
+        const vidBuffer = await vidRes.arrayBuffer();
+        const form = new FormData();
+        form.append('chat_id', String(chatId));
+        form.append('video', new Blob([vidBuffer], { type: 'video/mp4' }), 'south_side_crimini_sync.mp4');
+        form.append('caption', '🎵 South Side Crimini — synced con Shotstack');
+        await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
+        await edit(chatId, msgId, '✅ *Video synced listo*');
+        return;
+      }
+      if (status === 'failed') { await edit(chatId, msgId, '❌ Shotstack render falló.'); return; }
+      await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(5 + Math.floor(i/3), 10) + '\n_Renderizando ' + (i*10) + 's..._');
+    }
+    await edit(chatId, msgId, '❌ Timeout — intenta de nuevo.');
+  } catch(e) {
+    await edit(chatId, msgId, '❌ Error: ' + e.message);
   }
 }
 
