@@ -3,7 +3,7 @@
 const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
-const SOUTH_SIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH_SIDE_CRIMINI.mp3';
+const SOUTHSIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTHSIDE.mp3';
 
 // Clip storage — auto-saves all generated video URLs per chat
 const clipStore = {};
@@ -14,7 +14,57 @@ function saveClip(chatId, url) {
   if (clipStore[chatId].length > 20) clipStore[chatId].shift();
 }
 function getClips(chatId) { return clipStore[chatId] || []; }
+
+// Upload to Cloudflare R2 via Worker
 function clearClips(chatId) { clipStore[chatId] = []; }
+
+// ── CLOUDFLARE R2 UPLOAD ──────────────────────────────
+async function uploadToR2(buffer, filename, contentType) {
+  const accountId = process.env.CF_ACCOUNT_ID;
+  const accessKey = process.env.CF_R2_ACCESS_KEY;
+  const secretKey = process.env.CF_R2_SECRET_KEY;
+  const bucket = process.env.CF_R2_BUCKET || 'maarmapa';
+  if (!accountId || !accessKey || !secretKey) return null;
+
+  try {
+    const crypto = require('crypto');
+    const date = new Date();
+    const dateStr = date.toISOString().slice(0,10).replace(/-/g,'');
+    const timeStr = date.toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'') + 'Z';
+    const endpoint = 'https://' + accountId + '.r2.cloudflarestorage.com';
+    const url = endpoint + '/' + bucket + '/' + filename;
+
+    // AWS Signature V4 for R2
+    const method = 'PUT';
+    const host = accountId + '.r2.cloudflarestorage.com';
+    const payloadHash = crypto.createHash('sha256').update(Buffer.from(buffer)).digest('hex');
+    const canonicalHeaders = 'content-type:' + contentType + '\nhost:' + host + '\nx-amz-content-sha256:' + payloadHash + '\nx-amz-date:' + timeStr + '\n';
+    const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
+    const canonicalRequest = method + '\n/' + bucket + '/' + filename + '\n\n' + canonicalHeaders + '\n' + signedHeaders + '\n' + payloadHash;
+    const credentialScope = dateStr + '/auto/s3/aws4_request';
+    const stringToSign = 'AWS4-HMAC-SHA256\n' + timeStr + '\n' + credentialScope + '\n' + crypto.createHash('sha256').update(canonicalRequest).digest('hex');
+    const sign = (key, msg) => crypto.createHmac('sha256', key).update(msg).digest();
+    const signingKey = sign(sign(sign(sign('AWS4' + secretKey, dateStr), 'auto'), 's3'), 'aws4_request');
+    const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+    const auth = 'AWS4-HMAC-SHA256 Credential=' + accessKey + '/' + credentialScope + ',SignedHeaders=' + signedHeaders + ',Signature=' + signature;
+
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType, 'Authorization': auth, 'x-amz-date': timeStr, 'x-amz-content-sha256': payloadHash },
+      body: buffer
+    });
+
+    if (res.ok) {
+      const publicUrl = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/' + filename;
+      console.log('R2 upload OK:', publicUrl);
+      return publicUrl;
+    }
+    console.error('R2 upload failed:', res.status, await res.text());
+    return null;
+  } catch(e) { console.error('R2 error:', e.message); return null; }
+}
+
+
 
 // Model config
 const MODELS = {
@@ -259,8 +309,8 @@ async function runAnime(chatId, concept) {
   const HORROR_BASE = 'Hyper-cinematic dark anime horror. Katsuhiro Otomo meets Junji Ito aesthetic. Cel-shading heavy brush ink. Ultra-dark mature NOT kawaii. VHS grain distortion. 103 BPM energy. Dancehall horror. Distorted violin string ghost apparitions. Blood moon. Black flooded Santiago cobblestones. ALL inside 120px safe margins. 9:16 vertical.';
   const scenePrompts = [
     HORROR_BASE + ' SHOT 1. ' + ANDINO_P + ' Standing abandoned Plaza de Armas Santiago 3am. Colonial cathedral warped twisted nightmare behind. Black water flooding cobblestones. MPC altar glowing blood red, violin ghost apparitions rising from pads. Blood moon full massive low. Dancehall skeleton figures in shadows moving in rhythm.',
-    HORROR_BASE + ' SHOT 2. ' + PIERO_P + ' Flooded Barrio Italia alley. Black still water mirror. Violin string ghosts stretching between buildings. Iron microphone thrust toward blood moon, gold smoke forming kanji SOUTH SIDE CRIMINI. Dancehall zombie congregation moving at 103 BPM behind him.',
-    HORROR_BASE + ' SHOT 3. ' + SQUAD_COMP + ' Gran Torre Costanera as dark obelisk against blood moon. Cobblestone plaza flooded black water, squad reflected upside down in still water. Violin string apparitions between all three. Dancehall shadow congregation. SOUTH SIDE CRIMINI carved in stone glowing red inside safe zone top. Ultimate horror anime poster.'
+    HORROR_BASE + ' SHOT 2. ' + PIERO_P + ' Flooded Barrio Italia alley. Black still water mirror. Violin string ghosts stretching between buildings. Iron microphone thrust toward blood moon, gold smoke forming kanji SOUTHSIDE. Dancehall zombie congregation moving at 103 BPM behind him.',
+    HORROR_BASE + ' SHOT 3. ' + SQUAD_COMP + ' Gran Torre Costanera as dark obelisk against blood moon. Cobblestone plaza flooded black water, squad reflected upside down in still water. Violin string apparitions between all three. Dancehall shadow congregation. SOUTHSIDE carved in stone glowing red inside safe zone top. Ultimate horror anime poster.'
   ];
   const motions = [
     'J-horror anime slow orbit. Camera circles slowly. Black water ripples. Violin ghost apparitions drift past frame. Blood moon pulses. 103 BPM freeze frame energy.',
@@ -300,7 +350,7 @@ async function runSquad(chatId) {
     { label: 'Andino — Beat', prompt: BASE + ' ' + ANDINO_P + ' MEDIUM SHOT low angle. Both hands on MPC red energy pulses. Face bowed concentration. Crimson particles float up. Red neon rain window behind.' },
     { label: 'Andino — Rooftop', prompt: BASE + ' ' + ANDINO_P + ' FULL BODY rooftop edge. Right arm raised vinyl disc glowing red. Left arm balance. City below mountain silhouette red storm sky.' },
     { label: 'Piero — Battle', prompt: BASE + ' ' + PIERO_P + ' HERO SHOT center. Microphone thrust toward camera gold energy beam. Other hand open palm strike. Wet cobblestones. Colonial archway gold neon. Steam manholes.' },
-    { label: 'Squad — Final', prompt: BASE + ' EPIC WIDE. ' + ANDINO_P + ' left. ' + PIERO_P + ' center. ' + KINNY_P + ' right. Triangle ALL inside 120px. Three coronas red gold blue merge white. Yin yang ground. SOUTH SIDE CRIMINI red glitch top.' }
+    { label: 'Squad — Final', prompt: BASE + ' EPIC WIDE. ' + ANDINO_P + ' left. ' + PIERO_P + ' center. ' + KINNY_P + ' right. Triangle ALL inside 120px. Three coronas red gold blue merge white. Yin yang ground. SOUTHSIDE red glitch top.' }
   ];
   const clips = [];
   for (let i = 0; i < angles.length; i++) {
@@ -321,32 +371,32 @@ async function runSquad(chatId) {
 // ── CINEMATIC SCENE PRESETS ───────────────────────────
 const SCENES = {
   // SQUAD scenes — all 3 together
-  intro:   'Wu-Tang dark anime cinematic. SHOT 1: Extreme low angle — crumbling Shaolin temple, black smoke, blood moon through broken arch. Crimson eyes open in darkness — ANDINO materializes from shadow crouched over glowing MPC altar, red runes pulse. CAMERA rises slowly. CUT SHOT 2: PIERO steps from pure darkness into candlelight, glasses glint, raises iron microphone — gold smoke erupts, stone cracks. CAMERA rapid push-in. CUT SHOT 3: KINNY drops from above into Shaolin crouch, obsidian shuriken orbit, teal energy pulses. CAMERA tracks 90 degrees. SOUTH SIDE CRIMINI burns into frame. Blood red deep shadow palette.',
-  battle:  'Wu-Tang dark anime cinematic. SHOT 1: KINNY explosive spinning aerial kick — CAMERA follows 360 rotation, world blurs, shuriken orbit, dark energy trails, SLOW MOTION. CUT SHOT 2: PIERO battle stance rain-soaked alley — CAMERA extreme close-up eyes behind glasses, thrusts mic — gold shockwave shatters frame. RAPID CUT. SHOT 3: All three — ANDINO elevated on ruins MPC firing red beams, PIERO commanding center, KINNY spinning foreground — CAMERA pulls back fast. Black smoke fills frame. SOUTH SIDE CRIMINI.',
-  ritual:  'Wu-Tang dark anime cinematic. SHOT 1: Top-down — three figures kneeling in triangle around glowing yin-yang carved in stone. Blood moon reflected. CAMERA descends slowly. SHOT 2: ANDINO hands strike MPC pads — red pulse surges through stone, yin-yang brightens. CAMERA circles. SHOT 3: All three stand simultaneously — energy corona expands outward, stone shatters at edges, blood moon blazes. SOUTH SIDE CRIMINI burns into stone. Black crimson gold only.',
-  finale:  'Wu-Tang dark anime cinematic. OPENING: Total darkness. Blood-red light activates — ANDINO silhouette behind destroyed altar, smoke. CAMERA slow push-in. SHOT 2: PIERO from left darkness KINNY from right — advance toward camera in parallel. CAMERA retreats. SHOT 3: All three stop — PERFECT TRIANGLE — PIERO center raises mic, flanked. Blood moon BLAZES. Yin-yang erupts from ground — massive gold ring expanding. CAMERA cranes up. SOUTH SIDE CRIMINI massive glitch red. FREEZE FRAME. Epic.',
-  street:  'Wu-Tang dark anime cinematic. SHOT 1: Wet cobblestone Santiago alley 3am — steam manholes. ANDINO at end of alley, MPC glowing. CAMERA long lens push-in slow. SHOT 2: PIERO from steam left KINNY from right — parallel toward camera, faces half hidden. CAMERA tracks backward. SHOT 3: Street intersection — all three stop. Colonial archway frames them against blood-red storm sky, Andes silhouette. Stillness. Wind moves suits. CAMERA orbits 360. SOUTH SIDE CRIMINI.',
+  intro:   'Wu-Tang dark anime cinematic. SHOT 1: Extreme low angle — crumbling Shaolin temple, black smoke, blood moon through broken arch. Crimson eyes open in darkness — ANDINO materializes from shadow crouched over glowing MPC altar, red runes pulse. CAMERA rises slowly. CUT SHOT 2: PIERO steps from pure darkness into candlelight, glasses glint, raises iron microphone — gold smoke erupts, stone cracks. CAMERA rapid push-in. CUT SHOT 3: KINNY drops from above into Shaolin crouch, obsidian shuriken orbit, teal energy pulses. CAMERA tracks 90 degrees. SOUTHSIDE burns into frame. Blood red deep shadow palette.',
+  battle:  'Wu-Tang dark anime cinematic. SHOT 1: KINNY explosive spinning aerial kick — CAMERA follows 360 rotation, world blurs, shuriken orbit, dark energy trails, SLOW MOTION. CUT SHOT 2: PIERO battle stance rain-soaked alley — CAMERA extreme close-up eyes behind glasses, thrusts mic — gold shockwave shatters frame. RAPID CUT. SHOT 3: All three — ANDINO elevated on ruins MPC firing red beams, PIERO commanding center, KINNY spinning foreground — CAMERA pulls back fast. Black smoke fills frame. SOUTHSIDE.',
+  ritual:  'Wu-Tang dark anime cinematic. SHOT 1: Top-down — three figures kneeling in triangle around glowing yin-yang carved in stone. Blood moon reflected. CAMERA descends slowly. SHOT 2: ANDINO hands strike MPC pads — red pulse surges through stone, yin-yang brightens. CAMERA circles. SHOT 3: All three stand simultaneously — energy corona expands outward, stone shatters at edges, blood moon blazes. SOUTHSIDE burns into stone. Black crimson gold only.',
+  finale:  'Wu-Tang dark anime cinematic. OPENING: Total darkness. Blood-red light activates — ANDINO silhouette behind destroyed altar, smoke. CAMERA slow push-in. SHOT 2: PIERO from left darkness KINNY from right — advance toward camera in parallel. CAMERA retreats. SHOT 3: All three stop — PERFECT TRIANGLE — PIERO center raises mic, flanked. Blood moon BLAZES. Yin-yang erupts from ground — massive gold ring expanding. CAMERA cranes up. SOUTHSIDE massive glitch red. FREEZE FRAME. Epic.',
+  street:  'Wu-Tang dark anime cinematic. SHOT 1: Wet cobblestone Santiago alley 3am — steam manholes. ANDINO at end of alley, MPC glowing. CAMERA long lens push-in slow. SHOT 2: PIERO from steam left KINNY from right — parallel toward camera, faces half hidden. CAMERA tracks backward. SHOT 3: Street intersection — all three stop. Colonial archway frames them against blood-red storm sky, Andes silhouette. Stillness. Wind moves suits. CAMERA orbits 360. SOUTHSIDE.',
 
   // ANDINO solo scenes
-  'andino-intro':   'Wu-Tang dark anime. ANDINO solo. SHOT 1: Low angle — ANDINO materializes from pitch black, ONLY crimson eyes visible, MPC altar glowing red runes at his feet, black smoke rising. CAMERA rises slowly from ground. SHOT 2: Close on his eyes — calm predator stillness. SHOT 3: Hands strike MPC pads in slow motion — red energy pulse radiates outward cracking the stone floor. Blood moon above. SOUTH SIDE CRIMINI.',
+  'andino-intro':   'Wu-Tang dark anime. ANDINO solo. SHOT 1: Low angle — ANDINO materializes from pitch black, ONLY crimson eyes visible, MPC altar glowing red runes at his feet, black smoke rising. CAMERA rises slowly from ground. SHOT 2: Close on his eyes — calm predator stillness. SHOT 3: Hands strike MPC pads in slow motion — red energy pulse radiates outward cracking the stone floor. Blood moon above. SOUTHSIDE.',
   'andino-battle':  'Wu-Tang dark anime. ANDINO solo. SHOT 1: ANDINO crouched over MPC elevated on broken temple wall, MPC firing red energy beams downward like weapons. CAMERA pulls back revealing scale. SHOT 2: Extreme close — fingers strike pads with precision, each hit sends crimson shockwave. SHOT 3: ANDINO stands slowly — red energy corona surrounds him, headphones glow. CAMERA circles 360. Dark architect energy.',
-  'andino-ritual':  'Wu-Tang dark anime. ANDINO solo. SHOT 1: Top-down — ANDINO alone in center of yin-yang symbol, kneeling, hands on MPC. CAMERA descends slowly. SHOT 2: Red energy flows from MPC through stone veins outward like blood. SHOT 3: ANDINO raises head slowly — crimson eyes open, red energy explodes outward. Ritual complete. Blood moon directly above. SOUTH SIDE CRIMINI.',
-  'andino-finale':  'Wu-Tang dark anime. ANDINO solo. SHOT 1: Total darkness. Single red LED from MPC blinks on. CAMERA slow push-in. SHOT 2: ANDINO fully revealed — standing tall, headphones on, arms crossed, MPC at feet like conquered ground. SHOT 3: He turns to camera — direct eye contact through mask slit. Red energy pulses once massive. FREEZE. SOUTH SIDE CRIMINI.',
+  'andino-ritual':  'Wu-Tang dark anime. ANDINO solo. SHOT 1: Top-down — ANDINO alone in center of yin-yang symbol, kneeling, hands on MPC. CAMERA descends slowly. SHOT 2: Red energy flows from MPC through stone veins outward like blood. SHOT 3: ANDINO raises head slowly — crimson eyes open, red energy explodes outward. Ritual complete. Blood moon directly above. SOUTHSIDE.',
+  'andino-finale':  'Wu-Tang dark anime. ANDINO solo. SHOT 1: Total darkness. Single red LED from MPC blinks on. CAMERA slow push-in. SHOT 2: ANDINO fully revealed — standing tall, headphones on, arms crossed, MPC at feet like conquered ground. SHOT 3: He turns to camera — direct eye contact through mask slit. Red energy pulses once massive. FREEZE. SOUTHSIDE.',
   'andino-street':  'Wu-Tang dark anime. ANDINO solo. SHOT 1: Rain-soaked alley end — ANDINO barely visible, MPC glow only light source. CAMERA long lens compression push-in. SHOT 2: He steps forward into light — one slow deliberate step, headphones on, smoke trailing. SHOT 3: Medium shot — sets MPC down on wet cobblestone like an offering, kneels, begins playing. Red rune light reflects in puddle. Santiago Andes silhouette behind.',
 
   // PIERO solo scenes
-  'piero-intro':    'Wu-Tang dark anime. PIERO solo. SHOT 1: Stone corridor — candlelight flickers. PIERO steps from total darkness, glasses catch light first. CAMERA holds. SHOT 2: He raises iron microphone slowly — gold smoke begins rising from tip. Close on glasses, eyes sharp behind. SHOT 3: PIERO unleashes — gold energy beam from mic tears through stone walls, dust and debris flies. Voice of the clan. SOUTH SIDE CRIMINI burns in gold.',
-  'piero-battle':   'Wu-Tang dark anime. PIERO solo. SHOT 1: Rain-soaked alley — PIERO battle stance, mic thrust forward like weapon. CAMERA extreme close on eyes behind cracked glasses. SHOT 2: He steps forward — each step sends gold shockwave through wet cobblestones. SHOT 3: Mic raised to sky — massive gold energy crown erupts above him, stone walls shatter outward. CAMERA pulls back fast. SOUTH SIDE CRIMINI.',
-  'piero-ritual':   'Wu-Tang dark anime. PIERO solo. SHOT 1: Ancient stone circle — PIERO stands center, mic touching ground like a staff. Blood moon above. CAMERA circles slowly. SHOT 2: He raises mic — gold energy flows down from moon through mic into stone. SHOT 3: Full release — gold ring expands outward from him across the stone floor. Eyes close behind glasses. Power contained. SOUTH SIDE CRIMINI in gold.',
-  'piero-finale':   'Wu-Tang dark anime. PIERO solo. SHOT 1: Total darkness. PIERO materializes — only glasses visible first. CAMERA slow push-in. SHOT 2: Full reveal — PIERO standing, mic at side, absolute stillness. SHOT 3: Raises mic — stares directly at camera — fires single gold energy beam directly at lens. WHITE FLASH. FREEZE. SOUTH SIDE CRIMINI massive.',
+  'piero-intro':    'Wu-Tang dark anime. PIERO solo. SHOT 1: Stone corridor — candlelight flickers. PIERO steps from total darkness, glasses catch light first. CAMERA holds. SHOT 2: He raises iron microphone slowly — gold smoke begins rising from tip. Close on glasses, eyes sharp behind. SHOT 3: PIERO unleashes — gold energy beam from mic tears through stone walls, dust and debris flies. Voice of the clan. SOUTHSIDE burns in gold.',
+  'piero-battle':   'Wu-Tang dark anime. PIERO solo. SHOT 1: Rain-soaked alley — PIERO battle stance, mic thrust forward like weapon. CAMERA extreme close on eyes behind cracked glasses. SHOT 2: He steps forward — each step sends gold shockwave through wet cobblestones. SHOT 3: Mic raised to sky — massive gold energy crown erupts above him, stone walls shatter outward. CAMERA pulls back fast. SOUTHSIDE.',
+  'piero-ritual':   'Wu-Tang dark anime. PIERO solo. SHOT 1: Ancient stone circle — PIERO stands center, mic touching ground like a staff. Blood moon above. CAMERA circles slowly. SHOT 2: He raises mic — gold energy flows down from moon through mic into stone. SHOT 3: Full release — gold ring expands outward from him across the stone floor. Eyes close behind glasses. Power contained. SOUTHSIDE in gold.',
+  'piero-finale':   'Wu-Tang dark anime. PIERO solo. SHOT 1: Total darkness. PIERO materializes — only glasses visible first. CAMERA slow push-in. SHOT 2: Full reveal — PIERO standing, mic at side, absolute stillness. SHOT 3: Raises mic — stares directly at camera — fires single gold energy beam directly at lens. WHITE FLASH. FREEZE. SOUTHSIDE massive.',
   'piero-street':   'Wu-Tang dark anime. PIERO solo. SHOT 1: Street corner under broken lamplight — PIERO leans against graffiti wall, mic in hand, watching. CAMERA approaches slowly. SHOT 2: He pushes off wall — walks toward camera, glasses glinting, gold energy building around mic. SHOT 3: Stops center frame — raises mic, speaks — gold energy ripples outward through wet pavement. Colonial archway behind. Santiago night.',
 
   // KINNY solo scenes
-  'kinny-intro':    'Wu-Tang dark anime. KINNY solo. SHOT 1: Empty stone courtyard — total silence. KINNY drops from above frame, lands perfectly in Shaolin crouch. CAMERA holds. SHOT 2: Rises slowly — obsidian shuriken appear orbiting him one by one. CAMERA circles. SHOT 3: Explodes into motion — spinning kick, shuriken scatter, teal energy trails. SLOW MOTION mid-rotation. SOUTH SIDE CRIMINI.',
-  'kinny-battle':   'Wu-Tang dark anime. KINNY solo. SHOT 1: KINNY launches explosive aerial spinning kick — CAMERA follows full 360 rotation, world blurs around him. SLOW MOTION. SHOT 2: Lands — immediate low stance, hands on wet ground, coiled. CAMERA extreme low angle. SHOT 3: Erupts upward — three shuriken fire outward simultaneously, teal energy corona blazes. CAMERA pulls back fast. SOUTH SIDE CRIMINI.',
-  'kinny-ritual':   'Wu-Tang dark anime. KINNY solo. SHOT 1: KINNY kneeling in center of carved stone circle, three shuriken placed around him like offerings. CAMERA descends from above. SHOT 2: Teal energy begins pulsing through suit markings — breathing with it. SHOT 3: Stands — shuriken rise and orbit. Raises arms — teal corona explodes outward. CAMERA cranes back. Blood moon blazes. SOUTH SIDE CRIMINI.',
-  'kinny-finale':   'Wu-Tang dark anime. KINNY solo. SHOT 1: Darkness. KINNY heard before seen — shuriken glow appears first. CAMERA finds him. SHOT 2: Full reveal standing — weight forward, coiled energy, three shuriken orbiting. Direct camera eye contact. SHOT 3: One step toward camera — MASSIVE teal energy explosion from body. CAMERA pushed back by force. FREEZE. SOUTH SIDE CRIMINI.',
-  'kinny-street':   'Wu-Tang dark anime. KINNY solo. SHOT 1: Santiago alley — KINNY drops from rooftop, lands in crouch on wet cobblestone. Steam surrounds him. CAMERA low angle. SHOT 2: Rises — begins slow walk toward camera, shuriken orbiting. CAMERA tracks backward. SHOT 3: Stops at intersection — explodes into full breakdance spin, teal energy streaks. CAMERA 360 track. Andes silhouette. Colonial archway. SOUTH SIDE CRIMINI.'
+  'kinny-intro':    'Wu-Tang dark anime. KINNY solo. SHOT 1: Empty stone courtyard — total silence. KINNY drops from above frame, lands perfectly in Shaolin crouch. CAMERA holds. SHOT 2: Rises slowly — obsidian shuriken appear orbiting him one by one. CAMERA circles. SHOT 3: Explodes into motion — spinning kick, shuriken scatter, teal energy trails. SLOW MOTION mid-rotation. SOUTHSIDE.',
+  'kinny-battle':   'Wu-Tang dark anime. KINNY solo. SHOT 1: KINNY launches explosive aerial spinning kick — CAMERA follows full 360 rotation, world blurs around him. SLOW MOTION. SHOT 2: Lands — immediate low stance, hands on wet ground, coiled. CAMERA extreme low angle. SHOT 3: Erupts upward — three shuriken fire outward simultaneously, teal energy corona blazes. CAMERA pulls back fast. SOUTHSIDE.',
+  'kinny-ritual':   'Wu-Tang dark anime. KINNY solo. SHOT 1: KINNY kneeling in center of carved stone circle, three shuriken placed around him like offerings. CAMERA descends from above. SHOT 2: Teal energy begins pulsing through suit markings — breathing with it. SHOT 3: Stands — shuriken rise and orbit. Raises arms — teal corona explodes outward. CAMERA cranes back. Blood moon blazes. SOUTHSIDE.',
+  'kinny-finale':   'Wu-Tang dark anime. KINNY solo. SHOT 1: Darkness. KINNY heard before seen — shuriken glow appears first. CAMERA finds him. SHOT 2: Full reveal standing — weight forward, coiled energy, three shuriken orbiting. Direct camera eye contact. SHOT 3: One step toward camera — MASSIVE teal energy explosion from body. CAMERA pushed back by force. FREEZE. SOUTHSIDE.',
+  'kinny-street':   'Wu-Tang dark anime. KINNY solo. SHOT 1: Santiago alley — KINNY drops from rooftop, lands in crouch on wet cobblestone. Steam surrounds him. CAMERA low angle. SHOT 2: Rises — begins slow walk toward camera, shuriken orbiting. CAMERA tracks backward. SHOT 3: Stops at intersection — explodes into full breakdance spin, teal energy streaks. CAMERA 360 track. Andes silhouette. Colonial archway. SOUTHSIDE.'
 };
 
 // SEEDANCE FACTORY
@@ -364,11 +414,11 @@ async function runSeedance(chatId, concept, imageUrl) {
   // Show Grok reference image but use text prompt for Seedance (Grok URLs expire)
   if (!imageUrl) {
     await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(2, 10) + '\n_🎨 Generando frame referencia..._');
-    const squadPrompt = 'Hyper-cinematic anime Katsuhiro Otomo Akira cel-shading thick ink mature dark NOT kawaii. Dystopian Tokyo fused Andes silhouette wet cobblestones neon. 9:16 ALL 120px safe margins. ' + ANDINO_P + ' left. ' + PIERO_P + ' center. ' + KINNY_P + ' right mid-air. Triangle. Yin yang ground. SOUTH SIDE CRIMINI red text. Epic poster.';
+    const squadPrompt = 'Hyper-cinematic anime Katsuhiro Otomo Akira cel-shading thick ink mature dark NOT kawaii. Dystopian Tokyo fused Andes silhouette wet cobblestones neon. 9:16 ALL 120px safe margins. ' + ANDINO_P + ' left. ' + PIERO_P + ' center. ' + KINNY_P + ' right mid-air. Triangle. Yin yang ground. SOUTHSIDE red text. Epic poster.';
     const refImg = await grokImg(squadPrompt);
     if (refImg) await photo(chatId, refImg, '🎨 Frame referencia — Seedance generará el video');
   }
-  const seedancePrompt = prompt + ' ' + BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Shuriken stars orbiting. Three energy coronas red gold blue. SOUTH SIDE CRIMINI red text. Epic cinematic anime 9:16 vertical.';
+  const seedancePrompt = prompt + ' ' + BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Shuriken stars orbiting. Three energy coronas red gold blue. SOUTHSIDE red text. Epic cinematic anime 9:16 vertical.';
   await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(4, 10) + '\n_🎬 ' + currentVideoModel.split('/')[1] + ' generando..._');
   const vid = await seedanceVideo(seedancePrompt, null);
 
@@ -379,10 +429,19 @@ async function runSeedance(chatId, concept, imageUrl) {
       const vidBuffer = await vidRes.arrayBuffer();
       const form = new FormData();
       form.append('chat_id', String(chatId));
-      form.append('video', new Blob([vidBuffer], { type: 'video/mp4' }), 'south_side_crimini.mp4');
-      form.append('caption', '🎬 ' + currentVideoModel.split('/')[1] + ' — South Side Crimini');
+      form.append('video', new Blob([vidBuffer], { type: 'video/mp4' }), 'southside.mp4');
+      form.append('caption', '🎬 ' + currentVideoModel.split('/')[1] + ' — SOUTHSIDE');
       await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
-      saveClip(chatId, vid); // save for /sync
+      // Download and re-upload to R2 for permanent storage
+      try {
+        const r2Url = await uploadToR2(vidBuffer, 'clip-' + Date.now() + '.mp4');
+        if (r2Url) {
+          saveClip(chatId, r2Url);
+          console.log('Clip saved to R2:', r2Url);
+        } else {
+          saveClip(chatId, vid); // fallback to original URL
+        }
+      } catch(e) { saveClip(chatId, vid); }
       await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(10, 10) + '\n✅ *Completado — clip guardado para /sync*');
     } catch(e) {
       await edit(chatId, msgId, '✅ Video listo:\n' + vid);
@@ -489,6 +548,34 @@ async function handle(msg) {
     return;
   }
 
+
+  if (text === '/southside') {
+    send(chatId, '🎬 *SOUTHSIDE* — generando video completo...\n\nEsto puede tardar 15-20 minutos.\nSe generarán 3 escenas con Seedance y luego Shotstack las mezclará con la canción.');
+    (async () => {
+      const scenes = ['andino-battle', 'piero-ritual', 'kinny-finale'];
+      const videoBuffers = [];
+      for (const scene of scenes) {
+        await send(chatId, '🎬 Generando: ' + scene + '...');
+        const prompt = SCENES[scene];
+        const vid = await seedanceVideo(prompt, null);
+        if (vid) {
+          try {
+            const vidRes = await fetch(vid, { headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY } });
+            const vidBuffer = await vidRes.arrayBuffer();
+            videoBuffers.push({ scene, buffer: vidBuffer, url: vid });
+            const form = new FormData();
+            form.append('chat_id', String(chatId));
+            form.append('video', new Blob([vidBuffer], { type: 'video/mp4' }), scene + '.mp4');
+            form.append('caption', '🎬 ' + scene);
+            await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
+          } catch(e) { console.error('Error:', e.message); }
+        }
+      }
+      await send(chatId, '✅ 3 escenas generadas. Para el sync final usa Shotstack o CapCut con Beat Sync.');
+    })().catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
   if (text.startsWith('/sync')) {
     const args = text.replace('/sync', '').trim().split(' ').filter(u => u.startsWith('http'));
     const clips = args.length > 0 ? args : getClips(chatId);
@@ -496,7 +583,7 @@ async function handle(msg) {
       await send(chatId, '❌ No hay clips guardados.\nGenera clips con `/squad`, `/anime` o `/seedance` primero.');
       return;
     }
-    await send(chatId, '🎵 Sincronizando ' + clips.length + ' clips con SOUTH SIDE CRIMINI...');
+    await send(chatId, '🎵 Sincronizando ' + clips.length + ' clips con SOUTHSIDE...');
     runSync(chatId, clips, null).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
@@ -643,7 +730,7 @@ async function runSync(chatId, clipUrls, audioUrl) {
     return;
   }
 
-  const audio = audioUrl || SOUTH_SIDE_AUDIO;
+  const audio = audioUrl || SOUTHSIDE_AUDIO;
   const clipDuration = 3; // seconds per clip
 
   await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(3, 10) + '\n_Construyendo timeline..._');
@@ -693,8 +780,8 @@ async function runSync(chatId, clipUrls, audioUrl) {
         const vidBuffer = await vidRes.arrayBuffer();
         const form = new FormData();
         form.append('chat_id', String(chatId));
-        form.append('video', new Blob([vidBuffer], { type: 'video/mp4' }), 'south_side_crimini_sync.mp4');
-        form.append('caption', '🎵 South Side Crimini — synced con Shotstack');
+        form.append('video', new Blob([vidBuffer], { type: 'video/mp4' }), 'southside_sync.mp4');
+        form.append('caption', '🎵 SOUTHSIDE — synced con Shotstack');
         await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
         await edit(chatId, msgId, '✅ *Video synced listo*');
         return;
