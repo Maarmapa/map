@@ -18,49 +18,18 @@ function getClips(chatId) { return clipStore[chatId] || []; }
 // Upload to Cloudflare R2 via Worker
 function clearClips(chatId) { clipStore[chatId] = []; }
 
-// ── CLOUDFLARE R2 UPLOAD ──────────────────────────────
+// ── CLOUDFLARE R2 UPLOAD via Worker ──────────────────
 async function uploadToR2(buffer, filename, contentType) {
-  const accountId = process.env.CF_ACCOUNT_ID;
-  const accessKey = process.env.CF_R2_ACCESS_KEY;
-  const secretKey = process.env.CF_R2_SECRET_KEY;
-  const bucket = process.env.CF_R2_BUCKET || 'maarmapa';
-  if (!accountId || !accessKey || !secretKey) return null;
-
+  const workerUrl = process.env.R2_WORKER_URL || 'https://maarmapa-media.mario-25d.workers.dev';
   try {
-    const crypto = require('crypto');
-    const date = new Date();
-    const dateStr = date.toISOString().slice(0,10).replace(/-/g,'');
-    const timeStr = date.toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'') + 'Z';
-    const endpoint = 'https://' + accountId + '.r2.cloudflarestorage.com';
-    const url = endpoint + '/' + bucket + '/' + filename;
-
-    // AWS Signature V4 for R2
-    const method = 'PUT';
-    const host = accountId + '.r2.cloudflarestorage.com';
-    const payloadHash = crypto.createHash('sha256').update(Buffer.from(buffer)).digest('hex');
-    const canonicalHeaders = 'content-type:' + contentType + '\nhost:' + host + '\nx-amz-content-sha256:' + payloadHash + '\nx-amz-date:' + timeStr + '\n';
-    const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
-    const canonicalRequest = method + '\n/' + bucket + '/' + filename + '\n\n' + canonicalHeaders + '\n' + signedHeaders + '\n' + payloadHash;
-    const credentialScope = dateStr + '/auto/s3/aws4_request';
-    const stringToSign = 'AWS4-HMAC-SHA256\n' + timeStr + '\n' + credentialScope + '\n' + crypto.createHash('sha256').update(canonicalRequest).digest('hex');
-    const sign = (key, msg) => crypto.createHmac('sha256', key).update(msg).digest();
-    const signingKey = sign(sign(sign(sign('AWS4' + secretKey, dateStr), 'auto'), 's3'), 'aws4_request');
-    const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
-    const auth = 'AWS4-HMAC-SHA256 Credential=' + accessKey + '/' + credentialScope + ',SignedHeaders=' + signedHeaders + ',Signature=' + signature;
-
-    const res = await fetch(url, {
+    const res = await fetch(workerUrl + '/' + filename, {
       method: 'PUT',
-      headers: { 'Content-Type': contentType, 'Authorization': auth, 'x-amz-date': timeStr, 'x-amz-content-sha256': payloadHash },
+      headers: { 'Content-Type': contentType || 'video/mp4' },
       body: buffer
     });
-
-    if (res.ok) {
-      const publicUrl = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/' + filename;
-      console.log('R2 upload OK:', publicUrl);
-      return publicUrl;
-    }
-    console.error('R2 upload failed:', res.status, await res.text());
-    return null;
+    const d = await res.json();
+    console.log('R2 upload:', d.url);
+    return d.url || null;
   } catch(e) { console.error('R2 error:', e.message); return null; }
 }
 
