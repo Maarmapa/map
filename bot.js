@@ -601,7 +601,7 @@ async function handle(msg) {
       const clips = (d.objects || []).filter(k => k.endsWith('.mp4')).map(k => R2_BASE + k);
       if (clips.length === 0) { await edit(chatId, msgId, '❌ No hay clips MP4 en R2.'); return; }
       clips.forEach(url => saveClip(chatId, url));
-      await edit(chatId, msgId, '✅ ' + clips.length + ' clips cargados de R2:\n' + clips.map((u, i) => (i+1) + '. ' + u.split('/').pop()).join('\n') + '\n\nUsa `/sync` para mezclarlos con SOUTHSIDE.');
+      await edit(chatId, msgId, '✅ ' + clips.length + ' clips cargados de R2. Usa /sync para mezclarlos con SOUTHSIDE.');
     } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
     return;
   }
