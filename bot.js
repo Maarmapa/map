@@ -557,6 +557,43 @@ async function handle(msg) {
     return;
   }
 
+  if (text.startsWith('/addclip')) {
+    // Support multiple URLs separated by space or newline
+    const args = text.replace('/addclip', '').trim().split(' ').filter(u => u.startsWith('http'));
+    if (args.length === 0) {
+      await send(chatId, '❌ Uso: `/addclip URL1 URL2 URL3`\nO pega varias URLs separadas por espacio.');
+      return;
+    }
+    args.forEach(url => saveClip(chatId, url));
+    const clips = getClips(chatId);
+    await send(chatId, '✅ ' + args.length + ' clip(s) agregados. Total: ' + clips.length + '\nUsa `/sync` para mezclarlos.');
+    return;
+  }
+
+  if (text === '/syncr2') {
+    // Auto-fetch all clips from R2 bucket and add to store
+    const msgId = await send(chatId, '☁️ Buscando clips en R2...');
+    try {
+      // List objects in R2 via Worker
+      const workerUrl = process.env.R2_WORKER_URL || 'https://maarmapa-media.mario-25d.workers.dev';
+      const res = await fetch(workerUrl + '/?list=true');
+      const data = await res.json();
+      const r2Base = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/';
+      const clips = (data.objects || [])
+        .filter(k => k.endsWith('.mp4'))
+        .map(k => r2Base + k);
+      if (clips.length === 0) {
+        await edit(chatId, msgId, '❌ No hay clips MP4 en R2 todavía.');
+        return;
+      }
+      clips.forEach(url => saveClip(chatId, url));
+      await edit(chatId, msgId, '✅ ' + clips.length + ' clips cargados desde R2:\n' + clips.map((u,i) => (i+1) + '. ' + u.split('/').pop()).join('\n') + '\n\nUsa `/sync` para mezclarlos con SOUTHSIDE.');
+    } catch(e) {
+      await edit(chatId, msgId, '❌ Error listando R2: ' + e.message + '\n\nUsa `/addclip URL` manualmente.');
+    }
+    return;
+  }
+
   if (text === '/clips') {
     const clips = getClips(chatId);
     if (clips.length === 0) await send(chatId, '📋 No hay clips guardados todavía.');
