@@ -545,6 +545,16 @@ async function handle(msg) {
     return;
   }
 
+  if (text.startsWith('/runway')) {
+    const arg = text.replace('/runway', '').trim().toLowerCase();
+    if (!arg) {
+      await send(chatId, '🎬 *Runway Escenas:*\n\n*Andino:* andino-intro andino-battle andino-ritual andino-finale andino-street\n*Piero:* piero-intro piero-battle piero-ritual piero-finale piero-street\n*Kinny:* kinny-intro kinny-battle kinny-ritual kinny-finale kinny-street\n*Squad:* intro battle ritual finale street\n\nEj: `/runway kinny-battle`');
+      return;
+    }
+    runRunwayScene(chatId, arg).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
   if (text.startsWith('/sync')) {
     const args = text.replace('/sync', '').trim().split(' ').filter(u => u.startsWith('http'));
     const clips = args.length > 0 ? args : getClips(chatId);
@@ -798,6 +808,86 @@ async function runSync(chatId, clipUrls, audioUrl) {
     await edit(chatId, msgId, '❌ Timeout — intenta de nuevo.');
   } catch(e) {
     await edit(chatId, msgId, '❌ Error: ' + e.message);
+  }
+}
+
+
+// ── RUNWAY CINEMATIC SCENES ───────────────────────────
+const RUNWAY_SCENES = {
+  // ANDINO
+  'andino-intro':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Low angle looking up. MPC altar glowing red runes. Black smoke rising. Blood moon through broken stone arch. Extreme dramatic underlighting. 9:16 vertical ALL 120px safe margins.', motion: 'Extreme low angle camera rises slowly from ground level toward ANDINO. Red runes pulse rhythmically on MPC. Black smoke drifts upward in slow motion. Single blood moon light source intensifies. Camera holds on eyes through mask slit. Dark ritual energy builds.' },
+  'andino-battle':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Both hands striking MPC pads mid-motion. Red energy beams firing from each pad downward. Face bowed in intense concentration. Elevated on broken temple ruins above dark city. 9:16 vertical ALL 120px safe margins.', motion: 'Camera pulls back dramatically revealing full scale of scene. MPC pad strikes send red energy shockwaves outward with each hit. Debris and smoke swirl around him. Crimson light pulses in sync with imagined beat. Architect of sound unleashing power from elevated position.' },
+  'andino-ritual':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Kneeling over MPC at center of yin-yang carved in ancient stone floor. Red energy flows from hands through stone veins outward. Blood moon directly above. Top-down view. 9:16 vertical ALL 120px safe margins.', motion: 'Top-down camera descends slowly toward ANDINO. Red energy pulses outward from MPC through stone carvings like blood through veins. Yin-yang symbol brightens progressively. Blood moon reflection grows in wet stone. Ancient ritual power building to crescendo.' },
+  'andino-finale':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Standing tall on rooftop edge. Arms crossed. MPC at feet like conquered altar. Crimson headphones glowing. City sprawl far below. Blood moon blazing behind. 9:16 vertical ALL 120px safe margins.', motion: 'Camera slow push-in toward ANDINO on rooftop edge. Wind presses black suit against body. Crimson headphones pulse with light. City neon below reflects in his eyes through mask slit. One slow deliberate breath visible. Absolute stillness of a master. Camera holds on direct eye contact.' },
+  'andino-street':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Walking toward camera down rain-soaked Santiago alley. MPC under arm. Red headphones on. Steam rising from cobblestones. Colonial archway behind. Blood moon above. 9:16 vertical ALL 120px safe margins.', motion: 'Long lens compression as ANDINO walks directly toward camera through rain. Each footstep sends small red ripple through puddles. Steam parts around him. Camera slowly retreats maintaining distance. Red MPC glow intensifies. Colonial archway and Andes silhouette visible behind. Unstoppable approach.' },
+
+  // PIERO
+  'piero-intro':    { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Stepping from total darkness into single candlelight. Glasses catch light first. Iron microphone raised. Gold smoke beginning to rise from tip. Stone corridor. 9:16 vertical ALL 120px safe margins.', motion: 'PIERO materializes from pure darkness as single candle illuminates him dramatically. Gold smoke rises from microphone tip and curls upward. Camera slow push-in as he fully reveals himself. Glasses glint with gold light. Cracked stone walls surround him. Voice of the clan emerging from shadow.' },
+  'piero-battle':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Battle stance in rain-soaked alley. Microphone thrust forward like weapon. Gold energy beam erupting from tip. Other hand open palm strike. Wet cobblestones. Shockwave cracking stone walls. 9:16 vertical ALL 120px safe margins.', motion: 'Gold energy beam from microphone expands outward with tremendous force. Stone walls crack and crumble at edges of frame. Rain drops freeze mid-air in shockwave. Camera rapid push-in to eyes behind glasses. Each word sends visible gold pulse through the air. Power of voice as weapon.' },
+  'piero-ritual':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Standing center of ancient stone circle. Microphone touching ground like a ceremonial staff. Gold energy flowing down from blood moon through mic into stone carvings. 9:16 vertical ALL 120px safe margins.', motion: 'Gold light descends from blood moon through PIERO and into microphone like a lightning rod in reverse. Stone circle carvings illuminate gold one by one outward from center. Camera circles him slowly. His body channels ancient power into the earth. Gold ring expands beneath him.' },
+  'piero-finale':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Direct confrontation facing camera. Microphone raised at 45 degrees toward lens. Glasses glinting. Gold energy building around entire figure. Massive gold corona forming above. 9:16 vertical ALL 120px safe margins.', motion: 'PIERO raises microphone directly at camera in slow motion. Gold energy corona expands massively above and around him. Camera is pushed back by the force of the energy release. White gold flash fills frame momentarily. He holds position unflinching. Final declaration of dominance.' },
+  'piero-street':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Leaning against wet graffiti wall under broken lamplight. Microphone in hand hanging loose. Eyes sharp behind glasses watching something off camera. Gold energy barely contained. 9:16 vertical ALL 120px safe margins.', motion: 'PIERO pushes off wall in one fluid motion and walks directly toward camera. Gold energy builds around microphone with each step. Camera retreats slowly. Rain falls around him. He stops at exact center frame and raises mic. Gold shockwave ripples across wet pavement outward.' },
+
+  // KINNY
+  'kinny-intro':    { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops from above frame landing in perfect Shaolin crouch on wet stone. Three obsidian shuriken appear orbiting one by one. Teal energy pulses through suit markings. 9:16 vertical ALL 120px safe margins.', motion: 'KINNY drops into frame from above and lands in perfect stillness. Three shuriken materialize and begin orbiting in sequence. Teal energy begins pulsing through suit markings like electricity through veins. Camera circles him slowly as energy builds. From stillness to coiled explosive readiness.' },
+  'kinny-battle':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' FROZEN mid-air at peak of spinning aerial kick. Right leg fully extended horizontal. Arms opposing. THREE shuriken in perfect orbit. Teal energy corona blazing from every limb. Speed lines radiating. 9:16 vertical ALL 120px safe margins.', motion: 'Time resumes from frozen peak of kick in ULTRA SLOW MOTION. Leg completes arc with motion blur. Shuriken scatter outward like projectiles. Teal energy explodes from body in all directions. Camera rotates 180 degrees around him during spin. Landing is silent but devastating. Pure kinetic black magic.' },
+  'kinny-ritual':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Kneeling in center of carved stone circle. Three shuriken placed around him as offerings. Teal energy pulsing through suit veins in slow rhythm. Blood moon above. Top-down view descending. 9:16 vertical ALL 120px safe margins.', motion: 'Top-down camera descends as teal energy pulses through KINNY in breathing rhythm. Three shuriken begin rotating slowly like satellites. Stone circle carvings illuminate teal outward from his body. He stands slowly with arms raised. Teal corona explodes upward toward camera.' },
+  'kinny-finale':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Standing facing camera. Three shuriken orbiting in tight circle. Weight forward coiled energy. Direct fierce eye contact through mask slit. Massive teal energy building around entire figure. 9:16 vertical ALL 120px safe margins.', motion: 'KINNY takes one slow deliberate step forward. Shuriken orbit accelerates. Teal energy corona expands dramatically with each breath. Camera is pushed backward by energy field. He raises arms and massive teal explosion fires outward filling entire frame. Freeze at peak of power release.' },
+  'kinny-street':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops from rooftop onto wet Santiago cobblestones. Steam surrounds landing point. Low angle from ground. Three shuriken materialize hanging from belt. Andes silhouette behind in storm sky. 9:16 vertical ALL 120px safe margins.', motion: 'Landing impact sends teal energy shockwave rippling outward through wet cobblestones. Camera low angle looks up as KINNY rises from crouch to full height. Shuriken begin orbiting. He walks forward through steam toward camera. Colonial archway frames him. Camera retreats. Pure warrior energy.' },
+
+  // SQUAD
+  intro:   BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three emerging from darkness simultaneously. Blood moon above. Yin yang glowing ground. SOUTHSIDE red glitch text. 9:16 vertical ALL 120px.',
+  battle:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three in full battle action simultaneously. Energy beams red gold teal crossing. SOUTHSIDE red glitch. 9:16 vertical ALL 120px.',
+  ritual:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Triangle formation yin yang stone floor blood moon. Three energy coronas red gold teal merging. SOUTHSIDE. 9:16 vertical ALL 120px.',
+  finale:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three advancing toward camera. Massive combined energy burst. SOUTHSIDE red glitch top. Ultimate poster. 9:16 vertical ALL 120px.',
+  street:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Santiago alley 3am all three emerging from steam. Colonial archway. Andes. Blood moon. SOUTHSIDE. 9:16 vertical ALL 120px.'
+};
+
+const RUNWAY_SQUAD_MOTIONS = {
+  intro:  'All three figures materialize from darkness simultaneously. Three energy coronas red gold teal ignite. Camera pulls back dramatically revealing full triangle. Blood moon blazes. Yin yang erupts from ground. SOUTHSIDE burns into frame.',
+  battle: 'All three unleash simultaneously. Red gold teal energy beams cross in center. ANDINO fires from behind elevated. PIERO shockwave from center. KINNY spinning foreground. Camera pulls back fast revealing full chaos. Pure power.',
+  ritual: 'Three energy coronas merge at center creating white light. Yin yang expands outward. Camera descends from above revealing triangle. Stone carvings illuminate. Blood moon blazes. Ancient ritual complete.',
+  finale: 'All three advance toward camera in slow motion. Combined energy field pushes camera backward. Massive white explosion at climax. Freeze frame with SOUTHSIDE. Epic cinematic finale.',
+  street: 'All three emerge from steam and walk toward camera through rain. Colonial archway behind. Each step sends colored energy ripple through puddles. They stop simultaneously. Camera orbits 360 degrees around the squad.'
+};
+
+async function runRunwayScene(chatId, sceneKey) {
+  const msgId = await send(chatId, '🎬 *Runway factory*\n' + bar(0, 10) + '\n_Iniciando escena: ' + sceneKey + '..._');
+  const scene = RUNWAY_SCENES[sceneKey];
+  if (!scene) {
+    await edit(chatId, msgId, '❌ Escena no encontrada. Usa `/runway` para ver las opciones.');
+    return;
+  }
+
+  // Squad scenes have string prompt, character scenes have {img, motion}
+  const isSquad = typeof scene === 'string';
+  const imgPrompt = isSquad ? scene : scene.img;
+  const motionPrompt = isSquad ? (RUNWAY_SQUAD_MOTIONS[sceneKey] || 'Cinematic anime motion. Dark energy. Wu-Tang aesthetic.') : scene.motion;
+
+  // Generate image with Grok
+  await edit(chatId, msgId, '🎬 *Runway factory*\n' + bar(3, 10) + '\n_🎨 Grok generando imagen..._');
+  const imgUrl = await grokImg(imgPrompt);
+  if (!imgUrl) { await edit(chatId, msgId, '❌ Grok no generó imagen.'); return; }
+  await photo(chatId, imgUrl, '🎨 Frame: ' + sceneKey);
+
+  // Animate with Runway
+  await edit(chatId, msgId, '🎬 *Runway factory*\n' + bar(6, 10) + '\n_🎬 Runway animando..._');
+  const vid = await runwayVideo(imgUrl, motionPrompt, 5);
+
+  if (vid) {
+    await video(chatId, vid, '🎬 Runway — ' + sceneKey);
+    // Upload to R2 for sync
+    await edit(chatId, msgId, '🎬 *Runway factory*\n' + bar(9, 10) + '\n_☁️ Subiendo a R2..._');
+    try {
+      const vidRes = await fetch(vid);
+      const vidBuffer = await vidRes.arrayBuffer();
+      const filename = 'runway_' + sceneKey.replace('-','_') + '_' + Date.now() + '.mp4';
+      const r2Url = await uploadToR2(vidBuffer, filename, 'video/mp4');
+      if (r2Url) saveClip(chatId, r2Url);
+    } catch(e) { saveClip(chatId, vid); }
+    await edit(chatId, msgId, '🎬 *Runway factory*\n' + bar(10, 10) + '\n✅ *Completado — guardado para /sync*');
+  } else {
+    await edit(chatId, msgId, '❌ Runway no generó el clip.');
   }
 }
 
