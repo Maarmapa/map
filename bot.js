@@ -700,7 +700,7 @@ async function runSync(chatId, clipUrls, audioUrl) {
   }
 
   const audio = audioUrl || SOUTHSIDE_AUDIO;
-  const clipDuration = 3; // seconds per clip
+  const clipDuration = 5; // seconds per clip
 
   await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(3, 10) + '\n_Construyendo timeline..._');
 
