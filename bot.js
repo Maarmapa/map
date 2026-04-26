@@ -462,7 +462,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v6*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot\n`/anime` — video anime squad\n`/squad` — multi-angulo squad\n`/seedance intro|battle|ritual|finale|street` — video\n`/sync` — mezcla clips con cancion\n`/clips` — ver clips guardados\n`/model` — cambiar modelo\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n📸 Foto — Runway');
+    await send(chatId, '🎨 *maarmapa factory v6*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n`/syncr2` — cargar clips R2\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar SOUTHSIDE\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest');
     return;
   }
 
