@@ -408,30 +408,35 @@ async function runSync(chatId, clipUrls) {
 
   await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(3, 10) + '\n_Construyendo timeline con ' + clipUrls.length + ' clips..._');
 
-  // BPM sync — 103 BPM
+  // BPM sync — 103 BPM — drop at second 2
   const BPM = 103;
   const beat = 60 / BPM;           // 0.583s per beat
+  const bar2 = beat * 2;           // 1.165s — 2 beats
   const bar4 = beat * 4;           // 2.33s — 4 beats
   const bar8 = beat * 8;           // 4.66s — 8 beats
   const bar16 = beat * 16;         // 9.32s — 16 beats
+  const DROP = 2.0;                // drop at second 2
 
-  // Assign duration per clip based on position — alternating 8 and 16 beat cuts
-  // First and last clip get 16 beats (intro/outro), middle clips get 8 beats
+  // Mixed cuts — first cut lands on drop at second 2
+  // Each clip has a trim offset to start from most dynamic moment (1.5s in)
+  const TRIM = 1.5; // start clips 1.5s in to hit dynamic moment
   const durations = clipUrls.map((_, i) => {
-    if (i === 0 || i === clipUrls.length - 1) return bar16; // intro/outro — 16 beats
-    return bar8; // middle clips — 8 beats tight cuts
+    if (i === 0) return DROP;                          // first clip — 2s until drop
+    if (i === clipUrls.length - 1) return bar8;        // last clip — 8 beats
+    return i % 2 === 0 ? bar4 : bar8;                 // alternate 4/8 beats
   });
 
   // Calculate start times
   const starts = [];
   let t = 0;
   durations.forEach(d => { starts.push(parseFloat(t.toFixed(3))); t += d; });
+  console.log('BPM sync: drop at ' + DROP + 's, total: ' + parseFloat(t.toFixed(2)) + 's, clips: ' + clipUrls.length);
 
   const timeline = {
     soundtrack: { src: SOUTHSIDE_AUDIO, volume: 1 },
     tracks: [{
       clips: clipUrls.map((url, i) => ({
-        asset: { type: 'video', src: url, volume: 0 },
+        asset: { type: 'video', src: url, volume: 0, trim: i === 0 ? 0 : TRIM },
         start: starts[i],
         length: parseFloat(durations[i].toFixed(3)),
         transition: { in: i === 0 ? 'fadeFast' : 'none', out: i === clipUrls.length - 1 ? 'fadeFast' : 'none' }
@@ -469,7 +474,7 @@ async function runSync(chatId, clipUrls) {
         await tg('sendVideo', { chat_id: chatId, video: url, caption: '🎵 SOUTHSIDE — Video Final (' + clipUrls.length + ' clips)' });
         return;
       }
-      if (status === 'failed') { await edit(chatId, msgId, '❌ Shotstack render falló: ' + (pd.response?.error || '')); return; }
+      if (status === 'failed') { await edit(chatId, msgId, '❌ Shotstack render falló: ' + (typeof pd.response?.error === 'string' ? pd.response.error : JSON.stringify(pd.response?.error || pd))); return; }
     }
     await edit(chatId, msgId, '❌ Timeout.');
   } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
