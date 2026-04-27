@@ -434,7 +434,7 @@ async function runSync(chatId, clipUrls) {
         asset: { type: 'video', src: url, volume: 0 },
         start: starts[i],
         length: parseFloat(durations[i].toFixed(3)),
-        transition: { in: i === 0 ? 'fade' : 'cut', out: i === clipUrls.length - 1 ? 'fade' : 'cut' }
+        transition: { in: i === 0 ? 'fadeFast' : 'none', out: i === clipUrls.length - 1 ? 'fadeFast' : 'none' }
       }))
     }],
     background: '#000000'
