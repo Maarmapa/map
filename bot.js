@@ -464,15 +464,9 @@ async function runSync(chatId, clipUrls) {
       console.log('Shotstack poll ' + i + ':', status);
       await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(5 + Math.min(i, 4), 10) + '\n_Renderizando ' + (i*10) + 's..._');
       if (status === 'done' && url) {
-        await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(9, 10) + '\n_📥 Descargando video final..._');
-        const vr = await fetch(url);
-        const vb = await vr.arrayBuffer();
-        const form = new FormData();
-        form.append('chat_id', String(chatId));
-        form.append('video', new Blob([vb], { type: 'video/mp4' }), 'southside_final.mp4');
-        form.append('caption', '🎵 SOUTHSIDE — Video Final (' + clipUrls.length + ' clips)');
-        await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
         await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(10, 10) + '\n✅ *Video final listo*');
+        // Send via Telegram URL directly (avoid large download)
+        await tg('sendVideo', { chat_id: chatId, video: url, caption: '🎵 SOUTHSIDE — Video Final (' + clipUrls.length + ' clips)' });
         return;
       }
       if (status === 'failed') { await edit(chatId, msgId, '❌ Shotstack render falló: ' + (pd.response?.error || '')); return; }
