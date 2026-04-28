@@ -309,7 +309,13 @@ const SCENES = {
   battle:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three in battle action. Energy beams red gold teal crossing. SOUTHSIDE. 9:16 ALL 120px.',
   ritual:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Triangle yin yang stone floor blood moon. Three coronas merging. SOUTHSIDE. 9:16 ALL 120px.',
   finale:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three advancing toward camera. Massive combined energy burst. SOUTHSIDE. 9:16 ALL 120px.',
-  street:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Santiago alley 3am all three emerging from steam. Colonial archway. Andes. Blood moon. SOUTHSIDE. 9:16 ALL 120px.'
+  street:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Santiago alley 3am all three emerging from steam. Colonial archway. Andes. Blood moon. SOUTHSIDE. 9:16 ALL 120px.',
+
+  // NAME REVEAL scenes — character name burns into frame like SOUTHSIDE
+  'andino-name':  BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Full body dramatic low angle. Dark smoke surrounds him. MPC runes pulsing red. Massive bold glitch typography ANDINO in deep crimson red burns into frame center — same style as SOUTHSIDE title card. Blood moon above. Andes silhouette. 9:16 ALL 120px.',
+  'piero-name':   BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Full body center frame. Gold energy corona forming above. Iron microphone raised. Massive bold glitch typography PIERO LA ROCCA in tarnished gold burns into frame center — same style as SOUTHSIDE title card. Stone walls crack. 9:16 ALL 120px.',
+  'kinny-name':   BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Mid-air frozen kick. Three shuriken orbiting. Teal energy blazing. Massive bold glitch typography ILKINNY in electric teal burns into frame center — same style as SOUTHSIDE title card. Speed lines everywhere. 9:16 ALL 120px.',
+  'squad-name':   BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three in triangle formation advancing toward camera. Three energy coronas red gold teal merging into white at center. Blood moon blazing above. Yin yang erupting from wet ground. Heavy black smoke. No text no typography. Pure cinematic power. 9:16 ALL 120px.'
 };
 
 async function runSeedance(chatId, concept) {
@@ -419,11 +425,11 @@ async function runSync(chatId, clipUrls) {
 
   // Mixed cuts — first cut lands on drop at second 2
   // Each clip has a trim offset to start from most dynamic moment (1.5s in)
-  const TRIM = 1.5; // start clips 1.5s in to hit dynamic moment
+  const TRIM = 2.0; // skip first 2s of each clip — hit dynamic moment
   const durations = clipUrls.map((_, i) => {
     if (i === 0) return DROP;                          // first clip — 2s until drop
     if (i === clipUrls.length - 1) return bar16;       // last clip — 16 beats outro
-    return bar8;                                       // all middle clips — 8 beats (4.66s)
+    return bar4;                                       // all middle clips — 4 beats (2.33s) tight cuts
   });
 
   // Calculate start times
@@ -732,4 +738,3 @@ async function poll() {
 
 require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v7 online'); }).listen(process.env.PORT || 3000);
 poll();
-
