@@ -422,8 +422,8 @@ async function runSync(chatId, clipUrls) {
   const TRIM = 1.5; // start clips 1.5s in to hit dynamic moment
   const durations = clipUrls.map((_, i) => {
     if (i === 0) return DROP;                          // first clip — 2s until drop
-    if (i === clipUrls.length - 1) return bar8;        // last clip — 8 beats
-    return i % 2 === 0 ? bar4 : bar8;                 // alternate 4/8 beats
+    if (i === clipUrls.length - 1) return bar16;       // last clip — 16 beats outro
+    return bar8;                                       // all middle clips — 8 beats (4.66s)
   });
 
   // Calculate start times
@@ -439,7 +439,8 @@ async function runSync(chatId, clipUrls) {
         asset: { type: 'video', src: url, volume: 0, trim: i === 0 ? 0 : TRIM },
         start: starts[i],
         length: parseFloat(durations[i].toFixed(3)),
-        transition: { in: i === 0 ? 'fadeFast' : 'none', out: i === clipUrls.length - 1 ? 'fadeFast' : 'none' }
+        transition: { in: i === 0 ? 'fadeFast' : 'none', out: i === clipUrls.length - 1 ? 'fadeFast' : 'none' },
+        fit: 'crop'
       }))
     }],
     background: '#000000'
@@ -469,9 +470,20 @@ async function runSync(chatId, clipUrls) {
       console.log('Shotstack poll ' + i + ':', status);
       await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(5 + Math.min(i, 4), 10) + '\n_Renderizando ' + (i*10) + 's..._');
       if (status === 'done' && url) {
+        await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(9, 10) + '\n_📥 Descargando..._');
+        try {
+          const vr = await fetch(url);
+          const vb = await vr.arrayBuffer();
+          const form = new FormData();
+          form.append('chat_id', String(chatId));
+          form.append('video', new Blob([vb], { type: 'video/mp4' }), 'southside_final.mp4');
+          form.append('caption', '🎵 SOUTHSIDE — ' + clipUrls.length + ' clips BPM 103');
+          await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
+        } catch(e) {
+          console.error('Send error:', e.message);
+          await tg('sendMessage', { chat_id: chatId, text: '📥 Video listo: ' + url });
+        }
         await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(10, 10) + '\n✅ *Video final listo*');
-        // Send via Telegram URL directly (avoid large download)
-        await tg('sendVideo', { chat_id: chatId, video: url, caption: '🎵 SOUTHSIDE — Video Final (' + clipUrls.length + ' clips)' });
         return;
       }
       if (status === 'failed') { await edit(chatId, msgId, '❌ Shotstack render falló: ' + (typeof pd.response?.error === 'string' ? pd.response.error : JSON.stringify(pd.response?.error || pd))); return; }
@@ -617,7 +629,7 @@ async function handle(msg) {
     try {
       const r = await fetch(R2_WORKER + '/?list=true');
       const d = await r.json();
-      const clips = (d.objects || []).filter(k => k.endsWith('.mp4')).map(k => R2_BASE + k);
+      const clips = (d.objects || []).filter(k => k.endsWith('.mp4') && !k.includes('test') && !k.includes('Sin') && !k.includes(' ')).map(k => R2_BASE + encodeURIComponent(k));
       if (clips.length === 0) { await edit(chatId, msgId, '❌ No hay clips MP4 en R2.'); return; }
       clips.forEach(url => saveClip(chatId, url));
       await edit(chatId, msgId, '✅ ' + clips.length + ' clips cargados de R2. Usa /sync para mezclarlos con SOUTHSIDE.');
@@ -720,3 +732,4 @@ async function poll() {
 
 require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v7 online'); }).listen(process.env.PORT || 3000);
 poll();
+
