@@ -426,10 +426,11 @@ async function runSync(chatId, clipUrls) {
   // Mixed cuts — first cut lands on drop at second 2
   // Each clip has a trim offset to start from most dynamic moment (1.5s in)
   const TRIM = 2.0; // skip first 2s of each clip — hit dynamic moment
+  const MAX_CLIP = 4.5; // clips are 5s, cap at 4.5s to avoid freeze on last frame
   const durations = clipUrls.map((_, i) => {
-    if (i === 0) return DROP;                          // first clip — 2s until drop
-    if (i === clipUrls.length - 1) return bar16;       // last clip — 16 beats outro
-    return bar4;                                       // all middle clips — 4 beats (2.33s) tight cuts
+    if (i === 0) return Math.min(DROP, MAX_CLIP);          // first clip — drop
+    if (i === clipUrls.length - 1) return Math.min(bar8, MAX_CLIP); // last clip — 8 beats max 4.5s
+    return Math.min(bar4, MAX_CLIP);                       // middle clips — 4 beats max 4.5s
   });
 
   // Calculate start times
@@ -586,7 +587,12 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n`/syncr2` — cargar clips R2\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar SOUTHSIDE\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest');
+    await send(chatId, '🎨 *maarmapa factory v7*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n`/syncr2` — cargar clips R2\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar SOUTHSIDE\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/help` — ver todas las escenas');
+    return;
+  }
+
+  if (text === '/help') {
+    await send(chatId, '🎬 *Escenas disponibles:*\n\n*Squad:*\n`intro` `battle` `ritual` `finale` `street`\n\n*Andino:*\n`andino-intro` `andino-battle` `andino-ritual` `andino-finale` `andino-street` `andino-name`\n\n*Piero:*\n`piero-intro` `piero-battle` `piero-ritual` `piero-finale` `piero-street` `piero-name`\n\n*Kinny:*\n`kinny-intro` `kinny-battle` `kinny-ritual` `kinny-finale` `kinny-street` `kinny-name`\n\n*Nombres:*\n`andino-name` `piero-name` `kinny-name` `squad-name`\n\nEj: `/seedance kinny-battle` o `/runway andino-name`');
     return;
   }
 
