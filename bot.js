@@ -744,3 +744,4 @@ async function poll() {
 
 require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v7 online'); }).listen(process.env.PORT || 3000);
 poll();
+// redeploy trigger Sat May  2 22:21:20 -04 2026
