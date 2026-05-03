@@ -1,8 +1,14 @@
 // maarmapa — Telegram Bot v7
 // Claude + Grok + Runway + Seedance + DeepSeek + Shotstack + R2
+// v7.1 + Token Monitor + WebPost Commands
 const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
+
+// Token Monitor + Web Commands (v7.1)
+const TokenMonitor = require('./token-monitor');
+const WebPostGenerator = require('./webpost-module');
+const WebPostCarouselGenerator = require('./webpost-carousel-module');
 const SOUTHSIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH%20SIDE%20CRIMINI.mp3';
 const R2_BASE = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/';
 const R2_WORKER = 'https://maarmapa-media.mario-25d.workers.dev';
@@ -14,6 +20,24 @@ const MODELS = {
 };
 let currentTextModel = MODELS.text.fast;
 let currentVideoModel = MODELS.video.seedance_fast;
+
+// Initialize token monitor
+const monitor = new TokenMonitor();
+monitor.checkBalances();
+setInterval(() => monitor.checkBalances(), 600000); // Re-check every 10 min
+
+// Initialize web post generators
+const webPostGen = new WebPostGenerator(OPENROUTER_KEY, TELEGRAM_TOKEN, R2_WORKER);
+const carouselGen = new WebPostCarouselGenerator({
+  openrouterKey: OPENROUTER_KEY,
+  anthropicKey: process.env.ANTHROPIC_KEY,
+  grokKey: process.env.GROK_KEY,
+  runwayKey: process.env.RUNWAY_KEY,
+  telegramToken: TELEGRAM_TOKEN,
+  r2Worker: R2_WORKER,
+  searchProvider: 'duckduckgo',
+  imageGenerator: 'webimages' // 'webimages' (extract) or 'grok' (generate)
+});
 
 // Clip store (in-memory per session)
 const clipStore = {};
@@ -723,14 +747,87 @@ async function handle(msg) {
     return;
   }
 
+  // WebPost commands (v7.1)
+  if (text && text.startsWith('/webpost ') && !text.includes('-carousel')) {
+    const topic = text.replace('/webpost ', '').trim();
+    await runWebPost(chatId, topic);
+    return;
+  }
+
+  if (text && text.startsWith('/webpost-carousel ')) {
+    const topic = text.replace('/webpost-carousel ', '').trim();
+    await runWebPostCarousel(chatId, topic);
+    return;
+  }
+
   if (text && !text.startsWith('/')) {
     if (text.startsWith('https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/') && text.endsWith('.mp4')) {
       saveClip(chatId, text.trim());
       await send(chatId, '✅ Clip guardado. Total: ' + getClips(chatId).length + '\nUsa `/sync` para mezclar.');
       return;
     }
-    await send(chatId, '💡 `/post [tema]` — post\n`/runway [escena]` — video\n`/seedance [escena]` — video\n`/buscar [tema]` — noticias');
+    await send(chatId, '💡 `/post [tema]` — post\n`/webpost [tema]` — news\n`/webpost-carousel [tema]` — carousel\n`/runway [escena]` — video\n`/seedance [escena]` — video\n`/buscar [tema]` — noticias');
   }
+}
+
+// WebPost functions (v7.1)
+async function runWebPost(chatId, topic) {
+  const msgId = await send(chatId, '🔍 *webpost*\n' + bar(0, 5) + '\n_Buscando..._');
+  const post = await webPostGen.generateWebPost(topic, monitor);
+  
+  if (post.status !== 'success') {
+    await edit(chatId, msgId, '❌ Error: ' + post.status);
+    return;
+  }
+  
+  await edit(chatId, msgId, '📋 *' + topic + '*\n' + bar(2, 5) + '\n_Generando post..._');
+  
+  if (post.narrative) {
+    await send(chatId, post.narrative);
+  }
+  
+  await edit(chatId, msgId, '📤 *webpost*\n' + bar(4, 5) + '\n_Enviando imágenes..._');
+  
+  for (const url of post.r2Urls) {
+    await photo(chatId, url, topic);
+  }
+  
+  const status = monitor.formatCommandStatus('openrouter', 150, `/webpost ${topic}`);
+  if (status) await send(chatId, status);
+}
+
+async function runWebPostCarousel(chatId, topic) {
+  const msgId = await send(chatId, '🔍 *webpost carousel*\n' + bar(0, 7) + '\n_Buscando..._');
+  const result = await carouselGen.generateWebPostCarousel(topic, monitor);
+  
+  if (result.status !== 'success') {
+    await edit(chatId, msgId, '❌ Error: ' + result.status);
+    return;
+  }
+  
+  await edit(chatId, msgId, '📝 *carousel*\n' + bar(2, 7) + '\n_Generando slides..._');
+  
+  if (result.slides && Array.isArray(result.slides)) {
+    for (const slide of result.slides) {
+      const slideText = `${slide.emoji || '📌'} *Slide ${slide.slide}*\n\n${slide.text}`;
+      await send(chatId, slideText);
+    }
+  }
+  
+  await edit(chatId, msgId, '📸 *carousel*\n' + bar(5, 7) + '\n_Enviando imágenes..._');
+  
+  for (const url of result.r2Urls) {
+    await photo(chatId, url, topic);
+  }
+  
+  if (result.videoUrl) {
+    await edit(chatId, msgId, '🎬 *carousel*\n' + bar(6, 7) + '\n_Enviando video..._');
+    await video(chatId, result.videoUrl, topic + ' — Carousel Video');
+  }
+  
+  const tokensUsed = (result.tokensUsed?.openrouter || 200) + (result.tokensUsed?.grok || 0);
+  const status = monitor.formatCommandStatus('openrouter', tokensUsed, `/webpost-carousel ${topic}`);
+  if (status) await send(chatId, status);
 }
 
 // POLLING
