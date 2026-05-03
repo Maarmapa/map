@@ -253,6 +253,8 @@ async function runFactory(chatId, topic) {
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(10, 10) + '\n✅ *Completado*');
   await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips);
 }
+
+async function runAnime(chatId, concept) {
   const msgId = await send(chatId, '🎬 *anime factory*\n' + bar(0, 10) + '\n_Iniciando..._');
   const BS = BASE_STYLE + ' ' + CITY_BG + ' 9:16 vertical ALL 120px safe margins.';
   const chars = [
