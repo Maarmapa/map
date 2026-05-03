@@ -148,70 +148,111 @@ async function wakeAgent(chatId, msgId) {
 // POST FACTORY
 async function runFactory(chatId, topic) {
   const msgId = await send(chatId, '🏭 *maarmapa factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+
   const awake = await wakeAgent(chatId, msgId);
-  if (!awake) { await edit(chatId, msgId, '❌ Agente no responde.'); return; }
+  if (!awake) { await edit(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto.'); return; }
+
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Generando post..._');
 
   let postData;
   try {
-    const system = 'Eres escritor editorial para maarmapa artista urbano chileno. Genera posts completos Substack sobre arte cultura marketing blockchain ciudades. Devuelve SOLO JSON: {"title":"...","body":"...","instagram_caption":"...","thumbnail_prompt":"..."}';
-    const raw = await deepseek('Genera post completo sobre: ' + topic, system);
+    const dsSystem = 'Eres un escritor editorial experto para maarmapa — artista urbano chileno contemporáneo. Genera posts completos para Substack sobre arte, cultura, marketing, blockchain y ciudades. Devuelve JSON: {"title":"...","body":"...","instagram_caption":"...","thumbnail_prompt":"...","visual_style":"...","key_insights":[...]}';
+    let raw = await deepseek('Genera un post completo de Substack sobre: ' + topic, dsSystem);
+
     if (raw) {
-      try { postData = JSON.parse(raw.replace(/```json|```/g, '').trim()); } catch(e) { postData = { title: topic, body: raw, instagram_caption: '' }; }
-    }
-    if (!postData) {
-      const r = await fetch(AGENT_URL + '/post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
-      postData = (await r.json()).post || (await r.json());
+      try {
+        raw = raw.replace(/```json|```/g, '').trim();
+        postData = JSON.parse(raw);
+      } catch(e) { postData = { title: topic, body: raw, instagram_caption: '', visual_style: 'dark editorial', key_insights: [] }; }
+    } else {
+      const res = await fetch(AGENT_URL + '/post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic })
+      });
+      const r = await res.json();
+      postData = r.post || r;
     }
   } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); return; }
 
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_✅ Texto listo_');
 
   const title = (postData.title || topic).slice(0, 120);
-  const body = (postData.body || '').replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '').replace(/#{1,3} [^\n]+\n?/g, '\n').replace(/\*\*/g, '').trim().slice(0, 900);
-  const caption = (postData.instagram_caption || '').slice(0, 250);
+  const body = (postData.body || '')
+    .replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '')
+    .replace(/## [^\n]+\n?/g, '\n').replace(/# [^\n]+\n?/g, '\n')
+    .replace(/\*\*/g, '').replace(/\s{3,}/g, '\n\n').trim().slice(0, 900);
+  const caption = (postData.instagram_caption || '').replace(/<[^>]*>/g, '').slice(0, 250);
+  
   await send(chatId, '📝 *' + title + '*\n\n' + body + '...');
   if (caption) await send(chatId, '📌 _Caption:_\n' + caption);
 
+  // Thumbnail
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4, 10) + '\n_🖼 Thumbnail..._');
   if (postData.thumbnail_prompt) {
-    await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4, 10) + '\n_🖼 Thumbnail..._');
-    const t = await grokImg(postData.thumbnail_prompt);
-    if (t) await photo(chatId, t, '🖼 Thumbnail');
+    const thumbUrl = await grokImg(postData.thumbnail_prompt);
+    if (thumbUrl) await photo(chatId, thumbUrl, '🖼 Thumbnail');
   }
 
+  // MEJORADO: 7 Slides con contexto real del post
+  const T = (postData.title || topic).toUpperCase().slice(0, 38);
   const TL = postData.title || topic;
-  const T = TL.toUpperCase().slice(0, 38);
-  const slidePrompts = [
-    'Square 1:1 editorial. Dark #080808. Safe 120px all sides. Ghost image 12% film grain. Bebas Neue white: ' + T + ' 3 lines. 01/07.',
-    'Square 1:1 editorial. White #f5f5f0. Safe 120px. Bebas Neue black: key paradox about ' + TL + '. 02/07.',
-    'Square 1:1 editorial. Dark. Safe 120px. Architecture 10% film grain. Vertical white line. Massive stat from ' + TL + '. 03/07.',
-    'Square 1:1 editorial. Dark. Safe 120px. Quote mark 3%. Italic serif quote about ' + TL + '. Attribution. 04/07.',
-    'Square 1:1 editorial. Dark. Safe 120px. 2x2 brutalist grid. Bold white concepts from ' + TL + '. 05/07.',
-    'Square 1:1 editorial. White #f5f5f0. Safe 120px. Bebas Neue question about ' + TL + ' black italic gray. 06/07.',
-    'Square 1:1 editorial. Dark. Safe 120px. Urban pattern 5%. Bebas Neue conclusion. @maarmapa.eth. Hashtags. 07/07.'
+  const insights = postData.key_insights || [];
+  const style = postData.visual_style || 'dark editorial cinematic';
+  const firstLine = body.split('\n')[0] || TL;
+  
+  const improvedPrompts = [
+    `Square 1:1 editorial Instagram. Dark #080808. Safe zone 120px all sides. Cinematic ${style}. Bebas Neue white left-aligned massive: "${T}". 01/07. Ghost image subtle vignette film grain 12%. Dark moody atmospheric.`,
+    
+    `Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px all sides. High contrast. Bebas Neue black bold: KEY INSIGHT. 3 lines about "${firstLine}". 02/07. Minimalist elegant.`,
+    
+    `Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. ${style}. Architecture film grain 10%. Vertical accent line left. Bebas Neue white stat or fact from "${TL}". 03/07. Data-driven.`,
+    
+    `Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Quotation mark subtle 3%. Italic serif quote light gray: "${insights[0] || 'authenticity meets innovation'}". Attribution. 04/07. Thoughtful.`,
+    
+    `Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. 2x2 brutalist grid. Bold white 4 key concepts: "${insights[1] || 'creativity'}" "${insights[2] || 'culture'}" "${insights[3] || 'commerce'}" and "${insights[4] || 'community'}". 05/07. Powerful.`,
+    
+    `Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px all sides. Centered Bebas Neue 4 lines provocative question: "How does ${TL} redefine ${topic.split(' ')[0]}?". Black bold italic gray. 06/07. Engaging.`,
+    
+    `Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Urban pattern 5% opacity. ${style}. Bebas Neue white conclusion 2-3 lines. @maarmapa.eth bottom left. Hashtags bottom right. 07/07. Cinematic finale.`
   ];
+  
   const slideUrls = [];
   for (let i = 0; i < 7; i++) {
-    await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i+1) + '/7..._');
-    const u = await grokImg(slidePrompts[i]);
-    if (u) { slideUrls.push(u); await photo(chatId, u, 'Slide ' + (i+1) + '/7'); }
+    await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i + 1) + '/7..._');
+    const url = await grokImg(improvedPrompts[i]);
+    if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i + 1) + '/7'); }
   }
 
+  // MEJORADO: Runway clips con contexto visual coherente
   let clips = 0;
   if (process.env.RUNWAY_KEY && slideUrls.length > 0) {
-    const motions = ['Text slides left motion blur. Cinematic.', 'Text scales up blurs. Clean impact.', 'Numbers animate blur. Vertical line.', 'Quote fades upward smoke.', 'Grid cells flash sequential.', 'Letters scatter explosion.', 'Fade deeper black. Handle sharp.'];
+    const motions = [
+      `Instagram Reel. Dark cinematic ${style}. Text "${T}" slides left smooth motion blur. Professional editorial pacing. Fade in dark atmosphere.`,
+      
+      `Editorial reel. White slide sharp. Text scales up elegantly blurs out. Clean professional impact. Typography-focused motion.`,
+      
+      `Data visualization. Dark background. Numbers and stats animate upward with vertical line accent. Subtle blur motion. Analytical energy.`,
+      
+      `Contemplative motion. Quote drifts upward like smoke. Soft fade transitions. Meditative pacing. Introspective mood.`,
+      
+      `Grid cells flash sequentially brutal rhythm. Bold geometric motion. High contrast. Industrial aesthetic. Powerful kinetic energy.`,
+      
+      `Letters and words scatter outward explosion. Dynamic kinetic typography. Burst of creative energy. Fast impactful motion.`,
+      
+      `Cinematic finale. Deep fade to darker background. Pulsing subtle motion. @maarmapa.eth appears sharp. Professional conclusion. Film noir ending.`
+    ];
+    
     for (let i = 0; i < Math.min(slideUrls.length, 7); i++) {
-      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i+1) + '/' + slideUrls.length + '..._');
-      const vid = await runwayVideo(slideUrls[i], motions[i], 3);
-      if (vid) { await video(chatId, vid, '🎬 Clip ' + (i+1)); clips++; }
+      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/' + slideUrls.length + ' Runway..._');
+      const vid = await runwayVideo(slideUrls[i], motions[i], 4);
+      if (vid) { await video(chatId, vid, '🎬 Clip ' + (i + 1)); clips++; }
     }
   }
+
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(10, 10) + '\n✅ *Completado*');
   await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips);
 }
-
-// ANIME FACTORY
-async function runAnime(chatId, concept) {
   const msgId = await send(chatId, '🎬 *anime factory*\n' + bar(0, 10) + '\n_Iniciando..._');
   const BS = BASE_STYLE + ' ' + CITY_BG + ' 9:16 vertical ALL 120px safe margins.';
   const chars = [
@@ -309,13 +350,7 @@ const SCENES = {
   battle:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three in battle action. Energy beams red gold teal crossing. SOUTHSIDE. 9:16 ALL 120px.',
   ritual:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Triangle yin yang stone floor blood moon. Three coronas merging. SOUTHSIDE. 9:16 ALL 120px.',
   finale:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three advancing toward camera. Massive combined energy burst. SOUTHSIDE. 9:16 ALL 120px.',
-  street:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Santiago alley 3am all three emerging from steam. Colonial archway. Andes. Blood moon. SOUTHSIDE. 9:16 ALL 120px.',
-
-  // NAME REVEAL scenes — character name burns into frame like SOUTHSIDE
-  'andino-name':  BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Full body dramatic low angle. Dark smoke surrounds him. MPC runes pulsing red. Massive bold distressed glitch typography spelling exactly ANDINO in blood crimson red — same exact style font weight and glitch effect as SOUTHSIDE title card — positioned in UPPER THIRD of frame above character head. Blood moon above. Andes silhouette. 9:16 ALL 120px safe margins.',
-  'piero-name':   BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Full body center frame. Gold energy corona forming above. Iron microphone raised. Massive bold distressed glitch typography — THE TEXT MUST READ EXACTLY: first line "PIERO" second line "LA ROCCA" — spelled P-I-E-R-O and L-A-R-O-C-C-A — in blood crimson red — same exact style font weight and glitch effect as SOUTHSIDE title card — positioned in UPPER THIRD of frame above character head. Stone walls crack. 9:16 ALL 120px safe margins.',
-  'kinny-name':   BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Mid-air frozen kick. Three shuriken orbiting. Teal energy blazing. Massive bold distressed glitch typography spelling exactly IlKINNY in blood crimson red — same exact style font weight and glitch effect as SOUTHSIDE title card — positioned in UPPER THIRD of frame above character head. Speed lines everywhere. 9:16 ALL 120px safe margins.',
-  'squad-name':   BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three in triangle formation advancing toward camera. Three energy coronas red gold teal merging into white at center. Blood moon blazing above. Yin yang erupting from wet ground. Heavy black smoke. No text no typography. Pure cinematic power. 9:16 ALL 120px.'
+  street:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Santiago alley 3am all three emerging from steam. Colonial archway. Andes. Blood moon. SOUTHSIDE. 9:16 ALL 120px.'
 };
 
 async function runSeedance(chatId, concept) {
@@ -414,46 +449,19 @@ async function runSync(chatId, clipUrls) {
 
   await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(3, 10) + '\n_Construyendo timeline con ' + clipUrls.length + ' clips..._');
 
-  // BPM sync — 103 BPM — drop at second 2
-  const BPM = 103;
-  const beat = 60 / BPM;           // 0.583s per beat
-  const bar2 = beat * 2;           // 1.165s — 2 beats
-  const bar4 = beat * 4;           // 2.33s — 4 beats
-  const bar8 = beat * 8;           // 4.66s — 8 beats
-  const bar16 = beat * 16;         // 9.32s — 16 beats
-  const DROP = 2.0;                // drop at second 2
-
-  // Mixed cuts — first cut lands on drop at second 2
-  // Each clip has a trim offset to start from most dynamic moment (1.5s in)
-  const TRIM = 2.0; // skip first 2s of each clip — hit dynamic moment
-  const MAX_CLIP = 4.5; // clips are 5s, cap at 4.5s to avoid freeze on last frame
-  const durations = clipUrls.map((_, i) => {
-    if (i === 0) return Math.min(DROP, MAX_CLIP);          // first clip — drop
-    if (i === clipUrls.length - 1) return Math.min(bar8, MAX_CLIP); // last clip — 8 beats max 4.5s
-    return Math.min(bar4, MAX_CLIP);                       // middle clips — 4 beats max 4.5s
-  });
-
-  // Calculate start times
-  const starts = [];
-  let t = 0;
-  durations.forEach(d => { starts.push(parseFloat(t.toFixed(3))); t += d; });
-  console.log('BPM sync: drop at ' + DROP + 's, total: ' + parseFloat(t.toFixed(2)) + 's, clips: ' + clipUrls.length);
-
+  const clipDuration = 5;
   const timeline = {
     soundtrack: { src: SOUTHSIDE_AUDIO, volume: 1 },
     tracks: [{
       clips: clipUrls.map((url, i) => ({
-        asset: { type: 'video', src: url, volume: 0, trim: i === 0 ? 0 : TRIM },
-        start: starts[i],
-        length: parseFloat(durations[i].toFixed(3)),
-        transition: { in: i === 0 ? 'fadeFast' : 'none', out: i === clipUrls.length - 1 ? 'fadeFast' : 'none' },
-        fit: 'crop'
+        asset: { type: 'video', src: url, volume: 0 },
+        start: i * clipDuration,
+        length: clipDuration,
+        transition: { in: 'fade', out: 'fade' }
       }))
     }],
     background: '#000000'
   };
-
-  console.log('BPM sync: ' + clipUrls.length + ' clips, total duration: ' + parseFloat(t.toFixed(2)) + 's');
 
   try {
     const sr = await fetch('https://api.shotstack.io/edit/stage/render', {
@@ -477,23 +485,18 @@ async function runSync(chatId, clipUrls) {
       console.log('Shotstack poll ' + i + ':', status);
       await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(5 + Math.min(i, 4), 10) + '\n_Renderizando ' + (i*10) + 's..._');
       if (status === 'done' && url) {
-        await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(9, 10) + '\n_📥 Descargando..._');
-        try {
-          const vr = await fetch(url);
-          const vb = await vr.arrayBuffer();
-          const form = new FormData();
-          form.append('chat_id', String(chatId));
-          form.append('video', new Blob([vb], { type: 'video/mp4' }), 'southside_final.mp4');
-          form.append('caption', '🎵 SOUTHSIDE — ' + clipUrls.length + ' clips BPM 103');
-          await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
-        } catch(e) {
-          console.error('Send error:', e.message);
-          await tg('sendMessage', { chat_id: chatId, text: '📥 Video listo: ' + url });
-        }
+        await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(9, 10) + '\n_📥 Descargando video final..._');
+        const vr = await fetch(url);
+        const vb = await vr.arrayBuffer();
+        const form = new FormData();
+        form.append('chat_id', String(chatId));
+        form.append('video', new Blob([vb], { type: 'video/mp4' }), 'southside_final.mp4');
+        form.append('caption', '🎵 SOUTHSIDE — Video Final (' + clipUrls.length + ' clips)');
+        await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
         await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(10, 10) + '\n✅ *Video final listo*');
         return;
       }
-      if (status === 'failed') { await edit(chatId, msgId, '❌ Shotstack render falló: ' + (typeof pd.response?.error === 'string' ? pd.response.error : JSON.stringify(pd.response?.error || pd))); return; }
+      if (status === 'failed') { await edit(chatId, msgId, '❌ Shotstack render falló: ' + (pd.response?.error || '')); return; }
     }
     await edit(chatId, msgId, '❌ Timeout.');
   } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
@@ -587,12 +590,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n`/syncr2` — cargar clips R2\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar SOUTHSIDE\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/help` — ver todas las escenas');
-    return;
-  }
-
-  if (text === '/help') {
-    await send(chatId, '🎬 *Escenas disponibles:*\n\n*Squad:*\n`intro` `battle` `ritual` `finale` `street`\n\n*Andino:*\n`andino-intro` `andino-battle` `andino-ritual` `andino-finale` `andino-street` `andino-name`\n\n*Piero:*\n`piero-intro` `piero-battle` `piero-ritual` `piero-finale` `piero-street` `piero-name`\n\n*Kinny:*\n`kinny-intro` `kinny-battle` `kinny-ritual` `kinny-finale` `kinny-street` `kinny-name`\n\n*Nombres:*\n`andino-name` `piero-name` `kinny-name` `squad-name`\n\nEj: `/seedance kinny-battle` o `/runway andino-name`');
+    await send(chatId, '🎨 *maarmapa factory v7*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n`/syncr2` — cargar clips R2\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar SOUTHSIDE\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest');
     return;
   }
 
@@ -641,10 +639,10 @@ async function handle(msg) {
     try {
       const r = await fetch(R2_WORKER + '/?list=true');
       const d = await r.json();
-      const clips = (d.objects || []).filter(k => k.endsWith('.mp4') && !k.includes('test') && !k.includes('Sin') && !k.includes(' ')).map(k => R2_BASE + encodeURIComponent(k));
+      const clips = (d.objects || []).filter(k => k.endsWith('.mp4')).map(k => R2_BASE + k);
       if (clips.length === 0) { await edit(chatId, msgId, '❌ No hay clips MP4 en R2.'); return; }
       clips.forEach(url => saveClip(chatId, url));
-      await edit(chatId, msgId, '✅ ' + clips.length + ' clips cargados de R2. Usa /sync para mezclarlos con SOUTHSIDE.');
+      await edit(chatId, msgId, '✅ ' + clips.length + ' clips cargados de R2:\n' + clips.map((u, i) => (i+1) + '. ' + u.split('/').pop()).join('\n') + '\n\nUsa `/sync` para mezclarlos con SOUTHSIDE.');
     } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
     return;
   }
