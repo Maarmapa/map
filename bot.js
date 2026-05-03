@@ -152,30 +152,30 @@ async function runFactory(chatId, topic) {
   const awake = await wakeAgent(chatId, msgId);
   if (!awake) { await edit(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto.'); return; }
 
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Generando post..._');
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(1, 10) + '\n_Buscando contenido oficial..._');
 
-  let postData;
+  // MEJORADO: Búsqueda de prensa oficial + imágenes
+  let pressData = {};
   try {
-    const dsSystem = 'Eres un escritor editorial experto para maarmapa — artista urbano chileno contemporáneo. Genera posts completos para Substack sobre arte, cultura, marketing, blockchain y ciudades. Devuelve JSON: {"title":"...","body":"...","instagram_caption":"...","thumbnail_prompt":"...","visual_style":"...","key_insights":[...]}';
-    let raw = await deepseek('Genera un post completo de Substack sobre: ' + topic, dsSystem);
+    const res = await fetch(AGENT_URL + '/post', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        topic,
+        search_official: true,
+        include_images: true,
+        include_press_release: true
+      })
+    });
+    const r = await res.json();
+    postData = r.post || r;
+    pressData = r.press_data || {};
+  } catch(e) { 
+    await edit(chatId, msgId, '❌ Error: ' + e.message); 
+    return; 
+  }
 
-    if (raw) {
-      try {
-        raw = raw.replace(/```json|```/g, '').trim();
-        postData = JSON.parse(raw);
-      } catch(e) { postData = { title: topic, body: raw, instagram_caption: '', visual_style: 'dark editorial', key_insights: [] }; }
-    } else {
-      const res = await fetch(AGENT_URL + '/post', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic })
-      });
-      const r = await res.json();
-      postData = r.post || r;
-    }
-  } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); return; }
-
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_✅ Texto listo_');
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Generando narrativa visual..._');
 
   const title = (postData.title || topic).slice(0, 120);
   const body = (postData.body || '')
@@ -184,74 +184,84 @@ async function runFactory(chatId, topic) {
     .replace(/\*\*/g, '').replace(/\s{3,}/g, '\n\n').trim().slice(0, 900);
   const caption = (postData.instagram_caption || '').replace(/<[^>]*>/g, '').slice(0, 250);
   
+  // MEJORADO: Extraer párrafos clave para cada slide
+  const paragraphs = body.split('\n\n').filter(p => p.length > 20);
+  const p1 = paragraphs[0] || body;
+  const p2 = paragraphs[1] || paragraphs[0] || body;
+  const p3 = paragraphs[2] || paragraphs[1] || paragraphs[0] || body;
+  
+  // Extraer números/datos si existen
+  const dataPoints = body.match(/\d+%?|\d+\.\d+[a-z]*|[A-Z]{2,}/g) || [];
+  const stat = dataPoints[0] || 'milestone';
+  
   await send(chatId, '📝 *' + title + '*\n\n' + body + '...');
   if (caption) await send(chatId, '📌 _Caption:_\n' + caption);
 
   // Thumbnail
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4, 10) + '\n_🖼 Thumbnail..._');
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_🖼 Thumbnail..._');
   if (postData.thumbnail_prompt) {
     const thumbUrl = await grokImg(postData.thumbnail_prompt);
     if (thumbUrl) await photo(chatId, thumbUrl, '🖼 Thumbnail');
   }
 
-  // MEJORADO: 7 Slides con contexto real del post
+  // MEJORADO: Narrativa visual coherente basada en el post
   const T = (postData.title || topic).toUpperCase().slice(0, 38);
   const TL = postData.title || topic;
-  const insights = postData.key_insights || [];
   const style = postData.visual_style || 'dark editorial cinematic';
-  const firstLine = body.split('\n')[0] || TL;
+  const officialImages = pressData.images || [];
   
-  const improvedPrompts = [
-    `Square 1:1 editorial Instagram. Dark #080808. Safe zone 120px all sides. Cinematic ${style}. Bebas Neue white left-aligned massive: "${T}". 01/07. Ghost image subtle vignette film grain 12%. Dark moody atmospheric.`,
+  // Construir prompts que respeten imágenes oficiales y tengan coherencia narrativa
+  const coherentPrompts = [
+    `Square 1:1 editorial Instagram. Dark #080808. Safe zone 120px. Cinematic ${style}. Bebas Neue white massive: "${T}". 01/07. Reference official campaign imagery if available. Ghost vignette 12%. INTRO SLIDE: Set the tone for "${TL}".`,
     
-    `Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px all sides. High contrast. Bebas Neue black bold: KEY INSIGHT. 3 lines about "${firstLine}". 02/07. Minimalist elegant.`,
+    `Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. High contrast. Bebas Neue black bold. Extract key insight from: "${p1}". 02/07. CONTEXT: Establish why this matters. Make it visual, not wordy.`,
     
-    `Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. ${style}. Architecture film grain 10%. Vertical accent line left. Bebas Neue white stat or fact from "${TL}". 03/07. Data-driven.`,
+    `Square 1:1 editorial Instagram. Dark. Safe zone 120px. ${style}. Vertical accent line left. Bebas Neue white: "${stat}" or key statistic from the narrative. 03/07. DATA: Ground the story with facts.`,
     
-    `Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Quotation mark subtle 3%. Italic serif quote light gray: "${insights[0] || 'authenticity meets innovation'}". Attribution. 04/07. Thoughtful.`,
+    `Square 1:1 editorial Instagram. Dark. Safe zone 120px. Quotation mark 3%. Italic serif quote light gray from the core insight: "${p2.slice(0, 50)}...". Attribution. 04/07. VOICE: Let the narrative speak.`,
     
-    `Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. 2x2 brutalist grid. Bold white 4 key concepts: "${insights[1] || 'creativity'}" "${insights[2] || 'culture'}" "${insights[3] || 'commerce'}" and "${insights[4] || 'community'}". 05/07. Powerful.`,
+    `Square 1:1 editorial Instagram. Dark. Safe zone 120px. 2x2 brutalist grid. Bold white 4 key concepts extracted from narrative flow of "${TL}". 05/07. BREADTH: Show all dimensions.`,
     
-    `Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px all sides. Centered Bebas Neue 4 lines provocative question: "How does ${TL} redefine ${topic.split(' ')[0]}?". Black bold italic gray. 06/07. Engaging.`,
+    `Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. Centered Bebas Neue 4 lines: Provocative question that challenges reader: "What does ${TL} mean for the future?". 06/07. CHALLENGE: Make them think.`,
     
-    `Square 1:1 editorial Instagram. Dark. Safe zone 120px all sides. Urban pattern 5% opacity. ${style}. Bebas Neue white conclusion 2-3 lines. @maarmapa.eth bottom left. Hashtags bottom right. 07/07. Cinematic finale.`
+    `Square 1:1 editorial Instagram. Dark. Safe zone 120px. Urban pattern 5%. ${style}. Bebas Neue white conclusion that ties back to slide 01. @maarmapa.eth bottom left. Hashtags bottom right. 07/07. CLOSURE: Full circle narrative.`
   ];
   
   const slideUrls = [];
   for (let i = 0; i < 7; i++) {
     await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i + 1) + '/7..._');
-    const url = await grokImg(improvedPrompts[i]);
+    const url = await grokImg(coherentPrompts[i]);
     if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i + 1) + '/7'); }
   }
 
-  // MEJORADO: Runway clips con contexto visual coherente
+  // MEJORADO: Runway videos con narrativa coherente
   let clips = 0;
   if (process.env.RUNWAY_KEY && slideUrls.length > 0) {
-    const motions = [
-      `Instagram Reel. Dark cinematic ${style}. Text "${T}" slides left smooth motion blur. Professional editorial pacing. Fade in dark atmosphere.`,
+    const narrativeMotions = [
+      `INTRO. Dark ${style}. Title slides left. Establish mysterious atmosphere. Slow cinematic fade-in. 4 seconds.`,
       
-      `Editorial reel. White slide sharp. Text scales up elegantly blurs out. Clean professional impact. Typography-focused motion.`,
+      `REVELATION. White slide sharp. Text scales up with impact. This is the moment of clarity. 4 seconds.`,
       
-      `Data visualization. Dark background. Numbers and stats animate upward with vertical line accent. Subtle blur motion. Analytical energy.`,
+      `EVIDENCE. Dark. Numbers animate upward. Vertical line accent. Data proves the point. 4 seconds.`,
       
-      `Contemplative motion. Quote drifts upward like smoke. Soft fade transitions. Meditative pacing. Introspective mood.`,
+      `REFLECTION. Quote drifts like smoke. Contemplative pause. The human element. Soft introspective motion. 4 seconds.`,
       
-      `Grid cells flash sequentially brutal rhythm. Bold geometric motion. High contrast. Industrial aesthetic. Powerful kinetic energy.`,
+      `EXPANSION. Grid cells flash rhythm. All dimensions revealed. Brutal honesty. Geometric power. 4 seconds.`,
       
-      `Letters and words scatter outward explosion. Dynamic kinetic typography. Burst of creative energy. Fast impactful motion.`,
+      `PROVOCATION. Letters explode outward. Reader confronted. Challenge accepted. Kinetic energy. 4 seconds.`,
       
-      `Cinematic finale. Deep fade to darker background. Pulsing subtle motion. @maarmapa.eth appears sharp. Professional conclusion. Film noir ending.`
+      `RESOLUTION. Fade to deep black. Pulsing conclusion. @maarmapa.eth sharp. Film noir ending. Promise of next chapter. 4 seconds.`
     ];
     
     for (let i = 0; i < Math.min(slideUrls.length, 7); i++) {
       await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/' + slideUrls.length + ' Runway..._');
-      const vid = await runwayVideo(slideUrls[i], motions[i], 4);
+      const vid = await runwayVideo(slideUrls[i], narrativeMotions[i], 4);
       if (vid) { await video(chatId, vid, '🎬 Clip ' + (i + 1)); clips++; }
     }
   }
 
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(10, 10) + '\n✅ *Completado*');
-  await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips);
+  await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips + '\n\n_Narrativa visual coherente. Respeta imágenes oficiales. Ready to post._');
 }
 
 async function runAnime(chatId, concept) {
