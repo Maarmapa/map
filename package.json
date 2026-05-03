@@ -2,9 +2,9 @@
   "name": "maarmapa-agent",
   "version": "6.0.0",
   "description": "maarmapa content factory — Claude + Grok + Higgsfield + Telegram",
-  "main": "server.js",
+  "main": "bot.js",
   "scripts": {
-    "start": "node server.js & node bot.js",
+    "start": "node bot.js",
     "server": "node server.js",
     "bot": "node bot.js"
   },
