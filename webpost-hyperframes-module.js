@@ -19,7 +19,7 @@ const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
 
 class WebPostHyperframes {
   constructor() {
-    this.model = 'claude-3-5-haiku-20241022'; // Fastest Claude
+    this.model = 'claude-haiku-4-5'; // Fastest Claude
     this.heygenEndpoint = 'https://api.heygen.com/v1';
   }
 

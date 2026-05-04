@@ -9,7 +9,7 @@ const RUNWAY_KEY = process.env.RUNWAY_KEY;
 
 class WebPostHaikuImagesUltraSimple {
   constructor() {
-    this.model = 'claude-3-5-haiku-20241022';
+    this.model = 'claude-haiku-4-5';
   }
 
   async generateImageWithRunway(prompt) {

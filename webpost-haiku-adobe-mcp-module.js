@@ -27,7 +27,7 @@ const RUNWAY_KEY = process.env.RUNWAY_KEY;
 
 class WebPostHaikuAdobeMCP {
   constructor() {
-    this.model = 'claude-3-5-haiku-20241022'; // Fastest + cheapest
+    this.model = 'claude-haiku-4-5'; // Fastest + cheapest
     this.mcpEndpoint = process.env.MCP_ENDPOINT || 'http://localhost:3000/mcp';
     this.adobeSession = null;
   }

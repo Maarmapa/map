@@ -12,7 +12,7 @@ const HAIKU_API_KEY = process.env.API_KEY;
 
 class WebPostHaikuImagesSimple {
   constructor() {
-    this.model = 'claude-3-5-haiku-20241022';
+    this.model = 'claude-haiku-4-5';
   }
 
   async searchBrave(query, count = 5) {
