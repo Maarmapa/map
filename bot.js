@@ -5,10 +5,14 @@ const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com'
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
 
-// Token Monitor + Web Commands (v7.1)
+// Token Monitor + Web Commands (v7.1 + v7.2 webpost-haiku-images/hyperframes/adobe)
 const TokenMonitor = require('./token-monitor');
 const WebPostGenerator = require('./webpost-module');
 const WebPostCarouselGenerator = require('./webpost-carousel-module');
+const WebPostHaikuImages = require('./webpost-haiku-images-module');
+const WebPostHyperframes = require('./webpost-hyperframes-module');
+const WebPostHaikuAdobeMCP = require('./webpost-haiku-adobe-mcp-module');
+const WebPostOpenRouter = require('./webpost-openrouter-module');
 const SOUTHSIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH%20SIDE%20CRIMINI.mp3';
 const R2_BASE = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/';
 const R2_WORKER = 'https://maarmapa-media.mario-25d.workers.dev';
@@ -28,6 +32,10 @@ setInterval(() => monitor.checkBalances(), 600000); // Re-check every 10 min
 
 // Initialize web post generators
 const webPostGen = new WebPostGenerator(OPENROUTER_KEY, TELEGRAM_TOKEN, R2_WORKER);
+const webpostHaikuImages = new WebPostHaikuImages();
+const webpostHyperframes = new WebPostHyperframes();
+const webpostHaikuAdobe = new WebPostHaikuAdobeMCP();
+const webpostOpenRouter = new WebPostOpenRouter();
 const carouselGen = new WebPostCarouselGenerator({
   openrouterKey: OPENROUTER_KEY,
   anthropicKey: process.env.ANTHROPIC_KEY,
@@ -626,7 +634,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7.1*\n\n**Content Creation:**\n`/post [tema]` — IA post (350 tokens)\n\n**News + Images:**\n`/webpost [tema]` — Grokpedia+Grok (200 tokens)\n`/webpost-lite [tema]` — Grokpedia+DeepSeek (150 tokens) 🟢\n\n**Carousel + Video:**\n`/webpost-carousel [tema]` — Grokpedia+Grok (550 tokens)\n`/webpost-carousel-lite [tema]` — Grokpedia+DeepSeek (350 tokens) 🟢\n\n**Video:**\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n\n**Brand:**\n`/boykot [producto]` — Boykot posts\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n\n**Utilities:**\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar clips\n`/syncr2` — cargar R2\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/digest` — digest\n\n🟢 = Sin Grok (más barato)\n📊 *Token monitoring activo*');
+    await send(chatId, '🎨 *maarmapa factory v7.2*\n\n**Content Creation (ORIGINAL):**\n`/post [tema]` — Grok post (350 tokens)\n\n**NEW WebPost v7.2 (Choose one):**\n`/webpost-haiku-images` ⭐ RECOMMENDED — Haiku+HTML frames (200-250 tokens)\n`/webpost-hyperframes` — Haiku+Hyperframes animated (150 tokens)\n`/webpost-adobe` — Haiku+Adobe images (150 tokens)\n`/webpost-openrouter` — OpenRouter+Brave (200 tokens)\n\n**OLD WebPost (Still available):**\n`/webpost [tema]` — Grokpedia+Grok (200 tokens)\n`/webpost-lite` — Grokpedia+DeepSeek (150 tokens) 🟢\n`/webpost-carousel` — carousel+Grok (550 tokens)\n`/webpost-carousel-lite` — carousel+DeepSeek (350 tokens) 🟢\n\n**Video:**\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n\n**Utilities:**\n`/buscar [query]` — search\n`/chat [pregunta]` — agent\n`/clips` — manage clips\n\n⭐ = Recomendado para empezar\n🟢 = Sin Grok (barato)\n📊 *Token monitoring activo*');
     return;
   }
 
@@ -769,6 +777,75 @@ async function handle(msg) {
   if (text && text.startsWith('/webpost-carousel ') && !text.includes('-lite')) {
     const topic = text.replace('/webpost-carousel ', '').trim();
     await runWebPostCarousel(chatId, topic, false); // normal mode = with Grok fallback
+    return;
+  }
+
+  // New v7.2 commands
+  if (text && text.startsWith('/webpost-haiku-images ')) {
+    const query = text.replace('/webpost-haiku-images ', '').trim();
+    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating post with Haiku...');
+    try {
+      const result = await webpostHaikuImages.run(query);
+      if (result.success) {
+        const formatted = webpostHaikuImages.formatForTelegram(result);
+        await edit(chatId, loadingMsg, formatted);
+      } else {
+        await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
+      }
+    } catch(e) {
+      await edit(chatId, loadingMsg, '❌ Error: ' + e.message);
+    }
+    return;
+  }
+
+  if (text && text.startsWith('/webpost-hyperframes ')) {
+    const query = text.replace('/webpost-hyperframes ', '').trim();
+    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating with Haiku...\n🎬 Creating frames...');
+    try {
+      const result = await webpostHyperframes.run(query);
+      if (result.success) {
+        const formatted = webpostHyperframes.formatForTelegram(result);
+        await edit(chatId, loadingMsg, formatted);
+      } else {
+        await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
+      }
+    } catch(e) {
+      await edit(chatId, loadingMsg, '❌ Error: ' + e.message);
+    }
+    return;
+  }
+
+  if (text && text.startsWith('/webpost-adobe ')) {
+    const query = text.replace('/webpost-adobe ', '').trim();
+    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating post...\n🎨 Creating images...');
+    try {
+      const result = await webpostHaikuAdobe.run(query, { generateImages: true });
+      if (result.success) {
+        const formatted = webpostHaikuAdobe.formatForTelegram(result);
+        await edit(chatId, loadingMsg, formatted);
+      } else {
+        await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
+      }
+    } catch(e) {
+      await edit(chatId, loadingMsg, '❌ Error: ' + e.message);
+    }
+    return;
+  }
+
+  if (text && text.startsWith('/webpost-openrouter ')) {
+    const query = text.replace('/webpost-openrouter ', '').trim();
+    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating with OpenRouter...');
+    try {
+      const result = await webpostOpenRouter.run(query);
+      if (result.success) {
+        const formatted = webpostOpenRouter.formatForTelegram(result);
+        await edit(chatId, loadingMsg, formatted);
+      } else {
+        await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
+      }
+    } catch(e) {
+      await edit(chatId, loadingMsg, '❌ Error: ' + e.message);
+    }
     return;
   }
 
