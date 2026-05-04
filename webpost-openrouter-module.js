@@ -18,7 +18,7 @@ const TokenMonitor = require('./token-monitor.js');
 
 const BRAVE_API_KEY = process.env.BRAVE_SEARCH_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const RUNWAY_API_KEY = process.env.RUNWAY_API_KEY;
+const RUNWAY_KEY = process.env.RUNWAY_KEY;
 const R2_ENDPOINT = process.env.R2_ENDPOINT;
 const R2_ACCESS_KEY = process.env.R2_ACCESS_KEY;
 const R2_SECRET_KEY = process.env.R2_SECRET_KEY;
@@ -179,8 +179,8 @@ Output ONLY the post text, no hashtags, no titles.`;
    * Generate video with Runway ML
    */
   async generateVideoRunway(prompt) {
-    if (!RUNWAY_API_KEY) {
-      console.log('⚠️  RUNWAY_API_KEY not set, skipping video generation');
+    if (!RUNWAY_KEY) {
+      console.log('⚠️  RUNWAY_KEY not set, skipping video generation');
       return null;
     }
 
@@ -195,7 +195,7 @@ Output ONLY the post text, no hashtags, no titles.`;
         },
         {
           headers: {
-            'Authorization': `Bearer ${RUNWAY_API_KEY}`,
+            'Authorization': `Bearer ${RUNWAY_KEY}`,
             'Content-Type': 'application/json',
           },
         }

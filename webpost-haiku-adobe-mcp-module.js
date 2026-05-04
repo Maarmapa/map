@@ -23,7 +23,7 @@ const HAIKU_API_KEY = process.env.API_KEY;
 const ADOBE_CLIENT_ID = process.env.ADOBE_CLIENT_ID;
 const ADOBE_CLIENT_SECRET = process.env.ADOBE_CLIENT_SECRET;
 const ADOBE_ACCESS_TOKEN = process.env.ADOBE_ACCESS_TOKEN;
-const RUNWAY_API_KEY = process.env.RUNWAY_API_KEY;
+const RUNWAY_KEY = process.env.RUNWAY_KEY;
 
 class WebPostHaikuAdobeMCP {
   constructor() {
@@ -232,8 +232,8 @@ Text: "${slides[0]}" centered, large text`;
    * Generate video with Runway ML (async)
    */
   async generateVideoRunway(prompt) {
-    if (!RUNWAY_API_KEY) {
-      console.log('⚠️  RUNWAY_API_KEY not set, skipping video generation');
+    if (!RUNWAY_KEY) {
+      console.log('⚠️  RUNWAY_KEY not set, skipping video generation');
       return null;
     }
 
@@ -248,7 +248,7 @@ Text: "${slides[0]}" centered, large text`;
         },
         {
           headers: {
-            'Authorization': `Bearer ${RUNWAY_API_KEY}`,
+            'Authorization': `Bearer ${RUNWAY_KEY}`,
             'Content-Type': 'application/json',
           },
         }
