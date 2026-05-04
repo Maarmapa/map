@@ -9,7 +9,7 @@ const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
 const TokenMonitor = require('./token-monitor');
 const WebPostGenerator = require('./webpost-module');
 const WebPostCarouselGenerator = require('./webpost-carousel-module');
-const WebPostHaikuImages = require('./webpost-haiku-images-module');
+const WebPostHaikuImages = require('./webpost-haiku-images-simple');
 const WebPostHyperframes = require('./webpost-hyperframes-module');
 const WebPostHaikuAdobeMCP = require('./webpost-haiku-adobe-mcp-module');
 const WebPostOpenRouter = require('./webpost-openrouter-module');
@@ -783,7 +783,7 @@ async function handle(msg) {
   // New v7.2 commands
   if (text && text.startsWith('/webpost-haiku-images ')) {
     const query = text.replace('/webpost-haiku-images ', '').trim();
-    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating post with Haiku...');
+    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating...');
     try {
       const result = await webpostHaikuImages.run(query);
       if (result.success) {
