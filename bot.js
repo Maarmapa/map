@@ -626,7 +626,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7.1*\n\n**Content Creation:**\n`/post [tema]` — IA post (350 tokens)\n`/webpost [tema]` — News curation (150 tokens)\n`/webpost-carousel [tema]` — Carousel+video (300 tokens)\n\n**Video:**\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n\n**Brand:**\n`/boykot [producto]` — Boykot posts\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n\n**Utilities:**\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar clips\n`/syncr2` — cargar R2\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/digest` — digest\n\n📊 *Token monitoring activo*');
+    await send(chatId, '🎨 *maarmapa factory v7.1*\n\n**Content Creation:**\n`/post [tema]` — IA post (350 tokens)\n\n**News + Images:**\n`/webpost [tema]` — Grokpedia+Grok (200 tokens)\n`/webpost-lite [tema]` — Grokpedia+DeepSeek (150 tokens) 🟢\n\n**Carousel + Video:**\n`/webpost-carousel [tema]` — Grokpedia+Grok (550 tokens)\n`/webpost-carousel-lite [tema]` — Grokpedia+DeepSeek (350 tokens) 🟢\n\n**Video:**\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n\n**Brand:**\n`/boykot [producto]` — Boykot posts\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n\n**Utilities:**\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar clips\n`/syncr2` — cargar R2\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/digest` — digest\n\n🟢 = Sin Grok (más barato)\n📊 *Token monitoring activo*');
     return;
   }
 
@@ -748,15 +748,27 @@ async function handle(msg) {
   }
 
   // WebPost commands (v7.1)
-  if (text && text.startsWith('/webpost ') && !text.includes('-carousel')) {
-    const topic = text.replace('/webpost ', '').trim();
-    await runWebPost(chatId, topic);
+  if (text && text.startsWith('/webpost-lite ')) {
+    const topic = text.replace('/webpost-lite ', '').trim();
+    await runWebPost(chatId, topic, true); // lite mode = no Grok
     return;
   }
 
-  if (text && text.startsWith('/webpost-carousel ')) {
+  if (text && text.startsWith('/webpost ') && !text.includes('-carousel') && !text.includes('-lite')) {
+    const topic = text.replace('/webpost ', '').trim();
+    await runWebPost(chatId, topic, false); // normal mode = with Grok fallback
+    return;
+  }
+
+  if (text && text.startsWith('/webpost-carousel-lite ')) {
+    const topic = text.replace('/webpost-carousel-lite ', '').trim();
+    await runWebPostCarousel(chatId, topic, true); // lite mode = no Grok
+    return;
+  }
+
+  if (text && text.startsWith('/webpost-carousel ') && !text.includes('-lite')) {
     const topic = text.replace('/webpost-carousel ', '').trim();
-    await runWebPostCarousel(chatId, topic);
+    await runWebPostCarousel(chatId, topic, false); // normal mode = with Grok fallback
     return;
   }
 
@@ -771,9 +783,16 @@ async function handle(msg) {
 }
 
 // WebPost functions (v7.1)
-async function runWebPost(chatId, topic) {
-  const msgId = await send(chatId, '🔍 *webpost*\n' + bar(0, 5) + '\n_Buscando..._');
+async function runWebPost(chatId, topic, liteMode = false) {
+  const msgId = await send(chatId, (liteMode ? '🟢' : '🔵') + ' *webpost' + (liteMode ? '-lite' : '') + '*\n' + bar(0, 5) + '\n_Buscando..._');
+  
+  // Configure generator for lite mode (no Grok fallback)
+  if (liteMode) {
+    webPostGen.skipGrokFallback = true; // Prevent Grok fallback
+  }
+  
   const post = await webPostGen.generateWebPost(topic, monitor);
+  webPostGen.skipGrokFallback = false; // Reset
   
   if (post.status !== 'success') {
     await edit(chatId, msgId, '❌ Error: ' + post.status);
@@ -786,19 +805,27 @@ async function runWebPost(chatId, topic) {
     await send(chatId, post.narrative);
   }
   
-  await edit(chatId, msgId, '📤 *webpost*\n' + bar(4, 5) + '\n_Enviando imágenes..._');
+  await edit(chatId, msgId, '📤 *webpost' + (liteMode ? '-lite' : '') + '*\n' + bar(4, 5) + '\n_Enviando imágenes..._');
   
   for (const url of post.r2Urls) {
     await photo(chatId, url, topic);
   }
   
-  const status = monitor.formatCommandStatus('openrouter', 150, `/webpost ${topic}`);
+  const tokenCost = liteMode ? 150 : 200; // 150 if no Grok, 200 if Grok used
+  const status = monitor.formatCommandStatus('openrouter', tokenCost, `/webpost${liteMode ? '-lite' : ''} ${topic}`);
   if (status) await send(chatId, status);
 }
 
-async function runWebPostCarousel(chatId, topic) {
-  const msgId = await send(chatId, '🔍 *webpost carousel*\n' + bar(0, 7) + '\n_Buscando..._');
+async function runWebPostCarousel(chatId, topic, liteMode = false) {
+  const msgId = await send(chatId, (liteMode ? '🟢' : '🔵') + ' *webpost-carousel' + (liteMode ? '-lite' : '') + '*\n' + bar(0, 7) + '\n_Buscando..._');
+  
+  // Configure generator for lite mode (no Grok fallback)
+  if (liteMode) {
+    carouselGen.skipGrokFallback = true; // Prevent Grok fallback
+  }
+  
   const result = await carouselGen.generateWebPostCarousel(topic, monitor);
+  carouselGen.skipGrokFallback = false; // Reset
   
   if (result.status !== 'success') {
     await edit(chatId, msgId, '❌ Error: ' + result.status);

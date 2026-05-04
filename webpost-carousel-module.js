@@ -15,6 +15,7 @@ class WebPostCarouselGenerator {
     this.currentTextModel = 'deepseek/deepseek-v4-flash';
     this.searchProvider = options.searchProvider || 'duckduckgo'; // 'duckduckgo' | 'anthropic'
     this.imageGenerator = options.imageGenerator || 'grok'; // 'grok' | 'anthropic' | 'webimages'
+    this.skipGrokFallback = false; // Set to true to disable Grok fallback
   }
 
   // ========== WEB SEARCH ==========
@@ -431,6 +432,12 @@ ONLY JSON, no other text.`;
       
       // If no web images found, generate with Grok (fallback logic)
       if (!result.media.images.length) {
+        if (this.skipGrokFallback) {
+          // Lite mode: no Grok fallback
+          result.status = 'error: no images found (lite mode - no Grok fallback)';
+          return result;
+        }
+        
         console.log('🎨 No web images found, generating with Grok...');
         if (this.grokKey && result.slides) {
           const grokImages = await this.generateCarouselImagesWithGrok(topic, result.slides);

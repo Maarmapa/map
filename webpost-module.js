@@ -9,6 +9,7 @@ class WebPostGenerator {
     this.telegramToken = telegramToken;
     this.r2Worker = r2Worker;
     this.currentTextModel = 'deepseek/deepseek-v4-flash';
+    this.skipGrokFallback = false; // Set to true to disable Grok fallback
   }
 
   // 1. Web search usando Grokpedia (X.AI search API)
@@ -280,8 +281,14 @@ SOLO EL POST, nada más.`;
       const allImages = await Promise.all(imagePromises);
       result.images = allImages.flat();
 
-      // Si no hay web images, generar con Grok
+      // Si no hay web images, intentar generar con Grok (a menos que esté deshabilitado)
       if (!result.images.length) {
+        if (this.skipGrokFallback) {
+          // Lite mode: no Grok fallback
+          result.status = 'error: no images found (lite mode - no Grok fallback)';
+          return result;
+        }
+        
         // Generar imagen con Grok basada en el tópico
         const grokPrompt = `Professional, beautiful image about: ${topic}. High quality, commercial use, no text, no logos.`;
         const grokUrl = await this.grokImg(grokPrompt);
