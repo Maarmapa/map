@@ -11,102 +11,71 @@ class WebPostGenerator {
     this.currentTextModel = 'deepseek/deepseek-v4-flash';
   }
 
-  // 1. Web search usando Google Custom Search API (fallback: hardcoded results)
+  // 1. Web search usando Grokpedia (X.AI search API)
   async webSearch(query) {
     try {
-      // Alternativa: usar Google Search si tienes API key
-      // Por ahora, usar resultados simulados con fetch a sitios populares
-      
+      // Usar Grokpedia (X.AI search, no requiere tokens de imagen)
+      if (!process.env.GROK_KEY) {
+        throw new Error('GROK_KEY not configured');
+      }
+
+      const response = await fetch('https://api.x.ai/v1/search', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.GROK_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          query: query,
+          max_results: 10,
+          search_depth: 'basic'
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('Grokpedia error:', error);
+        throw new Error('Grokpedia search failed');
+      }
+
+      const data = await response.json();
       let results = [];
-      
-      // Buscar en Wikipedia primero
+
+      if (data.results && Array.isArray(data.results)) {
+        results = data.results.map((item, idx) => ({
+          title: item.title || 'Untitled',
+          url: item.url || '#',
+          snippet: item.content || item.snippet || '',
+          index: idx + 1
+        }));
+      }
+
+      if (results.length === 0) {
+        throw new Error('No search results from Grokpedia');
+      }
+
+      return results.slice(0, 10);
+    } catch (e) {
+      console.error('Grokpedia search error:', e.message);
+      // Fallback a Wikipedia si Grok falla
       try {
         const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&srsearch=${encodeURIComponent(query)}&list=search`;
         const wikiResponse = await fetch(wikiUrl);
         const wikiData = await wikiResponse.json();
         
-        if (wikiData.query?.search) {
-          wikiData.query.search.slice(0, 3).forEach(item => {
-            results.push({
-              title: item.title,
-              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title)}`,
-              snippet: item.snippet.replace(/<[^>]*>/g, '').slice(0, 100),
-              index: results.length + 1
-            });
-          });
+        if (wikiData.query?.search && wikiData.query.search.length > 0) {
+          return wikiData.query.search.slice(0, 10).map((item, idx) => ({
+            title: item.title,
+            url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title)}`,
+            snippet: item.snippet.replace(/<[^>]*>/g, '').slice(0, 150),
+            index: idx + 1
+          }));
         }
-      } catch (e) {
-        console.log('Wikipedia search failed, trying fallback');
+      } catch (wikiError) {
+        console.log('Wikipedia fallback also failed');
       }
       
-      // Si Wikipedia no devolvió resultados, usar Medium/Dev.to
-      if (results.length < 3) {
-        const searchUrls = [
-          `https://dev.to/search?q=${encodeURIComponent(query)}`,
-          `https://medium.com/search?q=${encodeURIComponent(query)}`,
-          `https://news.ycombinator.com/search?p=1&stories=${encodeURIComponent(query)}`
-        ];
-        
-        for (const searchUrl of searchUrls) {
-          try {
-            const response = await fetch(searchUrl, {
-              headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
-            const html = await response.text();
-            const $ = cheerio.load(html);
-            
-            // Extract títulos y URLs según sitio
-            if (searchUrl.includes('dev.to')) {
-              $('a[data-test-id]').each((i, el) => {
-                if (results.length >= 10) return false;
-                const href = $(el).attr('href');
-                if (href?.includes('/')) {
-                  results.push({
-                    title: $(el).text().trim(),
-                    url: href.startsWith('http') ? href : `https://dev.to${href}`,
-                    index: results.length + 1
-                  });
-                }
-              });
-            } else if (searchUrl.includes('medium')) {
-              $('a[data-action="show-post"]').each((i, el) => {
-                if (results.length >= 10) return false;
-                const href = $(el).attr('href');
-                if (href?.startsWith('http')) {
-                  results.push({
-                    title: $(el).text().trim(),
-                    url: href,
-                    index: results.length + 1
-                  });
-                }
-              });
-            }
-          } catch (e) {
-            console.log(`Search failed for ${searchUrl}:`, e.message);
-          }
-        }
-      }
-      
-      // Fallback: retornar resultados genéricos si nada funcionó
-      if (results.length === 0) {
-        results = [
-          {
-            title: `${query} - Latest News`,
-            url: `https://news.google.com/search?q=${encodeURIComponent(query)}`,
-            index: 1
-          },
-          {
-            title: `${query} - Wikipedia`,
-            url: `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(query)}`,
-            index: 2
-          }
-        ];
-      }
-      
-      return results.slice(0, 10);
-    } catch (e) {
-      console.error('Web search error:', e.message);
-      // Retornar al menos 2 resultados para no fallar completamente
+      // Last resort
       return [
         {
           title: `${query} - Google Search`,
