@@ -16,7 +16,7 @@
 const axios = require('axios');
 
 const BRAVE_API_KEY = process.env.BRAVE_SEARCH_API_KEY;
-const HAIKU_API_KEY = process.env.API_KEY;
+const HAIKU_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 class WebPostHaikuImages {
   constructor() {

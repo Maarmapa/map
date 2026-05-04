@@ -19,7 +19,7 @@
 const axios = require('axios');
 
 const BRAVE_API_KEY = process.env.BRAVE_SEARCH_API_KEY;
-const HAIKU_API_KEY = process.env.ANTHROPIC_API_KEY;
+const HAIKU_API_KEY = process.env.API_KEY;
 const ADOBE_CLIENT_ID = process.env.ADOBE_CLIENT_ID;
 const ADOBE_CLIENT_SECRET = process.env.ADOBE_CLIENT_SECRET;
 const ADOBE_ACCESS_TOKEN = process.env.ADOBE_ACCESS_TOKEN;

@@ -8,7 +8,7 @@
 const axios = require('axios');
 
 const BRAVE_API_KEY = process.env.BRAVE_SEARCH_API_KEY;
-const HAIKU_API_KEY = process.env.ANTHROPIC_API_KEY;
+const HAIKU_API_KEY = process.env.API_KEY;
 
 class WebPostHaikuImagesSimple {
   constructor() {
@@ -66,7 +66,7 @@ class WebPostHaikuImagesSimple {
 
   async generatePostAndImagePrompts(query, articles) {
     if (!HAIKU_API_KEY) {
-      throw new Error('❌ ANTHROPIC_API_KEY not set');
+      throw new Error('❌ API_KEY not set');
     }
 
     const articlesToUse = articles.slice(0, 3);
