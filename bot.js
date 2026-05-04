@@ -626,7 +626,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7*\n\n`/post [tema]` — post maarmapa\n`/boykot [producto]` — post Boykot\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n`/syncr2` — cargar clips R2\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar SOUTHSIDE\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/digest` — digest');
+    await send(chatId, '🎨 *maarmapa factory v7.1*\n\n**Content Creation:**\n`/post [tema]` — IA post (350 tokens)\n`/webpost [tema]` — News curation (150 tokens)\n`/webpost-carousel [tema]` — Carousel+video (300 tokens)\n\n**Video:**\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n\n**Brand:**\n`/boykot [producto]` — Boykot posts\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n\n**Utilities:**\n`/buscar [query]` — noticias\n`/chat [pregunta]` — agente\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar clips\n`/syncr2` — cargar R2\n`/clips` — ver clips\n`/clearclips` — borrar clips\n`/digest` — digest\n\n📊 *Token monitoring activo*');
     return;
   }
 
