@@ -99,7 +99,7 @@ class WebPostGenerator {
           'Authorization': `Bearer ${process.env.GROK_KEY}`
         },
         body: JSON.stringify({
-          model: 'grok-imagine-image',
+          model: 'grok-2-image',
           prompt: prompt,
           n: 1,
           response_format: 'url'
