@@ -783,17 +783,17 @@ async function handle(msg) {
   // New v7.2 commands
   if (text && text.startsWith('/webpost-haiku-images ')) {
     const query = text.replace('/webpost-haiku-images ', '').trim();
-    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating...');
+    await send(chatId, '🔍 Generating post...');
     try {
       const result = await webpostHaikuImages.run(query);
       if (result.success) {
         const formatted = webpostHaikuImages.formatForTelegram(result);
-        await edit(chatId, loadingMsg, formatted);
+        await send(chatId, formatted);
       } else {
-        await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
+        await send(chatId, '❌ Error: ' + result.error);
       }
     } catch(e) {
-      await edit(chatId, loadingMsg, '❌ Error: ' + e.message);
+      await send(chatId, '❌ Error: ' + e.message);
     }
     return;
   }

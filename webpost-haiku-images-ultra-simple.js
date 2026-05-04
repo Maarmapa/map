@@ -28,7 +28,7 @@ Include:
 Keep it max 250 words.`;
 
     try {
-      console.log('📡 Calling Anthropic API...');
+      console.log('📡 Calling Anthropic API (ultra-simple - no images)...');
       
       const response = await axios.post(
         'https://api.anthropic.com/v1/messages',
@@ -54,6 +54,7 @@ Keep it max 250 words.`;
       const content = response.data.content[0].text;
       const tokens = response.data.usage.input_tokens + response.data.usage.output_tokens;
 
+      console.log('✅ Got response from Haiku');
       return {
         post: content,
         tokens,
@@ -94,7 +95,10 @@ Keep it max 250 words.`;
       return `❌ Error: ${result.error}`;
     }
 
-    return `📱 *WebPost: ${result.query}*\n\n✍️ *Post:*\n${result.post}\n\n📊 Tokens: ${result.tokens}`;
+    let text = `📱 *WebPost: ${result.query}*\n\n`;
+    text += `✍️ *Post:*\n${result.post}\n\n`;
+    text += `📊 Tokens: ${result.tokens}`;
+    return text;
   }
 }
 
