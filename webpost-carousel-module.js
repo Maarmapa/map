@@ -293,7 +293,7 @@ ONLY JSON, no other text.`;
             'Authorization': `Bearer ${this.grokKey}`
           },
           body: JSON.stringify({
-            model: 'grok-imagine-image',
+            model: 'grok-2-image',
             prompt,
             n: 1,
             response_format: 'url'
