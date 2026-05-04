@@ -39,7 +39,8 @@ class WebPostHaikuImagesSimple {
         url: r.url,
       }));
     } catch (error) {
-      console.error('❌ Brave search error:', error.message);
+      console.error('❌ Brave search error:', error.response?.status || error.message);
+      console.error('   Details:', error.response?.data || error.message);
       return this.mockSearch(query);
     }
   }
@@ -132,7 +133,8 @@ IMAGE-PROMPT-3:
         elapsed,
       };
     } catch (error) {
-      console.error('❌ Haiku error:', error.response?.data || error.message);
+      console.error('❌ Haiku error:', error.response?.status || error.message);
+      console.error('   Details:', error.response?.data || error.message);
       throw error;
     }
   }
