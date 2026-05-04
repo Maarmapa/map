@@ -422,11 +422,6 @@ ONLY JSON, no other text.`;
       result.media.images = allMedia.flatMap(m => m.images);
       result.media.videos = allMedia.flatMap(m => m.videos);
 
-      if (!result.media.images.length) {
-        result.status = 'error: no images found';
-        return result;
-      }
-
       // STEP 3: Generate carousel slides (uses ~200 tokens OpenRouter)
       console.log('📝 Generating carousel...');
       result.slides = await this.generateCarouselSlides(topic, result.searchResults, result.media);
@@ -434,9 +429,25 @@ ONLY JSON, no other text.`;
       // STEP 4: Select images (Grok-generated OR web-extracted)
       console.log('🖼️ Selecting carousel images...');
       
-      if (this.imageGenerator === 'grok' && this.grokKey && result.slides) {
-        // Generate images with Grok
-        console.log('🎨 Generating carousel images with Grok...');
+      // If no web images found, generate with Grok (fallback logic)
+      if (!result.media.images.length) {
+        console.log('🎨 No web images found, generating with Grok...');
+        if (this.grokKey && result.slides) {
+          const grokImages = await this.generateCarouselImagesWithGrok(topic, result.slides);
+          if (grokImages.length > 0) {
+            result.selectedImages = grokImages.map(img => ({ url: img.url, alt: `Slide ${img.slide}` }));
+            result.tokensUsed.grok = 50 * Math.min(5, result.slides.length);
+          } else {
+            result.status = 'error: no images found and Grok generation failed';
+            return result;
+          }
+        } else {
+          result.status = 'error: no images found';
+          return result;
+        }
+      } else if (this.imageGenerator === 'grok' && this.grokKey && result.slides) {
+        // User explicitly requested Grok images
+        console.log('🎨 Generating carousel images with Grok (explicit mode)...');
         const grokImages = await this.generateCarouselImagesWithGrok(topic, result.slides);
         result.selectedImages = grokImages.map(img => ({ url: img.url, alt: `Slide ${img.slide}` }));
         result.tokensUsed.grok = 50 * Math.min(5, result.slides.length);

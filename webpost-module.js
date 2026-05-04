@@ -86,7 +86,43 @@ class WebPostGenerator {
     }
   }
 
-  // 2. Extraer imágenes de una URL
+  // 2. Generar imagen con Grok (para webpost)
+  async grokImg(prompt) {
+    if (!process.env.GROK_KEY) return null;
+    
+    try {
+      const response = await fetch('https://api.x.ai/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.GROK_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'grok-imagine-image',
+          prompt: prompt,
+          n: 1,
+          response_format: 'url'
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('Grok image generation error:', error);
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.data && data.data[0] && data.data[0].url) {
+        return data.data[0].url;
+      }
+      return null;
+    } catch (e) {
+      console.error('Grok image error:', e.message);
+      return null;
+    }
+  }
+
+  // Extraer imágenes de una URL (fallback si web scraping funciona)
   async extractImagesFromUrl(url) {
     try {
       const headers = {
@@ -244,14 +280,30 @@ SOLO EL POST, nada más.`;
       const allImages = await Promise.all(imagePromises);
       result.images = allImages.flat();
 
+      // Si no hay web images, generar con Grok
       if (!result.images.length) {
-        result.status = 'error: no images found';
-        return result;
+        // Generar imagen con Grok basada en el tópico
+        const grokPrompt = `Professional, beautiful image about: ${topic}. High quality, commercial use, no text, no logos.`;
+        const grokUrl = await this.grokImg(grokPrompt);
+        
+        if (grokUrl) {
+          result.images = [{
+            url: grokUrl,
+            alt: topic,
+            source: 'grok-generated',
+            score: 100
+          }];
+          result.topImages = result.images.slice(0, 5);
+          result.tokensUsed.grok = 50; // Grok image generation ~50 tokens
+        } else {
+          result.status = 'error: no images found and Grok generation failed';
+          return result;
+        }
+      } else {
+        // PASO 3: Score y seleccionar top 5 imágenes (si hay web images)
+        const scored = this.scoreImages(result.images, topic);
+        result.topImages = scored.slice(0, 5);
       }
-
-      // PASO 3: Score y seleccionar top 5 imágenes
-      const scored = this.scoreImages(result.images, topic);
-      result.topImages = scored.slice(0, 5);
 
       // PASO 4: Generar narrativa
       result.narrative = await this.generateNarrative(topic, result.searchResults);
@@ -266,8 +318,11 @@ SOLO EL POST, nada más.`;
         }
       }
 
-      // PASO 6: Track tokens (solo DeepSeek)
+      // PASO 6: Track tokens (DeepSeek + Grok si se usó)
       if (monitor) {
+        if (result.tokensUsed.grok) {
+          await monitor.trackUsage('grok', result.tokensUsed.grok, `/webpost ${topic}`);
+        }
         await monitor.trackUsage('openrouter', 150, `/webpost ${topic}`);
       }
 
