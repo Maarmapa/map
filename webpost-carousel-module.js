@@ -19,32 +19,109 @@ class WebPostCarouselGenerator {
 
   // ========== WEB SEARCH ==========
   
-  // Option 1: DuckDuckGo (free, no tokens)
+  // Option 1: Wikipedia + Dev.to + Medium (free, no tokens)
   async webSearchDuckDuckGo(query) {
     try {
-      const url = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&ia=web`;
-      const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      };
-
-      const response = await fetch(url, { headers });
-      const html = await response.text();
-      const $ = cheerio.load(html);
-
       let results = [];
-      $('a[data-testid="result-title-a"]').each((i, el) => {
-        if (results.length >= 15) return false;
-        const title = $(el).text().trim();
-        const link = $(el).attr('href');
-        if (title && link) {
-          results.push({ title, url: link, index: i + 1 });
+      
+      // Buscar en Wikipedia
+      try {
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&srsearch=${encodeURIComponent(query)}&list=search`;
+        const wikiResponse = await fetch(wikiUrl);
+        const wikiData = await wikiResponse.json();
+        
+        if (wikiData.query?.search) {
+          wikiData.query.search.slice(0, 5).forEach(item => {
+            results.push({
+              title: item.title,
+              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title)}`,
+              snippet: item.snippet.replace(/<[^>]*>/g, '').slice(0, 150),
+              index: results.length + 1
+            });
+          });
         }
-      });
-
-      return results;
+      } catch (e) {
+        console.log('Wikipedia search skipped');
+      }
+      
+      // Buscar en Dev.to y Medium
+      const searchUrls = [
+        `https://dev.to/search?q=${encodeURIComponent(query)}`,
+        `https://medium.com/search?q=${encodeURIComponent(query)}`
+      ];
+      
+      for (const searchUrl of searchUrls) {
+        if (results.length >= 15) break;
+        try {
+          const response = await fetch(searchUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            timeout: 8000
+          });
+          const html = await response.text();
+          const $ = cheerio.load(html);
+          
+          // Extract from Dev.to
+          if (searchUrl.includes('dev.to')) {
+            $('article').each((i, el) => {
+              if (results.length >= 15) return false;
+              const href = $(el).find('a').first().attr('href');
+              const title = $(el).find('h2, h3').first().text().trim();
+              if (title && href && href.startsWith('/')) {
+                results.push({
+                  title: title.slice(0, 100),
+                  url: `https://dev.to${href}`,
+                  index: results.length + 1
+                });
+              }
+            });
+          } 
+          // Extract from Medium
+          else if (searchUrl.includes('medium')) {
+            $('[data-action="show-post"]').each((i, el) => {
+              if (results.length >= 15) return false;
+              const href = $(el).attr('href');
+              const title = $(el).find('h2').text().trim();
+              if (title && href && href.startsWith('http')) {
+                results.push({
+                  title: title.slice(0, 100),
+                  url: href,
+                  index: results.length + 1
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.log(`Search failed for ${searchUrl}:`, e.message);
+        }
+      }
+      
+      // Fallback si no hay resultados
+      if (results.length === 0) {
+        results = [
+          {
+            title: `${query} - News`,
+            url: `https://news.google.com/search?q=${encodeURIComponent(query)}`,
+            index: 1
+          },
+          {
+            title: `${query} - Wikipedia`,
+            url: `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(query)}`,
+            index: 2
+          }
+        ];
+      }
+      
+      return results.slice(0, 15);
     } catch (e) {
-      console.error('DuckDuckGo search error:', e.message);
-      return [];
+      console.error('Web search error:', e.message);
+      // Retornar fallback
+      return [
+        {
+          title: `${query} - Google Search`,
+          url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+          index: 1
+        }
+      ];
     }
   }
 
