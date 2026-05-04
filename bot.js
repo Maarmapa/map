@@ -88,7 +88,14 @@ async function grokImg(prompt) {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.GROK_KEY },
       body: JSON.stringify({ model: 'grok-imagine-image', prompt, n: 1, response_format: 'url' })
     });
-    return (await r.json()).data?.[0]?.url || null;
+    const grokUrl = (await r.json()).data?.[0]?.url || null;
+    if (!grokUrl) return null;
+    try {
+      const imgRes = await fetch(grokUrl);
+      const imgBuf = await imgRes.arrayBuffer();
+      const r2Url = await uploadToR2(imgBuf, 'grok_' + Date.now() + '.jpg', 'image/jpeg');
+      return r2Url || grokUrl;
+    } catch(e) { return grokUrl; }
   } catch(e) { return null; }
 }
 
