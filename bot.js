@@ -1,11 +1,9 @@
 // maarmapa — Telegram Bot v7
 // Claude + Grok + Runway + Seedance + DeepSeek + Shotstack + R2
-// v7.1 + Token Monitor + WebPost Commands
+// v7.2 — fixed grokImg R2 upload + postData + BPM sync
 const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
-
-// Token Monitor + Web Commands (v7.1 + v7.2 webpost-haiku-images/hyperframes/adobe)
 const TokenMonitor = require('./token-monitor');
 const WebPostGenerator = require('./webpost-module');
 const WebPostCarouselGenerator = require('./webpost-carousel-module');
@@ -17,7 +15,6 @@ const SOUTHSIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOU
 const R2_BASE = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/';
 const R2_WORKER = 'https://maarmapa-media.mario-25d.workers.dev';
 
-// Model config
 const MODELS = {
   text: { fast: 'deepseek/deepseek-v4-flash', pro: 'deepseek/deepseek-v4-pro', gpt: 'openai/gpt-5.4' },
   video: { seedance_fast: 'bytedance/seedance-2.0-fast', seedance: 'bytedance/seedance-2.0', veo: 'google/veo-3.1' }
@@ -25,12 +22,10 @@ const MODELS = {
 let currentTextModel = MODELS.text.fast;
 let currentVideoModel = MODELS.video.seedance_fast;
 
-// Initialize token monitor
 const monitor = new TokenMonitor();
 monitor.checkBalances();
-setInterval(() => monitor.checkBalances(), 600000); // Re-check every 10 min
+setInterval(() => monitor.checkBalances(), 600000);
 
-// Initialize web post generators
 const webPostGen = new WebPostGenerator(OPENROUTER_KEY, TELEGRAM_TOKEN, R2_WORKER);
 const webpostHaikuImages = new WebPostHaikuImages();
 const webpostHyperframes = new WebPostHyperframes();
@@ -44,10 +39,9 @@ const carouselGen = new WebPostCarouselGenerator({
   telegramToken: TELEGRAM_TOKEN,
   r2Worker: R2_WORKER,
   searchProvider: 'duckduckgo',
-  imageGenerator: 'webimages' // 'webimages' (extract) or 'grok' (generate)
+  imageGenerator: 'webimages'
 });
 
-// Clip store (in-memory per session)
 const clipStore = {};
 function saveClip(chatId, url) {
   if (!clipStore[chatId]) clipStore[chatId] = [];
@@ -59,7 +53,7 @@ function saveClip(chatId, url) {
 function getClips(chatId) { return clipStore[chatId] || []; }
 function clearClips(chatId) { clipStore[chatId] = []; }
 
-// Character bibles — Wu-Tang dark black magic
+// Character bibles
 const BASE_STYLE = 'Hyper-cinematic dark anime. Katsuhiro Otomo Akira meets Wu-Tang Clan 36 Chambers. Cel-shading heavy brush ink textures. Mature ultra-dark occult. NOT kawaii NOT chibi. Black ink shadows. Black incense smoke. Film grain heavy. Black magic ritual energy. Blood moon. Only deep blacks blood crimsons tarnished gold shadow teal.';
 const CITY_BG = 'Background: abandoned Shaolin monastery ruins in dark Santiago barrio night. Crumbling stone arches with faded Chinese ink paintings and Spanish graffiti tags. Thick black smoke at ground level. Single blood-red lantern far away. Andes mountain silhouette through storm clouds. Wet black cobblestones with ancient symbols. Only candlelight and blood-red moon through storm clouds.';
 const ANDINO_P = 'ANDINO full PITCH MATTE BLACK ninja suit ONLY two calm predator eyes glowing faint crimson. Battle-scarred crimson red headphones over ninja hood. Ancient MPC drum machine at feet like ritual altar red runes glowing dark smoke rising. Monk-still posture. BACKGROUND center partially in shadow. Dark smoke curls around him.';
@@ -76,11 +70,38 @@ async function tg(method, body) {
 }
 async function send(chatId, text) { return (await tg('sendMessage', { chat_id: chatId, text, parse_mode: 'Markdown' }))?.message_id; }
 async function edit(chatId, msgId, text) { try { await tg('editMessageText', { chat_id: chatId, message_id: msgId, text, parse_mode: 'Markdown' }); } catch(e) {} }
-async function photo(chatId, url, caption) { try { await tg('sendPhoto', { chat_id: chatId, photo: url, caption }); } catch(e) {} }
-async function video(chatId, url, caption) { try { await tg('sendVideo', { chat_id: chatId, video: url, caption }); saveClip(chatId, url); } catch(e) {} }
+async function photo(chatId, url, caption) {
+  try {
+    const r = await tg('sendPhoto', { chat_id: chatId, photo: url, caption });
+    if (r) return;
+    // Fallback: download and send as file
+    const vr = await fetch(url);
+    const vb = await vr.arrayBuffer();
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    form.append('photo', new Blob([vb], { type: 'image/jpeg' }), 'image.jpg');
+    if (caption) form.append('caption', caption);
+    await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendPhoto', { method: 'POST', body: form });
+  } catch(e) { console.error('Photo error:', e.message); }
+}
+async function video(chatId, url, caption) {
+  try { await tg('sendVideo', { chat_id: chatId, video: url, caption }); saveClip(chatId, url); } catch(e) {}
+}
 function bar(n, t) { const f = Math.round((n/t)*10); return '[' + '█'.repeat(f) + '░'.repeat(10-f) + '] ' + Math.round((n/t)*100) + '%'; }
 
-// Grok image
+// R2 upload via Worker
+async function uploadToR2(buffer, filename, contentType) {
+  try {
+    const r = await fetch(R2_WORKER + '/' + filename, {
+      method: 'PUT', headers: { 'Content-Type': contentType || 'video/mp4' }, body: buffer
+    });
+    const d = await r.json();
+    console.log('R2 upload:', d.url);
+    return d.url || null;
+  } catch(e) { console.error('R2 error:', e.message); return null; }
+}
+
+// Grok image — uploads to R2 immediately so URL doesnt expire
 async function grokImg(prompt) {
   if (!process.env.GROK_KEY) return null;
   try {
@@ -108,7 +129,8 @@ async function runwayVideo(imageUrl, prompt, duration) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
       body: JSON.stringify({ model: 'gen4_turbo', promptImage: imageUrl, promptText: prompt, ratio: '720:1280', duration: duration || 5 })
     });
-    const d = await (await r.text().then(JSON.parse.bind(JSON)));
+    const txt = await r.text();
+    let d; try { d = JSON.parse(txt); } catch(e) { return null; }
     if (!d.id) return null;
     for (let i = 0; i < 30; i++) {
       await new Promise(r => setTimeout(r, 10000));
@@ -119,7 +141,7 @@ async function runwayVideo(imageUrl, prompt, duration) {
   } catch(e) { return null; }
 }
 
-// Seedance via OpenRouter
+// Seedance
 async function seedanceVideo(prompt, imageUrl) {
   if (!OPENROUTER_KEY) return null;
   try {
@@ -146,7 +168,7 @@ async function seedanceVideo(prompt, imageUrl) {
   } catch(e) { console.error('Seedance error:', e.message); return null; }
 }
 
-// DeepSeek via OpenRouter
+// DeepSeek
 async function deepseek(prompt, system) {
   if (!OPENROUTER_KEY) return null;
   try {
@@ -157,18 +179,6 @@ async function deepseek(prompt, system) {
     });
     return (await r.json()).choices?.[0]?.message?.content || null;
   } catch(e) { return null; }
-}
-
-// R2 upload via Worker
-async function uploadToR2(buffer, filename, contentType) {
-  try {
-    const r = await fetch(R2_WORKER + '/' + filename, {
-      method: 'PUT', headers: { 'Content-Type': contentType || 'video/mp4' }, body: buffer
-    });
-    const d = await r.json();
-    console.log('R2 upload:', d.url);
-    return d.url || null;
-  } catch(e) { console.error('R2 error:', e.message); return null; }
 }
 
 // Wake agent
@@ -187,85 +197,59 @@ async function wakeAgent(chatId, msgId) {
 // POST FACTORY
 async function runFactory(chatId, topic) {
   const msgId = await send(chatId, '🏭 *maarmapa factory*\n' + bar(0, 10) + '\n_Iniciando..._');
-
   const awake = await wakeAgent(chatId, msgId);
   if (!awake) { await edit(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto.'); return; }
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(1, 10) + '\n_Buscando contenido..._');
 
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(1, 10) + '\n_Buscando contenido oficial..._');
-
-  // MEJORADO: Búsqueda de prensa oficial + imágenes
+  let postData = {};
   let pressData = {};
   try {
     const res = await fetch(AGENT_URL + '/post', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        topic,
-        search_official: true,
-        include_images: true,
-        include_press_release: true
-      })
+      body: JSON.stringify({ topic, search_official: true, include_images: true })
     });
     const r = await res.json();
     postData = r.post || r;
     pressData = r.press_data || {};
-  } catch(e) { 
-    await edit(chatId, msgId, '❌ Error: ' + e.message); 
-    return; 
+  } catch(e) {
+    await edit(chatId, msgId, '❌ Error: ' + e.message);
+    return;
   }
 
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Generando narrativa visual..._');
 
   const title = (postData.title || topic).slice(0, 120);
-  const body = (postData.body || '')
-    .replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '')
-    .replace(/## [^\n]+\n?/g, '\n').replace(/# [^\n]+\n?/g, '\n')
-    .replace(/\*\*/g, '').replace(/\s{3,}/g, '\n\n').trim().slice(0, 900);
-  const caption = (postData.instagram_caption || '').replace(/<[^>]*>/g, '').slice(0, 250);
-  
-  // MEJORADO: Extraer párrafos clave para cada slide
+  const body = (postData.body || '').replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '').replace(/#{1,3} [^\n]+\n?/g, '\n').replace(/\*\*/g, '').trim().slice(0, 900);
+  const caption = (postData.instagram_caption || '').slice(0, 250);
   const paragraphs = body.split('\n\n').filter(p => p.length > 20);
   const p1 = paragraphs[0] || body;
-  const p2 = paragraphs[1] || paragraphs[0] || body;
-  const p3 = paragraphs[2] || paragraphs[1] || paragraphs[0] || body;
-  
-  // Extraer números/datos si existen
-  const dataPoints = body.match(/\d+%?|\d+\.\d+[a-z]*|[A-Z]{2,}/g) || [];
-  const stat = dataPoints[0] || 'milestone';
-  
+  const p2 = paragraphs[1] || p1;
+  const dataPoints = body.match(/\d+%?|\d+\.\d+[a-z]*/g) || [];
+  const stat = dataPoints[0] || '∞';
+
   await send(chatId, '📝 *' + title + '*\n\n' + body + '...');
   if (caption) await send(chatId, '📌 _Caption:_\n' + caption);
 
-  // Thumbnail
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_🖼 Thumbnail..._');
   if (postData.thumbnail_prompt) {
     const thumbUrl = await grokImg(postData.thumbnail_prompt);
     if (thumbUrl) await photo(chatId, thumbUrl, '🖼 Thumbnail');
   }
 
-  // MEJORADO: Narrativa visual coherente basada en el post
-  const T = (postData.title || topic).toUpperCase().slice(0, 38);
-  const TL = postData.title || topic;
+  const T = title.toUpperCase().slice(0, 38);
   const style = postData.visual_style || 'dark editorial cinematic';
-  const officialImages = pressData.images || [];
-  
-  // Construir prompts que respeten imágenes oficiales y tengan coherencia narrativa
+
   const coherentPrompts = [
-    `Square 1:1 editorial Instagram. Dark #080808. Safe zone 120px. Cinematic ${style}. Bebas Neue white massive: "${T}". 01/07. Reference official campaign imagery if available. Ghost vignette 12%. INTRO SLIDE: Set the tone for "${TL}".`,
-    
-    `Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. High contrast. Bebas Neue black bold. Extract key insight from: "${p1}". 02/07. CONTEXT: Establish why this matters. Make it visual, not wordy.`,
-    
-    `Square 1:1 editorial Instagram. Dark. Safe zone 120px. ${style}. Vertical accent line left. Bebas Neue white: "${stat}" or key statistic from the narrative. 03/07. DATA: Ground the story with facts.`,
-    
-    `Square 1:1 editorial Instagram. Dark. Safe zone 120px. Quotation mark 3%. Italic serif quote light gray from the core insight: "${p2.slice(0, 50)}...". Attribution. 04/07. VOICE: Let the narrative speak.`,
-    
-    `Square 1:1 editorial Instagram. Dark. Safe zone 120px. 2x2 brutalist grid. Bold white 4 key concepts extracted from narrative flow of "${TL}". 05/07. BREADTH: Show all dimensions.`,
-    
-    `Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. Centered Bebas Neue 4 lines: Provocative question that challenges reader: "What does ${TL} mean for the future?". 06/07. CHALLENGE: Make them think.`,
-    
-    `Square 1:1 editorial Instagram. Dark. Safe zone 120px. Urban pattern 5%. ${style}. Bebas Neue white conclusion that ties back to slide 01. @maarmapa.eth bottom left. Hashtags bottom right. 07/07. CLOSURE: Full circle narrative.`
+    'Square 1:1 editorial Instagram. Dark #080808. Safe zone 120px. Cinematic ' + style + '. Bebas Neue white massive: "' + T + '". 01/07. Ghost vignette 12%. INTRO SLIDE.',
+    'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. Bebas Neue black bold. Key insight: "' + p1.slice(0, 60) + '". 02/07. CONTEXT.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px. ' + style + '. Vertical accent line left. Massive: "' + stat + '". 03/07. DATA.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px. Quotation mark 3%. Italic serif light gray: "' + p2.slice(0, 50) + '...". 04/07. VOICE.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px. 2x2 brutalist grid. Bold white 4 key concepts from "' + title + '". 05/07.',
+    'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. Centered Bebas Neue: provocative question about "' + title + '". 06/07.',
+    'Square 1:1 editorial Instagram. Dark. Safe zone 120px. Urban pattern 5%. ' + style + '. @maarmapa.eth. 07/07. CLOSURE.'
   ];
-  
+
   const slideUrls = [];
   for (let i = 0; i < 7; i++) {
     await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i + 1) + '/7..._');
@@ -273,36 +257,29 @@ async function runFactory(chatId, topic) {
     if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i + 1) + '/7'); }
   }
 
-  // MEJORADO: Runway videos con narrativa coherente
   let clips = 0;
   if (process.env.RUNWAY_KEY && slideUrls.length > 0) {
-    const narrativeMotions = [
-      `INTRO. Dark ${style}. Title slides left. Establish mysterious atmosphere. Slow cinematic fade-in. 4 seconds.`,
-      
-      `REVELATION. White slide sharp. Text scales up with impact. This is the moment of clarity. 4 seconds.`,
-      
-      `EVIDENCE. Dark. Numbers animate upward. Vertical line accent. Data proves the point. 4 seconds.`,
-      
-      `REFLECTION. Quote drifts like smoke. Contemplative pause. The human element. Soft introspective motion. 4 seconds.`,
-      
-      `EXPANSION. Grid cells flash rhythm. All dimensions revealed. Brutal honesty. Geometric power. 4 seconds.`,
-      
-      `PROVOCATION. Letters explode outward. Reader confronted. Challenge accepted. Kinetic energy. 4 seconds.`,
-      
-      `RESOLUTION. Fade to deep black. Pulsing conclusion. @maarmapa.eth sharp. Film noir ending. Promise of next chapter. 4 seconds.`
+    const motions = [
+      'INTRO. Dark ' + style + '. Title slides left. Slow cinematic fade-in.',
+      'REVELATION. White slide. Text scales up with impact.',
+      'EVIDENCE. Numbers animate upward. Vertical line accent.',
+      'REFLECTION. Quote drifts like smoke. Contemplative pause.',
+      'EXPANSION. Grid cells flash rhythm. Brutalist power.',
+      'PROVOCATION. Letters explode outward. Kinetic energy.',
+      'RESOLUTION. Fade to deep black. @maarmapa.eth sharp.'
     ];
-    
     for (let i = 0; i < Math.min(slideUrls.length, 7); i++) {
-      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/' + slideUrls.length + ' Runway..._');
-      const vid = await runwayVideo(slideUrls[i], narrativeMotions[i], 4);
+      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/' + slideUrls.length + '..._');
+      const vid = await runwayVideo(slideUrls[i], motions[i], 4);
       if (vid) { await video(chatId, vid, '🎬 Clip ' + (i + 1)); clips++; }
     }
   }
 
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(10, 10) + '\n✅ *Completado*');
-  await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips + '\n\n_Narrativa visual coherente. Respeta imágenes oficiales. Ready to post._');
+  await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips);
 }
 
+// ANIME FACTORY
 async function runAnime(chatId, concept) {
   const msgId = await send(chatId, '🎬 *anime factory*\n' + bar(0, 10) + '\n_Iniciando..._');
   const BS = BASE_STYLE + ' ' + CITY_BG + ' 9:16 vertical ALL 120px safe margins.';
@@ -313,13 +290,13 @@ async function runAnime(chatId, concept) {
   ];
   const scenePrompts = [
     BS + ' SHOT 1. ' + ANDINO_P + ' Rooftop 360 orbit low angle. Red lightning rain. Andes silhouette.',
-    BS + ' SHOT 2. ' + PIERO_P + ' + ' + KINNY_P + ' Alley 180 arc. Steam grates. Kanji graffiti. Gold blue neon clash.',
-    BS + ' SHOT 3. ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Triangle top-down. SOUTHSIDE red glitch text. Yin yang glowing. Ultimate poster.'
+    BS + ' SHOT 2. ' + PIERO_P + ' + ' + KINNY_P + ' Alley 180 arc. Steam grates. Kanji graffiti.',
+    BS + ' SHOT 3. ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Triangle top-down. SOUTHSIDE red glitch text. Yin yang glowing.'
   ];
   const motions = [
-    'Akira anime 360 orbit rising low angle. Red lightning. Rain streaks. Beat-driven.',
-    'Dynamic 180 arc. Dancer spin motion blur. MC raises mic. Steam jets. Fast energy.',
-    'Top-down drone descent fast. Energy burst expands. Neon ripples. White flash freeze.'
+    'Akira anime 360 orbit rising low angle. Red lightning. Rain streaks.',
+    'Dynamic 180 arc. Dancer spin motion blur. MC raises mic. Steam jets.',
+    'Top-down drone descent fast. Energy burst expands. White flash freeze.'
   ];
   await send(chatId, '🎨 *Squad:*\n1. *Andino* — Beatmaker\n2. *Piero* — MC\n3. *Kinny* — Dancer');
   for (let i = 0; i < chars.length; i++) {
@@ -329,11 +306,11 @@ async function runAnime(chatId, concept) {
   }
   const clips = [];
   for (let i = 0; i < 3; i++) {
-    await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(5+i, 10) + '\n_🎨 Shot ' + (i+1) + '/3 Grok..._');
+    await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(5+i, 10) + '\n_🎨 Shot ' + (i+1) + '/3..._');
     const su = await grokImg(scenePrompts[i]);
     if (su) {
       await photo(chatId, su, '🎬 Shot ' + (i+1) + '/3');
-      await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(6+i, 10) + '\n_🎬 Shot ' + (i+1) + '/3 Runway..._');
+      await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(6+i, 10) + '\n_🎬 Runway Shot ' + (i+1) + '..._');
       const vid = await runwayVideo(su, motions[i], 5);
       if (vid) { clips.push(vid); await video(chatId, vid, '🎬 Shot ' + (i+1) + '/3'); }
     }
@@ -351,9 +328,9 @@ async function runSquad(chatId) {
     { label: 'Kinny — Low Angle', prompt: BS + ' ' + KINNY_P + ' EXTREME LOW ANGLE. Wide warrior stance both arms raised. Blue corona shockwave. Rain.', motion: 'Camera rises from ground. Blue corona expands. Shuriken orbit accelerates. Blood moon blazes.' },
     { label: 'Kinny — Portrait', prompt: BS + ' ' + KINNY_P + ' WAIST UP 3/4. Right hand spinning shuriken eye level. Blue energy crackling. Single neon blue light from left.', motion: 'Shuriken spins in slow motion. Blue energy crackles around fist. Camera slow push-in to eyes.' },
     { label: 'Andino — Beat', prompt: BS + ' ' + ANDINO_P + ' MEDIUM SHOT low angle. Both hands MPC mid-strike. Red energy pulses. Face bowed. Crimson particles float up.', motion: 'MPC pad strikes send red shockwaves through stone. Crimson particles float upward. Camera circles slowly.' },
-    { label: 'Andino — Rooftop', prompt: BS + ' ' + ANDINO_P + ' FULL BODY rooftop edge. Right arm raised vinyl disc glowing red. Left arm balance. City below. Red storm sky.', motion: 'Camera slow push-in. Wind presses suit. Crimson headphones pulse. City neon below. Direct eye contact.' },
-    { label: 'Piero — Battle', prompt: BS + ' ' + PIERO_P + ' HERO SHOT center. Microphone thrust toward camera gold energy beam. Palm strike. Wet cobblestones. Colonial archway gold neon.', motion: 'Gold energy beam expands. Stone walls crack. Rain drops freeze in shockwave. Camera rapid push-in to eyes.' },
-    { label: 'Squad — Final', prompt: BS + ' EPIC WIDE. ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Three coronas red gold teal merge white. Yin yang ground. SOUTHSIDE red glitch top.', motion: 'All three advance in slow motion. Combined energy field. Massive white explosion. Freeze. SOUTHSIDE burns.' }
+    { label: 'Andino — Rooftop', prompt: BS + ' ' + ANDINO_P + ' FULL BODY rooftop edge. Right arm raised vinyl disc glowing red. Left arm balance. City below. Red storm sky.', motion: 'Camera slow push-in. Wind presses suit. Crimson headphones pulse. Direct eye contact.' },
+    { label: 'Piero — Battle', prompt: BS + ' ' + PIERO_P + ' HERO SHOT center. Microphone thrust toward camera gold energy beam. Palm strike. Wet cobblestones.', motion: 'Gold energy beam expands. Stone walls crack. Rain drops freeze in shockwave. Camera rapid push-in.' },
+    { label: 'Squad — Final', prompt: BS + ' EPIC WIDE. ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Three coronas red gold teal merge white. Yin yang ground. SOUTHSIDE red glitch top.', motion: 'All three advance slow motion. Combined energy field. Massive white explosion. Freeze. SOUTHSIDE burns.' }
   ];
   const clips = [];
   for (let i = 0; i < angles.length; i++) {
@@ -365,7 +342,6 @@ async function runSquad(chatId) {
       const vid = await runwayVideo(u, angles[i].motion, 5);
       if (vid) {
         await video(chatId, vid, '🎬 ' + angles[i].label);
-        // Upload to R2
         try {
           const vr = await fetch(vid);
           const vb = await vr.arrayBuffer();
@@ -380,23 +356,27 @@ async function runSquad(chatId) {
   await send(chatId, '✅ *Squad listo*\n🎨 ' + angles.length + ' imágenes\n🎬 ' + clips.length + ' clips\n_Usa /sync para mezclar con SOUTHSIDE_');
 }
 
-// SEEDANCE FACTORY
+// SEEDANCE SCENES
 const SCENES = {
-  'andino-intro':  'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Low angle looking up. MPC altar glowing red runes. Black smoke. Blood moon through broken arch. CAMERA rises slowly from ground. 9:16 ALL 120px.',
-  'andino-battle': 'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Both hands striking MPC pads. Red energy beams firing from each pad. Elevated on broken ruins above dark city. CAMERA pulls back. 9:16 ALL 120px.',
-  'andino-ritual': 'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Kneeling over MPC center yin-yang carved stone floor. Red energy flows through stone veins. Blood moon above. Top-down view. 9:16 ALL 120px.',
-  'andino-finale': 'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Standing tall rooftop edge. Arms crossed. MPC at feet. Crimson headphones glowing. City below. Blood moon blazing. 9:16 ALL 120px.',
-  'andino-street': 'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Walking toward camera through rain-soaked alley. MPC under arm. Steam rising. Colonial archway behind. 9:16 ALL 120px.',
-  'piero-intro':   'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Stepping from total darkness into single candlelight. Glasses catch light first. Iron microphone raised. Gold smoke rising from tip. Stone corridor. 9:16 ALL 120px.',
-  'piero-battle':  'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Battle stance rain-soaked alley. Microphone thrust forward. Gold energy beam erupting. Shockwave cracking stone walls. 9:16 ALL 120px.',
-  'piero-ritual':  'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Standing center ancient stone circle. Microphone touching ground like ceremonial staff. Gold energy flowing from blood moon through mic into stone. 9:16 ALL 120px.',
-  'piero-finale':  'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Direct confrontation facing camera. Microphone raised 45 degrees toward lens. Massive gold corona forming above. 9:16 ALL 120px.',
-  'piero-street':  'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Leaning against wet graffiti wall under broken lamplight. Microphone hanging loose. Eyes sharp watching something off camera. 9:16 ALL 120px.',
-  'kinny-intro':   'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops from above frame landing in perfect Shaolin crouch on wet stone. Three obsidian shuriken appear orbiting one by one. Teal energy pulses through suit. 9:16 ALL 120px.',
-  'kinny-battle':  'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' FROZEN MID-AIR peak of spinning aerial kick. Right leg fully extended. THREE shuriken in orbit. Teal energy corona blazing. Speed lines. 9:16 ALL 120px.',
-  'kinny-ritual':  'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Kneeling in center carved stone circle. Three shuriken placed as offerings. Teal energy pulsing through suit veins. Blood moon above. Top-down view. 9:16 ALL 120px.',
-  'kinny-finale':  'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Standing facing camera. Three shuriken orbiting. Weight forward coiled. Direct fierce eye contact. Massive teal energy building. 9:16 ALL 120px.',
-  'kinny-street':  'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops from rooftop onto wet Santiago cobblestones. Steam surrounds landing. Low angle. Andes silhouette behind in storm sky. 9:16 ALL 120px.',
+  'andino-intro':  'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Low angle. MPC altar red runes. Blood moon broken arch. CAMERA rises. 9:16 ALL 120px.',
+  'andino-battle': 'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Both hands MPC mid-strike. Red energy beams. Elevated ruins. CAMERA pulls back. 9:16 ALL 120px.',
+  'andino-ritual': 'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Kneeling MPC center yin-yang stone floor. Red energy stone veins. Blood moon. Top-down. 9:16 ALL 120px.',
+  'andino-finale': 'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Standing rooftop edge. Arms crossed. MPC at feet. Blood moon blazing. 9:16 ALL 120px.',
+  'andino-street': 'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Walking toward camera rain-soaked alley. MPC under arm. Colonial archway behind. 9:16 ALL 120px.',
+  'andino-name':   'Wu-Tang dark anime. ANDINO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Full body dramatic low angle. Massive bold distressed glitch typography spelling exactly ANDINO in blood crimson red — same exact style as SOUTHSIDE title card — positioned in UPPER THIRD above character. Blood moon. 9:16 ALL 120px.',
+  'piero-intro':   'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Stepping from darkness into candlelight. Iron microphone raised. Gold smoke tip. Stone corridor. 9:16 ALL 120px.',
+  'piero-battle':  'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Battle stance rain alley. Mic thrust forward. Gold energy beam. Shockwave cracking walls. 9:16 ALL 120px.',
+  'piero-ritual':  'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Center stone circle. Mic ceremonial staff. Gold energy from blood moon through mic into stone. 9:16 ALL 120px.',
+  'piero-finale':  'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Facing camera. Mic raised toward lens. Massive gold corona above. 9:16 ALL 120px.',
+  'piero-street':  'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Leaning graffiti wall broken lamplight. Mic hanging. Eyes sharp watching. 9:16 ALL 120px.',
+  'piero-name':    'Wu-Tang dark anime. PIERO solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Full body center frame. Gold corona above. THE TEXT MUST READ EXACTLY: first line "PIERO" second line "LA ROCCA" spelled P-I-E-R-O and L-A-R-O-C-C-A in blood crimson red same style as SOUTHSIDE title card UPPER THIRD above character. 9:16 ALL 120px.',
+  'kinny-intro':   'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops from above landing Shaolin crouch wet stone. Three shuriken appear orbiting. Teal energy pulses. 9:16 ALL 120px.',
+  'kinny-battle':  'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' FROZEN MID-AIR peak spinning kick. Leg fully extended. THREE shuriken orbit. Teal corona blazing. 9:16 ALL 120px.',
+  'kinny-ritual':  'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Kneeling stone circle. Three shuriken as offerings. Teal pulsing. Blood moon. Top-down. 9:16 ALL 120px.',
+  'kinny-finale':  'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Facing camera. Three shuriken orbiting. Weight forward coiled. Massive teal energy building. 9:16 ALL 120px.',
+  'kinny-street':  'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops rooftop wet Santiago cobblestones. Steam surrounds. Low angle. Andes behind. 9:16 ALL 120px.',
+  'kinny-name':    'Wu-Tang dark anime. KINNY solo. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Mid-air frozen kick. Three shuriken orbiting. Teal energy blazing. Massive bold distressed glitch typography spelling exactly IlKINNY in blood crimson red — same exact style as SOUTHSIDE title card — UPPER THIRD above character. 9:16 ALL 120px.',
+  'squad-name':    'Wu-Tang dark anime. ' + BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three triangle formation advancing toward camera. Three energy coronas red gold teal merging white center. Blood moon blazing. Yin yang erupting. No text no typography. Pure cinematic power. 9:16 ALL 120px.',
   intro:   BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three emerging from darkness. Blood moon. Yin yang ground. SOUTHSIDE red glitch. 9:16 ALL 120px.',
   battle:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' All three in battle action. Energy beams red gold teal crossing. SOUTHSIDE. 9:16 ALL 120px.',
   ritual:  BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' ' + ANDINO_P + ' ' + PIERO_P + ' ' + KINNY_P + ' Triangle yin yang stone floor blood moon. Three coronas merging. SOUTHSIDE. 9:16 ALL 120px.',
@@ -407,17 +387,13 @@ const SCENES = {
 async function runSeedance(chatId, concept) {
   const msgId = await send(chatId, '🌱 *Seedance factory*\n' + bar(0, 10) + '\n_Iniciando..._');
   if (!OPENROUTER_KEY) { await edit(chatId, msgId, '❌ OPENROUTER_KEY no configurada.'); return; }
-
   const sceneKey = concept?.toLowerCase().trim();
   const prompt = SCENES[sceneKey] || concept || SCENES.intro;
-
-  await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(2, 10) + '\n_🎨 Generando frame referencia Grok..._');
+  await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(2, 10) + '\n_🎨 Generando frame referencia..._');
   const refImg = await grokImg(prompt.slice(0, 500));
   if (refImg) await photo(chatId, refImg, '🎨 Frame referencia');
-
   await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(4, 10) + '\n_🎬 ' + currentVideoModel.split('/')[1] + ' generando..._');
   const vid = await seedanceVideo(prompt, null);
-
   if (vid) {
     await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(8, 10) + '\n_📥 Descargando y subiendo a R2..._');
     try {
@@ -441,28 +417,28 @@ async function runSeedance(chatId, concept) {
   }
 }
 
-// RUNWAY CINEMATIC SCENES
+// RUNWAY SCENES
 const RUNWAY_SCENES = {
-  'andino-intro':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Low angle. MPC altar red runes. Blood moon broken arch. 9:16 ALL 120px.', motion: 'Camera rises slowly from ground toward ANDINO. Red runes pulse. Black smoke drifts upward. Blood moon intensifies. Dark ritual energy builds.' },
-  'andino-battle':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Both hands MPC mid-strike. Red energy beams. Elevated broken ruins. 9:16 ALL 120px.', motion: 'Camera pulls back revealing full scale. MPC strikes send red shockwaves. Debris swirls. Crimson light pulses with beat.' },
-  'andino-ritual':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Kneeling MPC center yin-yang stone floor. Red energy through stone veins. Blood moon. Top-down. 9:16 ALL 120px.', motion: 'Top-down camera descends slowly. Red energy pulses through stone carvings like blood. Yin-yang brightens. Ancient ritual builds.' },
-  'andino-finale':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Standing rooftop edge. Arms crossed. MPC at feet. Crimson headphones glowing. Blood moon. 9:16 ALL 120px.', motion: 'Camera slow push-in. Wind presses suit. Crimson headphones pulse. Direct eye contact through mask. Absolute stillness of a master.' },
-  'andino-street':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Walking toward camera rain-soaked alley. MPC under arm. Steam. Colonial archway. 9:16 ALL 120px.', motion: 'Long lens compression ANDINO walks toward camera through rain. Each step red ripple through puddles. Steam parts. Unstoppable approach.' },
-  'piero-intro':    { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Stepping from darkness into candlelight. Glasses catch light. Iron microphone raised. Gold smoke from tip. Stone corridor. 9:16 ALL 120px.', motion: 'PIERO materializes from pure darkness. Gold smoke rises from mic tip. Camera slow push-in. Glasses glint gold. Voice of the clan.' },
-  'piero-battle':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Battle stance rain alley. Mic thrust forward. Gold energy beam. Shockwave cracking walls. 9:16 ALL 120px.', motion: 'Gold energy beam expands with force. Stone walls crack. Rain freezes in shockwave. Camera rapid push-in to eyes behind glasses.' },
-  'piero-ritual':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Center stone circle. Mic as ceremonial staff. Gold energy from blood moon through mic into stone. 9:16 ALL 120px.', motion: 'Gold light from blood moon through PIERO into mic. Stone carvings illuminate gold outward. Camera circles slowly. Ancient power.' },
-  'piero-finale':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Facing camera. Mic raised toward lens. Gold corona forming above. 9:16 ALL 120px.', motion: 'PIERO raises mic directly at camera slow motion. Gold corona expands massively. Camera pushed back by force. White gold flash.' },
-  'piero-street':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Leaning graffiti wall broken lamplight. Mic hanging. Eyes watching. 9:16 ALL 120px.', motion: 'PIERO pushes off wall fluid motion toward camera. Gold builds around mic each step. He stops center. Gold shockwave ripples.' },
-  'kinny-intro':    { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops from above landing Shaolin crouch wet stone. Three shuriken appear orbiting. Teal energy pulses. 9:16 ALL 120px.', motion: 'KINNY drops into frame lands in stillness. Three shuriken materialize orbit in sequence. Teal energy pulses through markings. Coiled readiness.' },
-  'kinny-battle':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' FROZEN mid-air peak spinning kick. Leg fully extended. THREE shuriken orbit. Teal corona blazing. Speed lines. 9:16 ALL 120px.', motion: 'Time resumes from frozen peak ULTRA SLOW MOTION. Leg completes arc motion blur. Shuriken scatter. Teal explosion from body. Camera 180 rotation.' },
-  'kinny-ritual':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Kneeling stone circle. Three shuriken as offerings. Teal pulsing. Blood moon. Top-down. 9:16 ALL 120px.', motion: 'Teal energy pulses through KINNY in breathing rhythm. Shuriken rotate slowly like satellites. He stands arms raised. Teal corona explodes upward.' },
-  'kinny-finale':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Facing camera. Three shuriken orbiting. Weight forward. Direct eye contact. Massive teal energy building. 9:16 ALL 120px.', motion: 'One slow step forward. Shuriken orbit accelerates. Teal corona expands with each breath. Camera pushed backward. Massive teal explosion freeze.' },
-  'kinny-street':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops rooftop wet Santiago cobblestones. Steam surrounds. Low angle. Andes behind. 9:16 ALL 120px.', motion: 'Landing teal shockwave ripples. Camera looks up as KINNY rises to full height. Shuriken orbit. Walks through steam toward camera.' },
-  intro:   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' All three emerging from darkness. Blood moon. SOUTHSIDE. 9:16 ALL 120px.', motion: 'All three materialize from darkness. Energy coronas ignite. Camera pulls back. Blood moon blazes. Yin yang erupts. SOUTHSIDE burns.' },
+  'andino-intro':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Low angle. MPC altar red runes. Blood moon broken arch. 9:16 ALL 120px.', motion: 'Camera rises slowly from ground toward ANDINO. Red runes pulse. Black smoke drifts upward. Blood moon intensifies.' },
+  'andino-battle':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Both hands MPC mid-strike. Red energy beams. Elevated broken ruins. 9:16 ALL 120px.', motion: 'Camera pulls back revealing full scale. MPC strikes send red shockwaves. Debris swirls. Crimson light pulses.' },
+  'andino-ritual':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Kneeling MPC center yin-yang stone floor. Red energy through stone veins. Blood moon. Top-down. 9:16 ALL 120px.', motion: 'Top-down camera descends slowly. Red energy pulses through stone carvings. Yin-yang brightens. Ancient ritual builds.' },
+  'andino-finale':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Standing rooftop edge. Arms crossed. MPC at feet. Crimson headphones glowing. Blood moon. 9:16 ALL 120px.', motion: 'Camera slow push-in. Wind presses suit. Crimson headphones pulse. Direct eye contact through mask. Absolute stillness.' },
+  'andino-street':  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + ANDINO_P + ' Walking toward camera rain-soaked alley. MPC under arm. Steam. Colonial archway. 9:16 ALL 120px.', motion: 'Long lens compression ANDINO walks toward camera. Each step red ripple through puddles. Steam parts. Unstoppable.' },
+  'piero-intro':    { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Stepping from darkness into candlelight. Iron microphone raised. Gold smoke from tip. Stone corridor. 9:16 ALL 120px.', motion: 'PIERO materializes from pure darkness. Gold smoke rises from mic tip. Camera slow push-in. Voice of the clan.' },
+  'piero-battle':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Battle stance rain alley. Mic thrust forward. Gold energy beam. Shockwave cracking walls. 9:16 ALL 120px.', motion: 'Gold energy beam expands with force. Stone walls crack. Rain freezes in shockwave. Camera rapid push-in to eyes.' },
+  'piero-ritual':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Center stone circle. Mic as ceremonial staff. Gold energy from blood moon through mic into stone. 9:16 ALL 120px.', motion: 'Gold light from blood moon through PIERO into mic. Stone carvings illuminate gold outward. Camera circles slowly.' },
+  'piero-finale':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Facing camera. Mic raised toward lens. Gold corona forming above. 9:16 ALL 120px.', motion: 'PIERO raises mic directly at camera slow motion. Gold corona expands massively. Camera pushed back by force.' },
+  'piero-street':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + PIERO_P + ' Leaning graffiti wall broken lamplight. Mic hanging. Eyes watching. 9:16 ALL 120px.', motion: 'PIERO pushes off wall fluid motion toward camera. Gold builds around mic each step. Gold shockwave ripples.' },
+  'kinny-intro':    { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops from above landing Shaolin crouch wet stone. Three shuriken appear orbiting. Teal energy pulses. 9:16 ALL 120px.', motion: 'KINNY drops into frame lands in stillness. Three shuriken materialize orbit in sequence. Teal energy pulses. Coiled readiness.' },
+  'kinny-battle':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' FROZEN mid-air peak spinning kick. Leg fully extended. THREE shuriken orbit. Teal corona blazing. 9:16 ALL 120px.', motion: 'Time resumes ULTRA SLOW MOTION. Leg completes arc motion blur. Shuriken scatter. Teal explosion. Camera 180 rotation.' },
+  'kinny-ritual':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Kneeling stone circle. Three shuriken as offerings. Teal pulsing. Blood moon. Top-down. 9:16 ALL 120px.', motion: 'Teal energy pulses through KINNY breathing rhythm. Shuriken rotate like satellites. He stands arms raised. Teal corona explodes.' },
+  'kinny-finale':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Facing camera. Three shuriken orbiting. Weight forward. Direct eye contact. Massive teal energy building. 9:16 ALL 120px.', motion: 'One slow step forward. Shuriken orbit accelerates. Teal corona expands. Camera pushed backward. Massive teal explosion freeze.' },
+  'kinny-street':   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + KINNY_P + ' Drops rooftop wet Santiago cobblestones. Steam surrounds. Low angle. Andes behind. 9:16 ALL 120px.', motion: 'Landing teal shockwave ripples. Camera looks up as KINNY rises. Shuriken orbit. Walks through steam toward camera.' },
+  intro:   { img: BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' All three emerging from darkness. Blood moon. SOUTHSIDE. 9:16 ALL 120px.', motion: 'All three materialize from darkness. Energy coronas ignite. Camera pulls back. Blood moon blazes. SOUTHSIDE burns.' },
   battle:  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' All three battle simultaneously. Red gold teal crossing. SOUTHSIDE. 9:16 ALL 120px.', motion: 'All three unleash simultaneously. Red gold teal energy beams cross center. Camera pulls back fast. Pure power.' },
   ritual:  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' Triangle yin yang floor blood moon. Three coronas merging. 9:16 ALL 120px.', motion: 'Three coronas merge into white light. Yin yang expands. Camera descends from above. Ancient ritual complete.' },
   finale:  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' All three advancing camera. Combined energy burst. SOUTHSIDE. 9:16 ALL 120px.', motion: 'All three advance slow motion. Combined energy pushes camera back. Massive white explosion. Freeze. SOUTHSIDE.' },
-  street:  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' Santiago alley 3am steam. Colonial archway. 9:16 ALL 120px.', motion: 'All three emerge from steam walk toward camera through rain. Each step colored energy ripple. Stop simultaneously. Camera orbits 360.' }
+  street:  { img: BASE_STYLE + ' ' + CITY_BG + ' ' + SQUAD_COMP + ' Santiago alley 3am steam. Colonial archway. 9:16 ALL 120px.', motion: 'All three emerge from steam walk toward camera through rain. Each step colored energy ripple. Camera orbits 360.' }
 };
 
 async function runRunwayScene(chatId, sceneKey) {
@@ -491,24 +467,43 @@ async function runRunwayScene(chatId, sceneKey) {
   }
 }
 
-// SHOTSTACK SYNC
+// SHOTSTACK SYNC — BPM 103
 async function runSync(chatId, clipUrls) {
   const msgId = await send(chatId, '🎵 *Sync factory*\n' + bar(0, 10) + '\n_Iniciando..._');
   const SHOTSTACK_KEY = process.env.SHOTSTACK_KEY;
   if (!SHOTSTACK_KEY) { await edit(chatId, msgId, '❌ SHOTSTACK_KEY no configurada.'); return; }
   if (!clipUrls || clipUrls.length === 0) { await edit(chatId, msgId, '❌ No hay clips. Usa /syncr2 primero.'); return; }
 
-  await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(3, 10) + '\n_Construyendo timeline con ' + clipUrls.length + ' clips..._');
+  await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(3, 10) + '\n_BPM 103 sync con ' + clipUrls.length + ' clips..._');
 
-  const clipDuration = 5;
+  const BPM = 103;
+  const beat = 60 / BPM;
+  const bar4 = beat * 4;
+  const bar8 = beat * 8;
+  const bar16 = beat * 16;
+  const DROP = 2.0;
+  const TRIM = 2.0;
+  const MAX_CLIP = 4.5;
+
+  const durations = clipUrls.map((_, i) => {
+    if (i === 0) return Math.min(DROP, MAX_CLIP);
+    if (i === clipUrls.length - 1) return Math.min(bar8, MAX_CLIP);
+    return Math.min(bar4, MAX_CLIP);
+  });
+
+  let t = 0;
+  const starts = durations.map(d => { const s = t; t += d; return parseFloat(s.toFixed(3)); });
+  console.log('BPM sync: ' + clipUrls.length + ' clips, total: ' + parseFloat(t.toFixed(2)) + 's');
+
   const timeline = {
     soundtrack: { src: SOUTHSIDE_AUDIO, volume: 1 },
     tracks: [{
       clips: clipUrls.map((url, i) => ({
-        asset: { type: 'video', src: url, volume: 0 },
-        start: i * clipDuration,
-        length: clipDuration,
-        transition: { in: 'fade', out: 'fade' }
+        asset: { type: 'video', src: url, volume: 0, trim: i === 0 ? 0 : TRIM },
+        start: starts[i],
+        length: parseFloat(durations[i].toFixed(3)),
+        fit: 'crop',
+        transition: { in: i === 0 ? 'fadeFast' : 'none', out: i === clipUrls.length - 1 ? 'fadeFast' : 'none' }
       }))
     }],
     background: '#000000'
@@ -521,7 +516,6 @@ async function runSync(chatId, clipUrls) {
       body: JSON.stringify({ timeline, output: { format: 'mp4', resolution: 'hd', aspectRatio: '9:16', fps: 25 } })
     });
     const sd = await sr.json();
-    console.log('Shotstack submit:', JSON.stringify(sd).slice(0, 200));
     if (!sd.response?.id) { await edit(chatId, msgId, '❌ Shotstack error: ' + JSON.stringify(sd).slice(0, 200)); return; }
 
     const renderId = sd.response.id;
@@ -537,17 +531,23 @@ async function runSync(chatId, clipUrls) {
       await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(5 + Math.min(i, 4), 10) + '\n_Renderizando ' + (i*10) + 's..._');
       if (status === 'done' && url) {
         await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(9, 10) + '\n_📥 Descargando video final..._');
-        const vr = await fetch(url);
-        const vb = await vr.arrayBuffer();
-        const form = new FormData();
-        form.append('chat_id', String(chatId));
-        form.append('video', new Blob([vb], { type: 'video/mp4' }), 'southside_final.mp4');
-        form.append('caption', '🎵 SOUTHSIDE — Video Final (' + clipUrls.length + ' clips)');
-        await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
+        try {
+          const vr = await fetch(url);
+          const vb = await vr.arrayBuffer();
+          const form = new FormData();
+          form.append('chat_id', String(chatId));
+          form.append('video', new Blob([vb], { type: 'video/mp4' }), 'southside_final.mp4');
+          form.append('caption', '🎵 SOUTHSIDE — ' + clipUrls.length + ' clips BPM 103');
+          await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
+        } catch(e) { console.error('Send error:', e.message); }
         await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(10, 10) + '\n✅ *Video final listo*');
         return;
       }
-      if (status === 'failed') { await edit(chatId, msgId, '❌ Shotstack render falló: ' + (pd.response?.error || '')); return; }
+      if (status === 'failed') {
+        const err = pd.response?.error;
+        await edit(chatId, msgId, '❌ Shotstack render falló: ' + (typeof err === 'string' ? err : JSON.stringify(err || pd)));
+        return;
+      }
     }
     await edit(chatId, msgId, '❌ Timeout.');
   } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
@@ -608,7 +608,6 @@ async function handle(msg) {
   const chatId = msg.chat.id;
   const text = msg.text || '';
 
-  // Photo → Runway
   if (msg.photo) {
     const p = msg.photo[msg.photo.length - 1];
     const caption = msg.caption || '';
@@ -641,34 +640,19 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7.2*\n\n**Content Creation (ORIGINAL):**\n`/post [tema]` — Grok post (350 tokens)\n\n**NEW WebPost v7.2 (Choose one):**\n`/webpost-haiku-images` ⭐ RECOMMENDED — Haiku+HTML frames (200-250 tokens)\n`/webpost-hyperframes` — Haiku+Hyperframes animated (150 tokens)\n`/webpost-adobe` — Haiku+Adobe images (150 tokens)\n`/webpost-openrouter` — OpenRouter+Brave (200 tokens)\n\n**OLD WebPost (Still available):**\n`/webpost [tema]` — Grokpedia+Grok (200 tokens)\n`/webpost-lite` — Grokpedia+DeepSeek (150 tokens) 🟢\n`/webpost-carousel` — carousel+Grok (550 tokens)\n`/webpost-carousel-lite` — carousel+DeepSeek (350 tokens) 🟢\n\n**Video:**\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n\n**Utilities:**\n`/buscar [query]` — search\n`/chat [pregunta]` — agent\n`/clips` — manage clips\n\n⭐ = Recomendado para empezar\n🟢 = Sin Grok (barato)\n📊 *Token monitoring activo*');
+    await send(chatId, '🎨 *maarmapa factory v7.2*\n\n*Content Creation:*\n`/post [tema]` — Grok post\n\n*WebPost v7.2:*\n`/webpost-haiku-images [tema]` ⭐\n`/webpost-hyperframes [tema]`\n`/webpost-adobe [tema]`\n`/webpost-openrouter [tema]`\n\n*WebPost classic:*\n`/webpost [tema]`\n`/webpost-lite [tema]` 🟢\n`/webpost-carousel [tema]`\n`/webpost-carousel-lite [tema]` 🟢\n\n*Video:*\n`/runway [escena]` — Grok+Runway\n`/seedance [escena]` — Seedance\n`/squad` — multi-angulo squad\n`/anime` — anime squad\n`/boykot [producto]` — Boykot.cl\n\n*Sync:*\n`/syncr2` — cargar clips R2\n`/addclip [URL]` — agregar clip\n`/sync` — mezclar SOUTHSIDE BPM 103\n`/clips` — ver clips\n`/clearclips` — borrar clips\n\n*Utils:*\n`/buscar [query]` `/chat [pregunta]` `/digest`\n📸 Foto — Runway la anima');
     return;
   }
 
-  if (text.startsWith('/post ')) {
-    runFactory(chatId, text.replace('/post ', '')).catch(e => send(chatId, '❌ ' + e.message));
-    return;
-  }
-
-  if (text.startsWith('/boykot ')) {
-    runBoykotPost(chatId, text.replace('/boykot ', '')).catch(e => send(chatId, '❌ ' + e.message));
-    return;
-  }
-
-  if (text.startsWith('/anime') || text === '/anime') {
-    runAnime(chatId, text.replace('/anime', '').trim() || 'southside').catch(e => send(chatId, '❌ ' + e.message));
-    return;
-  }
-
-  if (text === '/squad') {
-    runSquad(chatId).catch(e => send(chatId, '❌ ' + e.message));
-    return;
-  }
+  if (text.startsWith('/post ')) { runFactory(chatId, text.replace('/post ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
+  if (text.startsWith('/boykot ')) { runBoykotPost(chatId, text.replace('/boykot ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
+  if (text.startsWith('/anime') || text === '/anime') { runAnime(chatId, text.replace('/anime', '').trim() || 'southside').catch(e => send(chatId, '❌ ' + e.message)); return; }
+  if (text === '/squad') { runSquad(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
 
   if (text.startsWith('/seedance')) {
     const concept = text.replace('/seedance', '').trim();
     if (!concept) {
-      await send(chatId, '🌱 *Seedance Escenas:*\n\n*Andino:* andino-intro andino-battle andino-ritual andino-finale andino-street\n*Piero:* piero-intro piero-battle piero-ritual piero-finale piero-street\n*Kinny:* kinny-intro kinny-battle kinny-ritual kinny-finale kinny-street\n*Squad:* intro battle ritual finale street\n\nEj: `/seedance kinny-battle`');
+      await send(chatId, '🌱 *Seedance Escenas:*\n\n*Andino:* andino-intro andino-battle andino-ritual andino-finale andino-street andino-name\n*Piero:* piero-intro piero-battle piero-ritual piero-finale piero-street piero-name\n*Kinny:* kinny-intro kinny-battle kinny-ritual kinny-finale kinny-street kinny-name\n*Squad:* intro battle ritual finale street squad-name');
       return;
     }
     runSeedance(chatId, concept).catch(e => send(chatId, '❌ ' + e.message));
@@ -678,7 +662,7 @@ async function handle(msg) {
   if (text.startsWith('/runway')) {
     const arg = text.replace('/runway', '').trim().toLowerCase();
     if (!arg) {
-      await send(chatId, '🎬 *Runway Escenas:*\n\n*Andino:* andino-intro andino-battle andino-ritual andino-finale andino-street\n*Piero:* piero-intro piero-battle piero-ritual piero-finale piero-street\n*Kinny:* kinny-intro kinny-battle kinny-ritual kinny-finale kinny-street\n*Squad:* intro battle ritual finale street\n\nEj: `/runway kinny-battle`');
+      await send(chatId, '🎬 *Runway Escenas:*\n\n*Andino:* andino-intro andino-battle andino-ritual andino-finale andino-street\n*Piero:* piero-intro piero-battle piero-ritual piero-finale piero-street\n*Kinny:* kinny-intro kinny-battle kinny-ritual kinny-finale kinny-street\n*Squad:* intro battle ritual finale street');
       return;
     }
     runRunwayScene(chatId, arg).catch(e => send(chatId, '❌ ' + e.message));
@@ -693,7 +677,7 @@ async function handle(msg) {
       const clips = (d.objects || []).filter(k => k.endsWith('.mp4')).map(k => R2_BASE + k);
       if (clips.length === 0) { await edit(chatId, msgId, '❌ No hay clips MP4 en R2.'); return; }
       clips.forEach(url => saveClip(chatId, url));
-      await edit(chatId, msgId, '✅ ' + clips.length + ' clips cargados de R2:\n' + clips.map((u, i) => (i+1) + '. ' + u.split('/').pop()).join('\n') + '\n\nUsa `/sync` para mezclarlos con SOUTHSIDE.');
+      await edit(chatId, msgId, '✅ ' + clips.length + ' clips cargados de R2. Usa /sync para mezclarlos.');
     } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
     return;
   }
@@ -702,30 +686,26 @@ async function handle(msg) {
     const urls = text.replace('/addclip', '').trim().split(' ').filter(u => u.startsWith('http'));
     if (urls.length === 0) { await send(chatId, '❌ Uso: `/addclip URL1 URL2 URL3`'); return; }
     urls.forEach(url => saveClip(chatId, url));
-    await send(chatId, '✅ ' + urls.length + ' clip(s) agregados. Total: ' + getClips(chatId).length + '\nUsa `/sync` para mezclarlos.');
+    await send(chatId, '✅ ' + urls.length + ' clip(s) agregados. Total: ' + getClips(chatId).length);
     return;
   }
 
   if (text.startsWith('/sync')) {
     const args = text.replace('/sync', '').trim().split(' ').filter(u => u.startsWith('http'));
     const clips = args.length > 0 ? args : getClips(chatId);
-    if (clips.length === 0) { await send(chatId, '❌ No hay clips. Usa `/syncr2` o genera clips con `/runway` o `/seedance`.'); return; }
+    if (clips.length === 0) { await send(chatId, '❌ No hay clips. Usa `/syncr2` primero.'); return; }
     runSync(chatId, clips).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
 
   if (text === '/clips') {
     const clips = getClips(chatId);
-    if (clips.length === 0) { await send(chatId, '📋 No hay clips guardados. Usa `/syncr2` para cargar desde R2.'); return; }
-    await send(chatId, '📋 *' + clips.length + ' clips:*\n' + clips.map((u, i) => (i+1) + '. ' + u.split('/').pop().slice(0, 40)).join('\n') + '\n\nUsa `/sync` para mezclarlos.');
+    if (clips.length === 0) { await send(chatId, '📋 No hay clips. Usa `/syncr2` para cargar desde R2.'); return; }
+    await send(chatId, '📋 *' + clips.length + ' clips:*\n' + clips.map((u, i) => (i+1) + '. ' + u.split('/').pop().slice(0, 40)).join('\n'));
     return;
   }
 
-  if (text === '/clearclips') {
-    clearClips(chatId);
-    await send(chatId, '🗑 Clips borrados.');
-    return;
-  }
+  if (text === '/clearclips') { clearClips(chatId); await send(chatId, '🗑 Clips borrados.'); return; }
 
   if (text.startsWith('/buscar ')) {
     const query = text.replace('/buscar ', '');
@@ -742,11 +722,10 @@ async function handle(msg) {
     const q = text.replace('/chat ', '');
     const msgId = await send(chatId, '💬 _Pensando..._');
     try {
-      const reply = await deepseek(q, 'Eres maarmapa artista urbano chileno con conocimiento de arte cultura blockchain ciudades. Responde en espanol.');
+      const reply = await deepseek(q, 'Eres maarmapa artista urbano chileno. Responde en espanol.');
       if (reply) { await edit(chatId, msgId, reply.slice(0, 4000)); return; }
       const r = await fetch(AGENT_URL + '/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: q }] }) });
-      const d = await r.json();
-      await edit(chatId, msgId, (d.reply || '...').slice(0, 4000));
+      await edit(chatId, msgId, ((await r.json()).reply || '...').slice(0, 4000));
     } catch(e) { await edit(chatId, msgId, '❌ ' + e.message); }
     return;
   }
@@ -754,7 +733,7 @@ async function handle(msg) {
   if (text === '/digest') {
     const msgId = await send(chatId, '📰 _Generando digest..._');
     try {
-      const reply = await deepseek('Genera digest semanal noticias arte contemporaneo marketing viral blockchain AI esta semana. 5-7 noticias descripcion breve. Espanol.', null);
+      const reply = await deepseek('Genera digest semanal noticias arte blockchain AI esta semana. 5-7 noticias descripcion breve. Espanol.', null);
       if (reply) { await edit(chatId, msgId, reply.slice(0, 4000)); return; }
       const r = await fetch(AGENT_URL + '/digest');
       await edit(chatId, msgId, ((await r.json()).digest || 'Error').slice(0, 4000));
@@ -762,188 +741,102 @@ async function handle(msg) {
     return;
   }
 
-  // WebPost commands (v7.1)
-  if (text && text.startsWith('/webpost-lite ')) {
-    const topic = text.replace('/webpost-lite ', '').trim();
-    await runWebPost(chatId, topic, true); // lite mode = no Grok
-    return;
-  }
+  // WebPost commands
+  if (text.startsWith('/webpost-lite ')) { await runWebPost(chatId, text.replace('/webpost-lite ', '').trim(), true); return; }
+  if (text.startsWith('/webpost ') && !text.includes('-carousel') && !text.includes('-lite')) { await runWebPost(chatId, text.replace('/webpost ', '').trim(), false); return; }
+  if (text.startsWith('/webpost-carousel-lite ')) { await runWebPostCarousel(chatId, text.replace('/webpost-carousel-lite ', '').trim(), true); return; }
+  if (text.startsWith('/webpost-carousel ') && !text.includes('-lite')) { await runWebPostCarousel(chatId, text.replace('/webpost-carousel ', '').trim(), false); return; }
 
-  if (text && text.startsWith('/webpost ') && !text.includes('-carousel') && !text.includes('-lite')) {
-    const topic = text.replace('/webpost ', '').trim();
-    await runWebPost(chatId, topic, false); // normal mode = with Grok fallback
-    return;
-  }
-
-  if (text && text.startsWith('/webpost-carousel-lite ')) {
-    const topic = text.replace('/webpost-carousel-lite ', '').trim();
-    await runWebPostCarousel(chatId, topic, true); // lite mode = no Grok
-    return;
-  }
-
-  if (text && text.startsWith('/webpost-carousel ') && !text.includes('-lite')) {
-    const topic = text.replace('/webpost-carousel ', '').trim();
-    await runWebPostCarousel(chatId, topic, false); // normal mode = with Grok fallback
-    return;
-  }
-
-  // New v7.2 commands
-  if (text && text.startsWith('/webpost-haiku-images ')) {
+  if (text.startsWith('/webpost-haiku-images ')) {
     const query = text.replace('/webpost-haiku-images ', '').trim();
     await send(chatId, '🔍 Generating post...');
     try {
       const result = await webpostHaikuImages.run(query);
-      if (result.success) {
-        const formatted = webpostHaikuImages.formatForTelegram(result);
-        await send(chatId, formatted);
-      } else {
-        await send(chatId, '❌ Error: ' + result.error);
-      }
-    } catch(e) {
-      await send(chatId, '❌ Error: ' + e.message);
-    }
+      if (result.success) await send(chatId, webpostHaikuImages.formatForTelegram(result));
+      else await send(chatId, '❌ Error: ' + result.error);
+    } catch(e) { await send(chatId, '❌ Error: ' + e.message); }
     return;
   }
 
-  if (text && text.startsWith('/webpost-hyperframes ')) {
+  if (text.startsWith('/webpost-hyperframes ')) {
     const query = text.replace('/webpost-hyperframes ', '').trim();
-    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating with Haiku...\n🎬 Creating frames...');
+    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...');
     try {
       const result = await webpostHyperframes.run(query);
-      if (result.success) {
-        const formatted = webpostHyperframes.formatForTelegram(result);
-        await edit(chatId, loadingMsg, formatted);
-      } else {
-        await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
-      }
-    } catch(e) {
-      await edit(chatId, loadingMsg, '❌ Error: ' + e.message);
-    }
+      if (result.success) await edit(chatId, loadingMsg, webpostHyperframes.formatForTelegram(result));
+      else await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
+    } catch(e) { await edit(chatId, loadingMsg, '❌ Error: ' + e.message); }
     return;
   }
 
-  if (text && text.startsWith('/webpost-adobe ')) {
+  if (text.startsWith('/webpost-adobe ')) {
     const query = text.replace('/webpost-adobe ', '').trim();
-    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating post...\n🎨 Creating images...');
+    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...');
     try {
       const result = await webpostHaikuAdobe.run(query, { generateImages: true });
-      if (result.success) {
-        const formatted = webpostHaikuAdobe.formatForTelegram(result);
-        await edit(chatId, loadingMsg, formatted);
-      } else {
-        await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
-      }
-    } catch(e) {
-      await edit(chatId, loadingMsg, '❌ Error: ' + e.message);
-    }
+      if (result.success) await edit(chatId, loadingMsg, webpostHaikuAdobe.formatForTelegram(result));
+      else await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
+    } catch(e) { await edit(chatId, loadingMsg, '❌ Error: ' + e.message); }
     return;
   }
 
-  if (text && text.startsWith('/webpost-openrouter ')) {
+  if (text.startsWith('/webpost-openrouter ')) {
     const query = text.replace('/webpost-openrouter ', '').trim();
-    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...\n⏳ Generating with OpenRouter...');
+    const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...');
     try {
       const result = await webpostOpenRouter.run(query);
-      if (result.success) {
-        const formatted = webpostOpenRouter.formatForTelegram(result);
-        await edit(chatId, loadingMsg, formatted);
-      } else {
-        await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
-      }
-    } catch(e) {
-      await edit(chatId, loadingMsg, '❌ Error: ' + e.message);
-    }
+      if (result.success) await edit(chatId, loadingMsg, webpostOpenRouter.formatForTelegram(result));
+      else await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
+    } catch(e) { await edit(chatId, loadingMsg, '❌ Error: ' + e.message); }
     return;
   }
 
   if (text && !text.startsWith('/')) {
     if (text.startsWith('https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/') && text.endsWith('.mp4')) {
       saveClip(chatId, text.trim());
-      await send(chatId, '✅ Clip guardado. Total: ' + getClips(chatId).length + '\nUsa `/sync` para mezclar.');
+      await send(chatId, '✅ Clip guardado. Total: ' + getClips(chatId).length);
       return;
     }
-    await send(chatId, '💡 `/post [tema]` — post\n`/webpost [tema]` — news\n`/webpost-carousel [tema]` — carousel\n`/runway [escena]` — video\n`/seedance [escena]` — video\n`/buscar [tema]` — noticias');
+    await send(chatId, '💡 `/post [tema]` — post\n`/runway [escena]` — video\n`/seedance [escena]` — video\n`/buscar [tema]` — noticias');
   }
 }
 
-// WebPost functions (v7.1)
+// WebPost v7.1 functions
 async function runWebPost(chatId, topic, liteMode = false) {
   const msgId = await send(chatId, (liteMode ? '🟢' : '🔵') + ' *webpost' + (liteMode ? '-lite' : '') + '*\n' + bar(0, 5) + '\n_Buscando..._');
-  
-  // Configure generator for lite mode (no Grok fallback)
-  if (liteMode) {
-    webPostGen.skipGrokFallback = true; // Prevent Grok fallback
-  }
-  
+  if (liteMode) webPostGen.skipGrokFallback = true;
   const post = await webPostGen.generateWebPost(topic, monitor);
-  webPostGen.skipGrokFallback = false; // Reset
-  
-  if (post.status !== 'success') {
-    await edit(chatId, msgId, '❌ Error: ' + post.status);
-    return;
-  }
-  
+  webPostGen.skipGrokFallback = false;
+  if (post.status !== 'success') { await edit(chatId, msgId, '❌ Error: ' + post.status); return; }
   await edit(chatId, msgId, '📋 *' + topic + '*\n' + bar(2, 5) + '\n_Generando post..._');
-  
-  if (post.narrative) {
-    await send(chatId, post.narrative);
-  }
-  
-  await edit(chatId, msgId, '📤 *webpost' + (liteMode ? '-lite' : '') + '*\n' + bar(4, 5) + '\n_Enviando imágenes..._');
-  
-  for (const url of post.r2Urls) {
-    await photo(chatId, url, topic);
-  }
-  
-  const tokenCost = liteMode ? 150 : 200; // 150 if no Grok, 200 if Grok used
-  const status = monitor.formatCommandStatus('openrouter', tokenCost, `/webpost${liteMode ? '-lite' : ''} ${topic}`);
+  if (post.narrative) await send(chatId, post.narrative);
+  await edit(chatId, msgId, '📤 *webpost*\n' + bar(4, 5) + '\n_Enviando imágenes..._');
+  for (const url of post.r2Urls) await photo(chatId, url, topic);
+  const status = monitor.formatCommandStatus('openrouter', liteMode ? 150 : 200, '/webpost ' + topic);
   if (status) await send(chatId, status);
 }
 
 async function runWebPostCarousel(chatId, topic, liteMode = false) {
-  const msgId = await send(chatId, (liteMode ? '🟢' : '🔵') + ' *webpost-carousel' + (liteMode ? '-lite' : '') + '*\n' + bar(0, 7) + '\n_Buscando..._');
-  
-  // Configure generator for lite mode (no Grok fallback)
-  if (liteMode) {
-    carouselGen.skipGrokFallback = true; // Prevent Grok fallback
-  }
-  
+  const msgId = await send(chatId, (liteMode ? '🟢' : '🔵') + ' *webpost-carousel*\n' + bar(0, 7) + '\n_Buscando..._');
+  if (liteMode) carouselGen.skipGrokFallback = true;
   const result = await carouselGen.generateWebPostCarousel(topic, monitor);
-  carouselGen.skipGrokFallback = false; // Reset
-  
-  if (result.status !== 'success') {
-    await edit(chatId, msgId, '❌ Error: ' + result.status);
-    return;
-  }
-  
+  carouselGen.skipGrokFallback = false;
+  if (result.status !== 'success') { await edit(chatId, msgId, '❌ Error: ' + result.status); return; }
   await edit(chatId, msgId, '📝 *carousel*\n' + bar(2, 7) + '\n_Generando slides..._');
-  
   if (result.slides && Array.isArray(result.slides)) {
-    for (const slide of result.slides) {
-      const slideText = `${slide.emoji || '📌'} *Slide ${slide.slide}*\n\n${slide.text}`;
-      await send(chatId, slideText);
-    }
+    for (const slide of result.slides) await send(chatId, (slide.emoji || '📌') + ' *Slide ' + slide.slide + '*\n\n' + slide.text);
   }
-  
   await edit(chatId, msgId, '📸 *carousel*\n' + bar(5, 7) + '\n_Enviando imágenes..._');
-  
-  for (const url of result.r2Urls) {
-    await photo(chatId, url, topic);
-  }
-  
-  if (result.videoUrl) {
-    await edit(chatId, msgId, '🎬 *carousel*\n' + bar(6, 7) + '\n_Enviando video..._');
-    await video(chatId, result.videoUrl, topic + ' — Carousel Video');
-  }
-  
+  for (const url of result.r2Urls) await photo(chatId, url, topic);
+  if (result.videoUrl) { await edit(chatId, msgId, '🎬 *carousel*\n' + bar(6, 7) + '\n_Video..._'); await video(chatId, result.videoUrl, topic + ' — Carousel Video'); }
   const tokensUsed = (result.tokensUsed?.openrouter || 200) + (result.tokensUsed?.grok || 0);
-  const status = monitor.formatCommandStatus('openrouter', tokensUsed, `/webpost-carousel ${topic}`);
+  const status = monitor.formatCommandStatus('openrouter', tokensUsed, '/webpost-carousel ' + topic);
   if (status) await send(chatId, status);
 }
 
 // POLLING
 async function poll() {
-  console.log('maarmapa bot v7 — Grok+Runway+Seedance+Shotstack+DeepSeek+R2');
+  console.log('maarmapa bot v7.2 — Grok+Runway+Seedance+Shotstack+DeepSeek+R2 — grokImg R2 fixed');
   let offset = 0;
   while (true) {
     try {
@@ -960,5 +853,5 @@ async function poll() {
   }
 }
 
-require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v7 online'); }).listen(process.env.PORT || 3000);
+require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v7.2 online'); }).listen(process.env.PORT || 3000);
 poll();
