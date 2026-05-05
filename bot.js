@@ -786,8 +786,10 @@ async function handle(msg) {
     const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...');
     try {
       const result = await webpostOpenRouter.run(query);
-      if (result.success) await edit(chatId, loadingMsg, webpostOpenRouter.formatForTelegram(result));
-      else await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
+      if (result.success) {
+        await edit(chatId, loadingMsg, webpostOpenRouter.formatForTelegram(result));
+        if (result.imageUrl) await photo(chatId, result.imageUrl, query);
+      } else await edit(chatId, loadingMsg, '❌ Error: ' + result.error);
     } catch(e) { await edit(chatId, loadingMsg, '❌ Error: ' + e.message); }
     return;
   }
