@@ -14,12 +14,12 @@
 const axios = require('axios');
 
 const BRAVE_API_KEY = process.env.BRAVE_SEARCH_API_KEY;
-const HAIKU_API_KEY = process.env.API_KEY;
+const HAIKU_API_KEY = process.env.ANTHROPIC_KEY;
 const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
 
 class WebPostHyperframes {
   constructor() {
-    this.model = 'claude-haiku-4-5'; // Fastest Claude
+    this.model = 'claude-3-5-haiku-20241022'; // Fastest Claude
     this.heygenEndpoint = 'https://api.heygen.com/v1';
   }
 

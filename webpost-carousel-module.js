@@ -12,7 +12,7 @@ class WebPostCarouselGenerator {
     this.runwayKey = options.runwayKey;
     this.telegramToken = options.telegramToken;
     this.r2Worker = options.r2Worker;
-    this.currentTextModel = 'deepseek/deepseek-v4-flash';
+    this.currentTextModel = 'deepseek/deepseek-chat';
     this.searchProvider = options.searchProvider || 'duckduckgo'; // 'duckduckgo' | 'anthropic'
     this.imageGenerator = options.imageGenerator || 'grok'; // 'grok' | 'anthropic' | 'webimages'
     this.skipGrokFallback = false; // Set to true to disable Grok fallback
@@ -153,7 +153,7 @@ ONLY JSON, no other text.`;
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       };
 
-      const response = await fetch(url, { headers, timeout: 10000 });
+      const response = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
       if (!response.ok) return { images: [], videos: [] };
 
       const html = await response.text();
@@ -293,7 +293,7 @@ ONLY JSON, no other text.`;
             'Authorization': `Bearer ${this.grokKey}`
           },
           body: JSON.stringify({
-            model: 'grok-2-image',
+            model: 'grok-imagine-image',
             prompt,
             n: 1,
             response_format: 'url'
@@ -375,7 +375,8 @@ ONLY JSON, no other text.`;
       const res = await fetch(r2Url, {
         method: 'PUT',
         headers: { 'Content-Type': contentType },
-        body: buffer
+        body: buffer,
+        signal: AbortSignal.timeout(20000)
       });
 
       if (res.ok) {
@@ -480,10 +481,10 @@ ONLY JSON, no other text.`;
       for (let i = 0; i < result.selectedImages.length; i++) {
         const img = result.selectedImages[i];
         try {
-          const imgResponse = await fetch(img.url, { timeout: 15000 });
+          const imgResponse = await fetch(img.url, { signal: AbortSignal.timeout(15000) });
           if (imgResponse.ok) {
-            const buffer = await imgResponse.buffer();
-            const filename = `carousel/${topic.replace(/\s+/g, '-').toLowerCase()}-${i + 1}-${Date.now()}.jpg`;
+            const buffer = await imgResponse.arrayBuffer();
+            const filename = `carousel_${topic.replace(/\s+/g, '-').toLowerCase()}-${i + 1}-${Date.now()}.jpg`;
             const r2Url = await this.uploadMediaToR2(buffer, filename);
             if (r2Url) result.r2Urls.push(r2Url);
           }

@@ -19,7 +19,7 @@
 const axios = require('axios');
 
 const BRAVE_API_KEY = process.env.BRAVE_SEARCH_API_KEY;
-const HAIKU_API_KEY = process.env.API_KEY;
+const HAIKU_API_KEY = process.env.ANTHROPIC_KEY;
 const ADOBE_CLIENT_ID = process.env.ADOBE_CLIENT_ID;
 const ADOBE_CLIENT_SECRET = process.env.ADOBE_CLIENT_SECRET;
 const ADOBE_ACCESS_TOKEN = process.env.ADOBE_ACCESS_TOKEN;
@@ -27,7 +27,7 @@ const RUNWAY_KEY = process.env.RUNWAY_KEY;
 
 class WebPostHaikuAdobeMCP {
   constructor() {
-    this.model = 'claude-haiku-4-5'; // Fastest + cheapest
+    this.model = 'claude-3-5-haiku-20241022'; // Fastest + cheapest
     this.mcpEndpoint = process.env.MCP_ENDPOINT || 'http://localhost:3000/mcp';
     this.adobeSession = null;
   }

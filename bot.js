@@ -16,7 +16,7 @@ const R2_BASE = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/';
 const R2_WORKER = 'https://maarmapa-media.mario-25d.workers.dev';
 
 const MODELS = {
-  text: { fast: 'deepseek/deepseek-v4-flash', pro: 'deepseek/deepseek-v4-pro', gpt: 'openai/gpt-5.4' },
+  text: { fast: 'deepseek/deepseek-chat', pro: 'deepseek/deepseek-r1', gpt: 'openai/gpt-4o' },
   video: { seedance_fast: 'bytedance/seedance-2.0-fast', seedance: 'bytedance/seedance-2.0', veo: 'google/veo-3.1' }
 };
 let currentTextModel = MODELS.text.fast;
@@ -832,8 +832,10 @@ async function runWebPostCarousel(chatId, topic, liteMode = false) {
     for (const slide of result.slides) await send(chatId, (slide.emoji || '📌') + ' *Slide ' + slide.slide + '*\n\n' + slide.text);
   }
   await edit(chatId, msgId, '📸 *carousel*\n' + bar(5, 7) + '\n_Enviando imágenes..._');
-  for (const url of result.r2Urls) await photo(chatId, url, topic);
+  const carouselImgs = result.r2Urls.length > 0 ? result.r2Urls : result.selectedImages.map(i => i.url).filter(Boolean);
+  for (const url of carouselImgs) await photo(chatId, url, topic);
   if (result.videoUrl) { await edit(chatId, msgId, '🎬 *carousel*\n' + bar(6, 7) + '\n_Video..._'); await video(chatId, result.videoUrl, topic + ' — Carousel Video'); }
+  await edit(chatId, msgId, '✅ *carousel*\n' + bar(7, 7) + '\n_' + carouselImgs.length + ' imagen(es) · ' + (result.slides?.length || 0) + ' slides_');
   const tokensUsed = (result.tokensUsed?.openrouter || 200) + (result.tokensUsed?.grok || 0);
   const status = monitor.formatCommandStatus('openrouter', tokensUsed, '/webpost-carousel ' + topic);
   if (status) await send(chatId, status);

@@ -9,7 +9,7 @@ const RUNWAY_KEY = process.env.RUNWAY_KEY;
 
 class WebPostHaikuImagesUltraSimple {
   constructor() {
-    this.model = 'claude-haiku-4-5';
+    this.model = 'claude-3-5-haiku-20241022';
   }
 
   async generateImageWithRunway(prompt) {
@@ -47,10 +47,10 @@ class WebPostHaikuImagesUltraSimple {
   }
 
   async generatePost(query) {
-    const HAIKU_API_KEY = process.env.API_KEY;
-    
+    const HAIKU_API_KEY = process.env.ANTHROPIC_KEY;
+
     if (!HAIKU_API_KEY) {
-      throw new Error('❌ API_KEY not set in environment');
+      throw new Error('❌ ANTHROPIC_KEY not set in environment');
     }
 
     const prompt = `Create a compelling Instagram post about: "${query}"

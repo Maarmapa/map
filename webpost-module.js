@@ -8,7 +8,7 @@ class WebPostGenerator {
     this.openrouterKey = openrouterKey;
     this.telegramToken = telegramToken;
     this.r2Worker = r2Worker;
-    this.currentTextModel = 'deepseek/deepseek-v4-flash';
+    this.currentTextModel = 'deepseek/deepseek-chat';
     this.skipGrokFallback = false; // Set to true to disable Grok fallback
   }
 
