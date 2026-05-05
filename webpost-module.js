@@ -230,16 +230,17 @@ SOLO EL POST, nada más.`;
   // 5. Descargar y subir imagen a R2
   async uploadImageToR2(imageUrl, filename) {
     try {
-      const imgResponse = await fetch(imageUrl, { timeout: 15000 });
+      const imgResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
       if (!imgResponse.ok) return null;
 
       const buffer = await imgResponse.arrayBuffer();
-      
+
       const r2Url = `${this.r2Worker}/posts/${filename}`;
       const uploadRes = await fetch(r2Url, {
         method: 'PUT',
         headers: { 'Content-Type': 'image/jpeg' },
-        body: buffer
+        body: buffer,
+        signal: AbortSignal.timeout(20000)
       });
 
       if (uploadRes.ok) {

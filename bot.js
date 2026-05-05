@@ -64,7 +64,8 @@ const SQUAD_COMP = 'COMPOSITION: PIERO foreground left, KINNY foreground right, 
 // Telegram helpers
 async function tg(method, body) {
   const res = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/' + method, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30000)
   });
   return (await res.json()).result;
 }
@@ -75,13 +76,14 @@ async function photo(chatId, url, caption) {
     const r = await tg('sendPhoto', { chat_id: chatId, photo: url, caption });
     if (r) return;
     // Fallback: download and send as file
-    const vr = await fetch(url);
+    const vr = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!vr.ok) return;
     const vb = await vr.arrayBuffer();
     const form = new FormData();
     form.append('chat_id', String(chatId));
     form.append('photo', new Blob([vb], { type: 'image/jpeg' }), 'image.jpg');
     if (caption) form.append('caption', caption);
-    await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendPhoto', { method: 'POST', body: form });
+    await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendPhoto', { method: 'POST', body: form, signal: AbortSignal.timeout(20000) });
   } catch(e) { console.error('Photo error:', e.message); }
 }
 async function video(chatId, url, caption) {
