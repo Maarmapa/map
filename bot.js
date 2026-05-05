@@ -814,6 +814,7 @@ async function runWebPost(chatId, topic, liteMode = false) {
   await edit(chatId, msgId, '📤 *webpost*\n' + bar(4, 5) + '\n_Enviando imágenes..._');
   const imgUrls = post.r2Urls.length > 0 ? post.r2Urls : post.topImages.map(i => i.url).filter(Boolean);
   for (const url of imgUrls) await photo(chatId, url, topic);
+  await edit(chatId, msgId, '✅ *webpost*\n' + bar(5, 5) + '\n_' + imgUrls.length + ' imagen(es) enviadas_');
   const status = monitor.formatCommandStatus('openrouter', liteMode ? 150 : 200, '/webpost ' + topic);
   if (status) await send(chatId, status);
 }
