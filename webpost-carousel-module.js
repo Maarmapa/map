@@ -261,13 +261,28 @@ ONLY JSON, no other text.`;
       const text = data.choices?.[0]?.message?.content || '';
 
       try {
-        return JSON.parse(text);
+        // Strip markdown code blocks if present
+        const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+        return JSON.parse(clean);
       } catch {
-        return null;
+        // Fallback: build generic slides from topic
+        return [
+          { slide: 1, text: topic, emoji: '🎯' },
+          { slide: 2, text: `Key insights on ${topic}`, emoji: '💡' },
+          { slide: 3, text: `Why ${topic} matters`, emoji: '📊' },
+          { slide: 4, text: `The future of ${topic}`, emoji: '🚀' },
+          { slide: 5, text: `Follow for more — @maarmapa.eth`, emoji: '✅' }
+        ];
       }
     } catch (e) {
       console.error('Carousel generation error:', e.message);
-      return null;
+      return [
+        { slide: 1, text: topic, emoji: '🎯' },
+        { slide: 2, text: `Key insights on ${topic}`, emoji: '💡' },
+        { slide: 3, text: `Why ${topic} matters`, emoji: '📊' },
+        { slide: 4, text: `The future of ${topic}`, emoji: '🚀' },
+        { slide: 5, text: `Follow for more — @maarmapa.eth`, emoji: '✅' }
+      ];
     }
   }
 
@@ -440,17 +455,18 @@ ONLY JSON, no other text.`;
         }
         
         console.log('🎨 No web images found, generating with Grok...');
-        if (this.grokKey && result.slides) {
-          const grokImages = await this.generateCarouselImagesWithGrok(topic, result.slides);
+        if (this.grokKey) {
+          const slidesToUse = result.slides || [{ slide: 1, text: topic, emoji: '🎯' }];
+          const grokImages = await this.generateCarouselImagesWithGrok(topic, slidesToUse);
           if (grokImages.length > 0) {
             result.selectedImages = grokImages.map(img => ({ url: img.url, alt: `Slide ${img.slide}` }));
-            result.tokensUsed.grok = 50 * Math.min(5, result.slides.length);
+            result.tokensUsed.grok = 50 * grokImages.length;
           } else {
             result.status = 'error: no images found and Grok generation failed';
             return result;
           }
         } else {
-          result.status = 'error: no images found';
+          result.status = 'error: no images found (no Grok key)';
           return result;
         }
       } else if (this.imageGenerator === 'grok' && this.grokKey && result.slides) {
