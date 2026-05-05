@@ -99,7 +99,7 @@ class WebPostGenerator {
           'Authorization': `Bearer ${process.env.GROK_KEY}`
         },
         body: JSON.stringify({
-          model: 'grok-2-image',
+          model: 'grok-imagine-image',
           prompt: prompt,
           n: 1,
           response_format: 'url'
@@ -233,7 +233,7 @@ SOLO EL POST, nada más.`;
       const imgResponse = await fetch(imageUrl, { timeout: 15000 });
       if (!imgResponse.ok) return null;
 
-      const buffer = await imgResponse.buffer();
+      const buffer = await imgResponse.arrayBuffer();
       
       const r2Url = `${this.r2Worker}/posts/${filename}`;
       const uploadRes = await fetch(r2Url, {

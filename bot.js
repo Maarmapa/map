@@ -810,7 +810,8 @@ async function runWebPost(chatId, topic, liteMode = false) {
   await edit(chatId, msgId, '📋 *' + topic + '*\n' + bar(2, 5) + '\n_Generando post..._');
   if (post.narrative) await send(chatId, post.narrative);
   await edit(chatId, msgId, '📤 *webpost*\n' + bar(4, 5) + '\n_Enviando imágenes..._');
-  for (const url of post.r2Urls) await photo(chatId, url, topic);
+  const imgUrls = post.r2Urls.length > 0 ? post.r2Urls : post.topImages.map(i => i.url).filter(Boolean);
+  for (const url of imgUrls) await photo(chatId, url, topic);
   const status = monitor.formatCommandStatus('openrouter', liteMode ? 150 : 200, '/webpost ' + topic);
   if (status) await send(chatId, status);
 }
