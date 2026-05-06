@@ -172,15 +172,18 @@ async function seedanceVideo(prompt, imageUrl) {
 
 // DeepSeek
 async function deepseek(prompt, system) {
-  if (!OPENROUTER_KEY) return null;
+  if (!OPENROUTER_KEY) { console.error('deepseek: OPENROUTER_KEY no configurada'); return null; }
   try {
     const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo' },
-      body: JSON.stringify({ model: currentTextModel, max_tokens: 4096, messages: [...(system ? [{ role: 'system', content: system }] : []), { role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: currentTextModel, max_tokens: 4096, messages: [...(system ? [{ role: 'system', content: system }] : []), { role: 'user', content: prompt }] }),
+      signal: AbortSignal.timeout(30000)
     });
-    return (await r.json()).choices?.[0]?.message?.content || null;
-  } catch(e) { return null; }
+    const data = await r.json();
+    if (data.error) { console.error('deepseek API error:', JSON.stringify(data.error)); return null; }
+    return data.choices?.[0]?.message?.content || null;
+  } catch(e) { console.error('deepseek fetch error:', e.message); return null; }
 }
 
 // Wake agent
@@ -737,7 +740,12 @@ async function handle(msg) {
         ? `Basándote en estos datos reales obtenidos de la web:\n\n${webData}\n\nRedacta un resumen claro, bien estructurado y en español sobre: "${query}". Usa emojis, destaca los datos clave, cita fuentes si las hay.`
         : `Resume información relevante sobre: "${query}". Responde en español con datos clave y estructura clara.`;
       const reply = await deepseek(prompt, 'Eres un redactor experto. Sintetizas información compleja en textos claros, directos y bien estructurados en español.');
-      await edit(chatId, msgId, (reply || 'Sin resultados').slice(0, 4000));
+      if (!reply) {
+        const keyStatus = OPENROUTER_KEY ? '✅ key presente' : '❌ OPENROUTER_KEY no configurada';
+        await edit(chatId, msgId, '❌ DeepSeek no respondió\n' + keyStatus + '\nModelo: ' + currentTextModel);
+        return;
+      }
+      await edit(chatId, msgId, reply.slice(0, 4000));
     } catch(e) { await edit(chatId, msgId, '❌ ' + e.message); }
     return;
   }
