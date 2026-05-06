@@ -712,9 +712,32 @@ async function handle(msg) {
     const query = text.replace('/buscar ', '');
     const msgId = await send(chatId, '🔍 _Buscando: ' + query + '..._');
     try {
-      const r = await fetch(AGENT_URL + '/grok', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
-      const d = await r.json();
-      await edit(chatId, msgId, (d.reply || 'Sin resultados').slice(0, 4000));
+      let webData = null;
+      // Paso 1: Grok busca en la web
+      if (process.env.GROK_KEY) {
+        try {
+          await edit(chatId, msgId, '🔍 _Grok buscando: ' + query + '..._');
+          const gr = await fetch('https://api.x.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.GROK_KEY },
+            body: JSON.stringify({
+              model: 'grok-3',
+              messages: [{ role: 'user', content: 'Search for recent information about: ' + query + '. Return the raw facts, data points, quotes and sources found. Be comprehensive.' }],
+              search_parameters: { mode: 'on' }
+            }),
+            signal: AbortSignal.timeout(30000)
+          });
+          const gd = await gr.json();
+          webData = gd.choices?.[0]?.message?.content || null;
+        } catch(e) { console.log('Grok search failed:', e.message); }
+      }
+      // Paso 2: DeepSeek redacta con los datos de Grok
+      await edit(chatId, msgId, '✍️ _DeepSeek redactando..._');
+      const prompt = webData
+        ? `Basándote en estos datos reales obtenidos de la web:\n\n${webData}\n\nRedacta un resumen claro, bien estructurado y en español sobre: "${query}". Usa emojis, destaca los datos clave, cita fuentes si las hay.`
+        : `Resume información relevante sobre: "${query}". Responde en español con datos clave y estructura clara.`;
+      const reply = await deepseek(prompt, 'Eres un redactor experto. Sintetizas información compleja en textos claros, directos y bien estructurados en español.');
+      await edit(chatId, msgId, (reply || 'Sin resultados').slice(0, 4000));
     } catch(e) { await edit(chatId, msgId, '❌ ' + e.message); }
     return;
   }
