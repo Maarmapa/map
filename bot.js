@@ -1,6 +1,6 @@
 // maarmapa — Telegram Bot v7
 // Claude + Grok + Runway + Seedance + DeepSeek + Shotstack + R2
-// v7.2 — fixed grokImg R2 upload + postData + BPM sync
+// v7.3 — oracle backgrounds + start menu updated
 const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
@@ -75,7 +75,6 @@ async function photo(chatId, url, caption) {
   try {
     const r = await tg('sendPhoto', { chat_id: chatId, photo: url, caption });
     if (r) return;
-    // Fallback: download and send as file
     const vr = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!vr.ok) return;
     const vb = await vr.arrayBuffer();
@@ -103,7 +102,7 @@ async function uploadToR2(buffer, filename, contentType) {
   } catch(e) { console.error('R2 error:', e.message); return null; }
 }
 
-// Grok image — uploads to R2 immediately so URL doesnt expire
+// Grok image
 async function grokImg(prompt) {
   if (!process.env.GROK_KEY) return null;
   try {
@@ -205,9 +204,7 @@ async function runFactory(chatId, topic) {
   const awake = await wakeAgent(chatId, msgId);
   if (!awake) { await edit(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto.'); return; }
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(1, 10) + '\n_Buscando contenido..._');
-
   let postData = {};
-  let pressData = {};
   try {
     const res = await fetch(AGENT_URL + '/post', {
       method: 'POST',
@@ -216,14 +213,8 @@ async function runFactory(chatId, topic) {
     });
     const r = await res.json();
     postData = r.post || r;
-    pressData = r.press_data || {};
-  } catch(e) {
-    await edit(chatId, msgId, '❌ Error: ' + e.message);
-    return;
-  }
-
+  } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); return; }
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Generando narrativa visual..._');
-
   const title = (postData.title || topic).slice(0, 120);
   const body = (postData.body || '').replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '').replace(/#{1,3} [^\n]+\n?/g, '\n').replace(/\*\*/g, '').trim().slice(0, 900);
   const caption = (postData.instagram_caption || '').slice(0, 250);
@@ -232,18 +223,14 @@ async function runFactory(chatId, topic) {
   const p2 = paragraphs[1] || p1;
   const dataPoints = body.match(/\d+%?|\d+\.\d+[a-z]*/g) || [];
   const stat = dataPoints[0] || '∞';
-
   await send(chatId, '📝 *' + title + '*\n\n' + body + '...');
   if (caption) await send(chatId, '📌 _Caption:_\n' + caption);
-
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_🖼 Thumbnail..._');
   const thumbPrompt = postData.thumbnail_prompt || ('Dark editorial cinematic. Topic: ' + title + '. Moody atmospheric urban contemporary art. Black background. Dramatic lighting. High contrast.');
   const thumbUrl = await grokImg(thumbPrompt);
   if (thumbUrl) await photo(chatId, thumbUrl, '🖼 Thumbnail');
-
   const T = title.toUpperCase().slice(0, 38);
   const style = postData.visual_style || 'dark editorial cinematic';
-
   const coherentPrompts = [
     'Square 1:1 editorial Instagram. Dark #080808. Safe zone 120px. Cinematic ' + style + '. Bebas Neue white massive: "' + T + '". 01/07. Ghost vignette 12%. INTRO SLIDE.',
     'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. Bebas Neue black bold. Key insight: "' + p1.slice(0, 60) + '". 02/07. CONTEXT.',
@@ -253,14 +240,12 @@ async function runFactory(chatId, topic) {
     'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. Centered Bebas Neue: provocative question about "' + title + '". 06/07.',
     'Square 1:1 editorial Instagram. Dark. Safe zone 120px. Urban pattern 5%. ' + style + '. @maarmapa.eth. 07/07. CLOSURE.'
   ];
-
   const slideUrls = [];
   for (let i = 0; i < 7; i++) {
     await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i + 1) + '/7..._');
     const url = await grokImg(coherentPrompts[i]);
     if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i + 1) + '/7'); }
   }
-
   let clips = 0;
   if (process.env.RUNWAY_KEY && slideUrls.length > 0) {
     const motions = [
@@ -278,7 +263,6 @@ async function runFactory(chatId, topic) {
       if (vid) { await video(chatId, vid, '🎬 Clip ' + (i + 1)); clips++; }
     }
   }
-
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(10, 10) + '\n✅ *Completado*');
   await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips);
 }
@@ -413,9 +397,7 @@ async function runSeedance(chatId, concept) {
       form.append('caption', '🎬 Seedance — ' + (sceneKey || 'clip') + (r2u ? ' ✅ R2' : ''));
       await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
       await edit(chatId, msgId, '🌱 *Seedance factory*\n' + bar(10, 10) + '\n✅ *Completado — guardado para /sync*');
-    } catch(e) {
-      await edit(chatId, msgId, '✅ Video listo: ' + vid);
-    }
+    } catch(e) { await edit(chatId, msgId, '✅ Video listo: ' + vid); }
   } else {
     await edit(chatId, msgId, '❌ No generó video. Verifica créditos en openrouter.ai');
   }
@@ -477,28 +459,21 @@ async function runSync(chatId, clipUrls) {
   const SHOTSTACK_KEY = process.env.SHOTSTACK_KEY;
   if (!SHOTSTACK_KEY) { await edit(chatId, msgId, '❌ SHOTSTACK_KEY no configurada.'); return; }
   if (!clipUrls || clipUrls.length === 0) { await edit(chatId, msgId, '❌ No hay clips. Usa /syncr2 primero.'); return; }
-
   await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(3, 10) + '\n_BPM 103 sync con ' + clipUrls.length + ' clips..._');
-
   const BPM = 103;
   const beat = 60 / BPM;
   const bar4 = beat * 4;
   const bar8 = beat * 8;
-  const bar16 = beat * 16;
   const DROP = 2.0;
   const TRIM = 2.0;
   const MAX_CLIP = 4.5;
-
   const durations = clipUrls.map((_, i) => {
     if (i === 0) return Math.min(DROP, MAX_CLIP);
     if (i === clipUrls.length - 1) return Math.min(bar8, MAX_CLIP);
     return Math.min(bar4, MAX_CLIP);
   });
-
   let t = 0;
   const starts = durations.map(d => { const s = t; t += d; return parseFloat(s.toFixed(3)); });
-  console.log('BPM sync: ' + clipUrls.length + ' clips, total: ' + parseFloat(t.toFixed(2)) + 's');
-
   const timeline = {
     soundtrack: { src: SOUTHSIDE_AUDIO, volume: 1 },
     tracks: [{
@@ -512,7 +487,6 @@ async function runSync(chatId, clipUrls) {
     }],
     background: '#000000'
   };
-
   try {
     const sr = await fetch('https://api.shotstack.io/edit/stage/render', {
       method: 'POST',
@@ -521,20 +495,16 @@ async function runSync(chatId, clipUrls) {
     });
     const sd = await sr.json();
     if (!sd.response?.id) { await edit(chatId, msgId, '❌ Shotstack error: ' + JSON.stringify(sd).slice(0, 200)); return; }
-
     const renderId = sd.response.id;
     await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(5, 10) + '\n_Renderizando..._');
-
     for (let i = 0; i < 30; i++) {
       await new Promise(r => setTimeout(r, 10000));
       const pr = await fetch('https://api.shotstack.io/edit/stage/render/' + renderId, { headers: { 'x-api-key': SHOTSTACK_KEY } });
       const pd = await pr.json();
       const status = pd.response?.status;
       const url = pd.response?.url;
-      console.log('Shotstack poll ' + i + ':', status);
       await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(5 + Math.min(i, 4), 10) + '\n_Renderizando ' + (i*10) + 's..._');
       if (status === 'done' && url) {
-        await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(9, 10) + '\n_📥 Descargando video final..._');
         try {
           const vr = await fetch(url);
           const vb = await vr.arrayBuffer();
@@ -547,11 +517,7 @@ async function runSync(chatId, clipUrls) {
         await edit(chatId, msgId, '🎵 *Sync factory*\n' + bar(10, 10) + '\n✅ *Video final listo*');
         return;
       }
-      if (status === 'failed') {
-        const err = pd.response?.error;
-        await edit(chatId, msgId, '❌ Shotstack render falló: ' + (typeof err === 'string' ? err : JSON.stringify(err || pd)));
-        return;
-      }
+      if (status === 'failed') { await edit(chatId, msgId, '❌ Shotstack render falló.'); return; }
     }
     await edit(chatId, msgId, '❌ Timeout.');
   } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); }
@@ -609,40 +575,39 @@ async function runBoykotPost(chatId, topic) {
 
 // ORACLE BACKGROUNDS — GPT Image 2 via Runway
 async function runOracleBackgrounds(chatId) {
-  const msgId = await send(chatId, "🌆 *Oracle Backgrounds*\n" + bar(0, 5) + "\n_Generando fondos..._");
+  const msgId = await send(chatId, '🌆 *Oracle Backgrounds*\n' + bar(0, 5) + '\n_Generando fondos..._');
   const cities = [
-    { name: "berlin", prompt: "Aerial view from extreme height above Berlin looking down, Fernsehturm TV tower visible, overcast sky golden hour light, photorealistic, cinematic, no people" },
-    { name: "tokyo", prompt: "Aerial view from extreme height above Tokyo looking down, city grid to horizon, Tokyo Tower visible, dusk blue hour, neon lights, photorealistic, cinematic, no people" },
-    { name: "rio", prompt: "Aerial view from extreme height above Rio de Janeiro looking down, Guanabara Bay, Christ the Redeemer visible below, tropical green hills, golden hour, photorealistic, cinematic, no people" },
-    { name: "dubai", prompt: "Aerial view from Burj Khalifa height looking down, Dubai desert city below, glass towers, sunset orange sky, photorealistic, cinematic, no people" },
-    { name: "nyc", prompt: "Aerial view from Empire State Building height looking down, Manhattan grid, Hudson and East River, morning golden light, photorealistic, cinematic, no people" },
+    { name: 'berlin', prompt: 'Aerial view from extreme height above Berlin looking down, Fernsehturm TV tower visible, overcast sky golden hour light, photorealistic, cinematic, no people' },
+    { name: 'tokyo', prompt: 'Aerial view from extreme height above Tokyo looking down, city grid to horizon, Tokyo Tower visible, dusk blue hour, neon lights, photorealistic, cinematic, no people' },
+    { name: 'rio', prompt: 'Aerial view from extreme height above Rio de Janeiro looking down, Guanabara Bay, Christ the Redeemer visible below, tropical green hills, golden hour, photorealistic, cinematic, no people' },
+    { name: 'dubai', prompt: 'Aerial view from Burj Khalifa height looking down, Dubai desert city below, glass towers, sunset orange sky, photorealistic, cinematic, no people' },
+    { name: 'nyc', prompt: 'Aerial view from Empire State Building height looking down, Manhattan grid, Hudson and East River, morning golden light, photorealistic, cinematic, no people' },
   ];
   const results = [];
   for (let i = 0; i < cities.length; i++) {
     const city = cities[i];
-    await edit(chatId, msgId, "🌆 *Oracle Backgrounds*\n" + bar(i, 5) + "\n_📸 " + city.name + "..._");
+    await edit(chatId, msgId, '🌆 *Oracle Backgrounds*\n' + bar(i, 5) + '\n_📸 ' + city.name + '..._');
     try {
-      const r = await fetch("https://api.dev.runwayml.com/v1/text_to_image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + process.env.RUNWAY_KEY, "X-Runway-Version": "2024-11-06" },
-        body: JSON.stringify({ model: "gpt_image_2", promptText: city.prompt, ratio: "1920:1088" })
+      const r = await fetch('https://api.dev.runwayml.com/v1/text_to_image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
+        body: JSON.stringify({ model: 'gpt-image-2', promptText: city.prompt, width: 1280, height: 720 })
       });
       const d = await r.json();
       const imgUrl = d.url || d.output?.[0];
-      if (!imgUrl) { await send(chatId, "❌ " + city.name + ": " + JSON.stringify(d).slice(0, 100)); continue; }
+      if (!imgUrl) { await send(chatId, '❌ ' + city.name + ': ' + JSON.stringify(d).slice(0, 100)); continue; }
       const imgRes = await fetch(imgUrl);
       const imgBuf = await imgRes.arrayBuffer();
-      const filename = "oracle_bg_" + city.name + ".jpg";
-      const r2Url = await uploadToR2(imgBuf, filename, "image/jpeg");
+      const filename = 'oracle_bg_' + city.name + '.jpg';
+      const r2Url = await uploadToR2(imgBuf, filename, 'image/jpeg');
       const finalUrl = r2Url || imgUrl;
       results.push({ city: city.name, url: finalUrl });
-      await photo(chatId, finalUrl, "🌆 " + city.name + " — " + finalUrl);
-    } catch(e) { await send(chatId, "❌ " + city.name + ": " + e.message); }
+      await photo(chatId, finalUrl, '🌆 ' + city.name + ' — ' + finalUrl);
+    } catch(e) { await send(chatId, '❌ ' + city.name + ': ' + e.message); }
   }
-  await edit(chatId, msgId, "🌆 *Oracle Backgrounds*\n" + bar(5, 5) + "\n✅ *" + results.length + "/5 generados*");
-  if (results.length > 0) await send(chatId, "✅ *URLs R2:*\n" + results.map(r => r.city + ":\n" + r.url).join("\n\n"));
+  await edit(chatId, msgId, '🌆 *Oracle Backgrounds*\n' + bar(5, 5) + '\n✅ *' + results.length + '/5 generados*');
+  if (results.length > 0) await send(chatId, '✅ *URLs R2:*\n' + results.map(r => r.city + ':\n' + r.url).join('\n\n'));
 }
-
 
 // COMMAND HANDLER
 async function handle(msg) {
@@ -681,7 +646,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7.2*\n\n*📝 Content*\n`/post [tema]` — Busca el tema, genera narrativa + 7 slides Grok + los anima con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Igual sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n📸 *Foto* — Runway la convierte en video 5s');
+    await send(chatId, '🎨 *maarmapa factory v7.3*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n📸 *Foto* — Runway la convierte en video 5s');
     return;
   }
 
@@ -754,35 +719,25 @@ async function handle(msg) {
     const msgId = await send(chatId, '🔍 _Buscando: ' + query + '..._');
     try {
       let webData = null;
-      // Paso 1: Grok busca en la web
       if (process.env.GROK_KEY) {
         try {
           await edit(chatId, msgId, '🔍 _Grok buscando: ' + query + '..._');
           const gr = await fetch('https://api.x.ai/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.GROK_KEY },
-            body: JSON.stringify({
-              model: 'grok-3',
-              messages: [{ role: 'user', content: 'Search for recent information about: ' + query + '. Return the raw facts, data points, quotes and sources found. Be comprehensive.' }],
-              search_parameters: { mode: 'on' }
-            }),
+            body: JSON.stringify({ model: 'grok-3', messages: [{ role: 'user', content: 'Search for recent information about: ' + query + '. Return the raw facts, data points, quotes and sources found.' }], search_parameters: { mode: 'on' } }),
             signal: AbortSignal.timeout(30000)
           });
           const gd = await gr.json();
           webData = gd.choices?.[0]?.message?.content || null;
         } catch(e) { console.log('Grok search failed:', e.message); }
       }
-      // Paso 2: DeepSeek redacta con los datos de Grok
       await edit(chatId, msgId, '✍️ _DeepSeek redactando..._');
       const prompt = webData
-        ? `Basándote en estos datos reales obtenidos de la web:\n\n${webData}\n\nRedacta un resumen claro, bien estructurado y en español sobre: "${query}". Usa emojis, destaca los datos clave, cita fuentes si las hay.`
-        : `Resume información relevante sobre: "${query}". Responde en español con datos clave y estructura clara.`;
-      const reply = await deepseek(prompt, 'Eres un redactor experto. Sintetizas información compleja en textos claros, directos y bien estructurados en español.');
-      if (!reply) {
-        const keyStatus = OPENROUTER_KEY ? '✅ key presente' : '❌ OPENROUTER_KEY no configurada';
-        await edit(chatId, msgId, '❌ DeepSeek no respondió\n' + keyStatus + '\nModelo: ' + currentTextModel);
-        return;
-      }
+        ? `Basándote en estos datos reales obtenidos de la web:\n\n${webData}\n\nRedacta un resumen claro en español sobre: "${query}". Usa emojis, destaca datos clave.`
+        : `Resume información relevante sobre: "${query}". Responde en español con datos clave.`;
+      const reply = await deepseek(prompt, 'Eres un redactor experto. Sintetizas información compleja en textos claros en español.');
+      if (!reply) { await edit(chatId, msgId, '❌ DeepSeek no respondió\nModelo: ' + currentTextModel); return; }
       await edit(chatId, msgId, reply.slice(0, 4000));
     } catch(e) { await edit(chatId, msgId, '❌ ' + e.message); }
     return;
@@ -811,7 +766,6 @@ async function handle(msg) {
     return;
   }
 
-  // WebPost commands
   if (text.startsWith('/webpost-lite ')) { await runWebPost(chatId, text.replace('/webpost-lite ', '').trim(), true); return; }
   if (text.startsWith('/webpost ') && !text.includes('-carousel') && !text.includes('-lite')) { await runWebPost(chatId, text.replace('/webpost ', '').trim(), false); return; }
   if (text.startsWith('/webpost-carousel-lite ')) { await runWebPostCarousel(chatId, text.replace('/webpost-carousel-lite ', '').trim(), true); return; }
@@ -873,7 +827,6 @@ async function handle(msg) {
   }
 }
 
-// WebPost v7.1 functions
 async function runWebPost(chatId, topic, liteMode = false) {
   const msgId = await send(chatId, (liteMode ? '🟢' : '🔵') + ' *webpost' + (liteMode ? '-lite' : '') + '*\n' + bar(0, 5) + '\n_Buscando..._');
   if (liteMode) webPostGen.skipGrokFallback = true;
@@ -910,9 +863,8 @@ async function runWebPostCarousel(chatId, topic, liteMode = false) {
   if (status) await send(chatId, status);
 }
 
-// POLLING
 async function poll() {
-  console.log('maarmapa bot v7.2 — Grok+Runway+Seedance+Shotstack+DeepSeek+R2 — grokImg R2 fixed');
+  console.log('maarmapa bot v7.3 — oracle-bg + GPT Image 2 + R2');
   let offset = 0;
   while (true) {
     try {
@@ -929,5 +881,5 @@ async function poll() {
   }
 }
 
-require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v7.2 online'); }).listen(process.env.PORT || 3000);
-poll();
+require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v7.3 online'); }).listen(process.env.PORT || 3000);
+poll();commit 
