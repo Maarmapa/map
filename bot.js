@@ -607,6 +607,43 @@ async function runBoykotPost(chatId, topic) {
   await send(chatId, '✅ *Boykot listo*\n📸 Carrusel: ' + carouselUrls.length + '/3\n🎬 Reel frames: ' + reelUrls.length + '/3\n🎥 Clips: ' + clips);
 }
 
+// ORACLE BACKGROUNDS — GPT Image 2 via Runway
+async function runOracleBackgrounds(chatId) {
+  const msgId = await send(chatId, "🌆 *Oracle Backgrounds*\n" + bar(0, 5) + "\n_Generando fondos..._");
+  const cities = [
+    { name: "berlin", prompt: "Aerial view from extreme height above Berlin looking down, Fernsehturm TV tower visible, overcast sky golden hour light, photorealistic, cinematic, no people" },
+    { name: "tokyo", prompt: "Aerial view from extreme height above Tokyo looking down, city grid to horizon, Tokyo Tower visible, dusk blue hour, neon lights, photorealistic, cinematic, no people" },
+    { name: "rio", prompt: "Aerial view from extreme height above Rio de Janeiro looking down, Guanabara Bay, Christ the Redeemer visible below, tropical green hills, golden hour, photorealistic, cinematic, no people" },
+    { name: "dubai", prompt: "Aerial view from Burj Khalifa height looking down, Dubai desert city below, glass towers, sunset orange sky, photorealistic, cinematic, no people" },
+    { name: "nyc", prompt: "Aerial view from Empire State Building height looking down, Manhattan grid, Hudson and East River, morning golden light, photorealistic, cinematic, no people" },
+  ];
+  const results = [];
+  for (let i = 0; i < cities.length; i++) {
+    const city = cities[i];
+    await edit(chatId, msgId, "🌆 *Oracle Backgrounds*\n" + bar(i, 5) + "\n_📸 " + city.name + "..._");
+    try {
+      const r = await fetch("https://api.dev.runwayml.com/v1/text_to_image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + process.env.RUNWAY_KEY, "X-Runway-Version": "2024-11-06" },
+        body: JSON.stringify({ model: "gpt-image-2", promptText: city.prompt, width: 1280, height: 720 })
+      });
+      const d = await r.json();
+      const imgUrl = d.url || d.output?.[0];
+      if (!imgUrl) { await send(chatId, "❌ " + city.name + ": " + JSON.stringify(d).slice(0, 100)); continue; }
+      const imgRes = await fetch(imgUrl);
+      const imgBuf = await imgRes.arrayBuffer();
+      const filename = "oracle_bg_" + city.name + ".jpg";
+      const r2Url = await uploadToR2(imgBuf, filename, "image/jpeg");
+      const finalUrl = r2Url || imgUrl;
+      results.push({ city: city.name, url: finalUrl });
+      await photo(chatId, finalUrl, "🌆 " + city.name + " — " + finalUrl);
+    } catch(e) { await send(chatId, "❌ " + city.name + ": " + e.message); }
+  }
+  await edit(chatId, msgId, "🌆 *Oracle Backgrounds*\n" + bar(5, 5) + "\n✅ *" + results.length + "/5 generados*");
+  if (results.length > 0) await send(chatId, "✅ *URLs R2:*\n" + results.map(r => r.city + ":\n" + r.url).join("\n\n"));
+}
+
+
 // COMMAND HANDLER
 async function handle(msg) {
   const chatId = msg.chat.id;
@@ -651,6 +688,7 @@ async function handle(msg) {
   if (text.startsWith('/post ')) { runFactory(chatId, text.replace('/post ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text.startsWith('/boykot ')) { runBoykotPost(chatId, text.replace('/boykot ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text.startsWith('/anime') || text === '/anime') { runAnime(chatId, text.replace('/anime', '').trim() || 'southside').catch(e => send(chatId, '❌ ' + e.message)); return; }
+  if (text === '/oracle-bg') { runOracleBackgrounds(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text === '/squad') { runSquad(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
 
   if (text.startsWith('/seedance')) {
