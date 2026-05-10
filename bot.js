@@ -584,6 +584,7 @@ async function runOracleBackgrounds(chatId) {
     { name: 'nyc', prompt: 'Aerial view from Empire State Building height looking down, Manhattan grid, Hudson and East River, morning golden light, photorealistic, cinematic, no people' },
   ];
   const results = [];
+  console.log('RUNWAY_KEY prefix:', (process.env.RUNWAY_KEY || '').slice(0, 8));
   for (let i = 0; i < cities.length; i++) {
     const city = cities[i];
     await edit(chatId, msgId, '🌆 *Oracle Backgrounds*\n' + bar(i, 5) + '\n_📸 ' + city.name + '..._');
