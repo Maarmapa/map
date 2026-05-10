@@ -65,7 +65,7 @@ const SQUAD_COMP = 'COMPOSITION: PIERO foreground left, KINNY foreground right, 
 async function tg(method, body) {
   const res = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/' + method, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30000)
+    signal: AbortSignal.timeout(60000)
   });
   return (await res.json()).result;
 }
@@ -177,7 +177,7 @@ async function deepseek(prompt, system) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo' },
       body: JSON.stringify({ model: currentTextModel, max_tokens: 4096, messages: [...(system ? [{ role: 'system', content: system }] : []), { role: 'user', content: prompt }] }),
-      signal: AbortSignal.timeout(30000)
+      signal: AbortSignal.timeout(60000)
     });
     const data = await r.json();
     if (data.error) { console.error('deepseek API error:', JSON.stringify(data.error)); return null; }
@@ -591,7 +591,7 @@ async function runOracleBackgrounds(chatId) {
       const r = await fetch('https://api.dev.runwayml.com/v1/text_to_image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
-        body: JSON.stringify({ model: 'gpt-image-2', promptText: city.prompt, width: 1280, height: 720 })
+        body: JSON.stringify({ model: 'gpt_image_2', promptText: city.prompt, ratio: '1920:1088' })
       });
       const d = await r.json();
       const imgUrl = d.url || d.output?.[0];
@@ -726,7 +726,7 @@ async function handle(msg) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.GROK_KEY },
             body: JSON.stringify({ model: 'grok-3', messages: [{ role: 'user', content: 'Search for recent information about: ' + query + '. Return the raw facts, data points, quotes and sources found.' }], search_parameters: { mode: 'on' } }),
-            signal: AbortSignal.timeout(30000)
+            signal: AbortSignal.timeout(60000)
           });
           const gd = await gr.json();
           webData = gd.choices?.[0]?.message?.content || null;
