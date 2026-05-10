@@ -616,6 +616,7 @@ async function runOracleBackgrounds(chatId) {
       const r2Url = await uploadToR2(imgBuf, 'oracle_bg_' + city.name + '.jpg', 'image/jpeg');
       const finalUrl = r2Url || imgUrl;
       results.push({ city: city.name, url: finalUrl });
+      await new Promise(res => setTimeout(res, 10000));
       await photo(chatId, finalUrl, '🌆 ' + city.name + ' — ' + finalUrl);
     } catch(e) { await send(chatId, '❌ ' + city.name + ': ' + e.message); }
   }
