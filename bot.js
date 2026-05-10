@@ -573,7 +573,7 @@ async function runBoykotPost(chatId, topic) {
   await send(chatId, '✅ *Boykot listo*\n📸 Carrusel: ' + carouselUrls.length + '/3\n🎬 Reel frames: ' + reelUrls.length + '/3\n🎥 Clips: ' + clips);
 }
 
-// ORACLE BACKGROUNDS — GPT Image 2 via Runway
+// ORACLE BACKGROUNDS — GPT Image 2 via Runway (async polling)
 async function runOracleBackgrounds(chatId) {
   const msgId = await send(chatId, '🌆 *Oracle Backgrounds*\n' + bar(0, 5) + '\n_Generando fondos..._');
   const cities = [
@@ -594,12 +594,25 @@ async function runOracleBackgrounds(chatId) {
         body: JSON.stringify({ model: 'gpt_image_2', promptText: city.prompt, ratio: '1920:1088' })
       });
       const d = await r.json();
-      const imgUrl = d.url || d.output?.[0];
-      if (!imgUrl) { await send(chatId, '❌ ' + city.name + ': ' + JSON.stringify(d).slice(0, 100)); continue; }
+      if (!d.id) { await send(chatId, '❌ ' + city.name + ': ' + JSON.stringify(d).slice(0, 100)); continue; }
+
+      // Poll until complete
+      let imgUrl = null;
+      for (let j = 0; j < 30; j++) {
+        await new Promise(res => setTimeout(res, 5000));
+        const poll = await fetch('https://api.dev.runwayml.com/v1/tasks/' + d.id, {
+          headers: { 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' }
+        });
+        const t = await poll.json();
+        console.log(city.name + ' poll ' + j + ':', t.status);
+        if (t.status === 'SUCCEEDED') { imgUrl = t.output?.[0]; break; }
+        if (t.status === 'FAILED') break;
+      }
+
+      if (!imgUrl) { await send(chatId, '❌ ' + city.name + ': generación falló'); continue; }
       const imgRes = await fetch(imgUrl);
       const imgBuf = await imgRes.arrayBuffer();
-      const filename = 'oracle_bg_' + city.name + '.jpg';
-      const r2Url = await uploadToR2(imgBuf, filename, 'image/jpeg');
+      const r2Url = await uploadToR2(imgBuf, 'oracle_bg_' + city.name + '.jpg', 'image/jpeg');
       const finalUrl = r2Url || imgUrl;
       results.push({ city: city.name, url: finalUrl });
       await photo(chatId, finalUrl, '🌆 ' + city.name + ' — ' + finalUrl);
@@ -608,7 +621,6 @@ async function runOracleBackgrounds(chatId) {
   await edit(chatId, msgId, '🌆 *Oracle Backgrounds*\n' + bar(5, 5) + '\n✅ *' + results.length + '/5 generados*');
   if (results.length > 0) await send(chatId, '✅ *URLs R2:*\n' + results.map(r => r.city + ':\n' + r.url).join('\n\n'));
 }
-
 // COMMAND HANDLER
 async function handle(msg) {
   const chatId = msg.chat.id;
