@@ -574,7 +574,7 @@ async function runBoykotPost(chatId, topic) {
 }
 
 // ORACLE BACKGROUNDS — GPT Image 2 via Runway (async polling)
-async function runOracleBackgrounds(chatId) {
+async function runOracleBackgrounds(chatId, onlyCity = null) {
   const msgId = await send(chatId, '🌆 *Oracle Backgrounds*\n' + bar(0, 5) + '\n_Generando fondos..._');
   const cities = [
     { name: 'berlin', prompt: 'Aerial view from extreme height above Berlin looking down, Fernsehturm TV tower visible, overcast sky golden hour light, photorealistic, cinematic, no people' },
@@ -585,8 +585,9 @@ async function runOracleBackgrounds(chatId) {
   ];
   const results = [];
   console.log('RUNWAY_KEY prefix:', (process.env.RUNWAY_KEY || '').slice(0, 8));
-  for (let i = 0; i < cities.length; i++) {
-    const city = cities[i];
+  const citiesToProcess = onlyCity ? cities.filter(c => c.name === onlyCity) : cities;
+  for (let i = 0; i < citiesToProcess.length; i++) {
+    const city = citiesToProcess[i];
     await edit(chatId, msgId, '🌆 *Oracle Backgrounds*\n' + bar(i, 5) + '\n_📸 ' + city.name + '..._');
     try {
       const r = await fetch('https://api.dev.runwayml.com/v1/text_to_image', {
@@ -667,7 +668,7 @@ async function handle(msg) {
   if (text.startsWith('/post ')) { runFactory(chatId, text.replace('/post ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text.startsWith('/boykot ')) { runBoykotPost(chatId, text.replace('/boykot ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text.startsWith('/anime') || text === '/anime') { runAnime(chatId, text.replace('/anime', '').trim() || 'southside').catch(e => send(chatId, '❌ ' + e.message)); return; }
-  if (text === '/oracle-bg') { runOracleBackgrounds(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
+  if (text.startsWith("/oracle-bg")) { const bgCity = text.replace("/oracle-bg", "").trim() || null; runOracleBackgrounds(chatId, bgCity)(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text === '/squad') { runSquad(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
 
   if (text.startsWith('/seedance')) {
