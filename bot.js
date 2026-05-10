@@ -625,7 +625,7 @@ async function runOracleBackgrounds(chatId) {
       const r = await fetch("https://api.dev.runwayml.com/v1/text_to_image", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + process.env.RUNWAY_KEY, "X-Runway-Version": "2024-11-06" },
-        body: JSON.stringify({ model: "gpt-image-2", promptText: city.prompt, width: 1280, height: 720 })
+        body: JSON.stringify({ model: "gpt_image_2", promptText: city.prompt, width: 1280, height: 720 })
       });
       const d = await r.json();
       const imgUrl = d.url || d.output?.[0];
