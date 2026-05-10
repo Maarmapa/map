@@ -882,4 +882,4 @@ async function poll() {
 }
 
 require('http').createServer((q, s) => { s.writeHead(200); s.end('maarmapa bot v7.3 online'); }).listen(process.env.PORT || 3000);
-poll();commit 
+poll(); 
