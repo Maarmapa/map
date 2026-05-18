@@ -624,9 +624,32 @@ async function runOracleBackgrounds(chatId, onlyCity = null) {
   await edit(chatId, msgId, '🌆 *Oracle Backgrounds*\n' + bar(5, 5) + '\n✅ *' + results.length + '/5 generados*');
   if (results.length > 0) await send(chatId, '✅ *URLs R2:*\n' + results.map(r => r.city + ':\n' + r.url).join('\n\n'));
 }
+// ACCESS CONTROL — whitelist por chat ID. Override con env ALLOWED_CHAT_IDS="id1,id2,..."
+const ALLOWED_CHAT_IDS = new Set(
+  (process.env.ALLOWED_CHAT_IDS || '1244921942')
+    .split(',').map(s => Number(s.trim())).filter(Boolean)
+);
+
+function logAccess(msg, authorized) {
+  const f = msg.from || {};
+  console.log('[ACCESS] ' + JSON.stringify({
+    ts: new Date().toISOString(),
+    authorized,
+    chat_id: msg.chat?.id,
+    user_id: f.id,
+    username: f.username || null,
+    first_name: f.first_name || null,
+    last_name: f.last_name || null,
+    text: (msg.text || msg.caption || (msg.photo ? '[photo]' : '')).slice(0, 200)
+  }));
+}
+
 // COMMAND HANDLER
 async function handle(msg) {
   const chatId = msg.chat.id;
+  const authorized = ALLOWED_CHAT_IDS.has(chatId);
+  logAccess(msg, authorized);
+  if (!authorized) return; // silent drop — no confirmamos existencia del bot
   const text = msg.text || '';
 
   if (msg.photo) {
