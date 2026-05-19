@@ -913,7 +913,9 @@ async function poll() {
         if (u.message) handle(u.message).catch(e => console.error('Error:', e.message));
       }
     } catch(e) {
-      console.error('Poll error:', e.message);
+      // Redact bot token from URL embedded in node-fetch error messages
+      const safe = (e.message || e.code || 'unknown').replace(/bot\d+:[\w-]+/g, 'bot<REDACTED>');
+      console.error('Poll error:', safe);
       await new Promise(r => setTimeout(r, 5000));
     }
   }
