@@ -549,6 +549,52 @@ async function runBoykotPost(chatId, topic) {
   await send(chatId, '✅ *Boykot listo*\n📸 Carrusel: ' + carouselUrls.length + '/3\n🎬 Reel frames: ' + reelUrls.length + '/3\n🎥 Clips: ' + clips);
 }
 
+// === SEEDANCE 16:9 (horizontal) ===
+async function seedanceVideo16(prompt) {
+  if (!OPENROUTER_KEY) return null;
+  try {
+    const promptH = prompt.replace(/9:16[^.]*/gi, '16:9 horizontal cinematic widescreen, wide shot, the ruined environment fills both sides of the frame');
+    const body = { model: currentVideoModel, prompt: promptH, aspect_ratio: '16:9', duration: 5, resolution: '720p' };
+    const r = await fetch('https://openrouter.ai/api/v1/videos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo', 'X-Title': 'maarmapa' },
+      body: JSON.stringify(body)
+    });
+    const text = await r.text(); console.log('Seedance16:', text.slice(0,150));
+    let d; try { d = JSON.parse(text); } catch(e) { return null; }
+    if (!d.id) return null;
+    const pollUrl = d.polling_url || ('https://openrouter.ai/api/v1/videos/' + d.id);
+    for (let i = 0; i < 40; i++) {
+      await new Promise(r => setTimeout(r, 10000));
+      const t = await (await fetch(pollUrl, { headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY } })).json();
+      if (t.status === 'completed') return 'https://openrouter.ai/api/v1/videos/' + d.id + '/content?index=0';
+      if (t.status === 'failed') return null;
+    }
+    return null;
+  } catch(e) { console.error('Seedance16 error:', e.message); return null; }
+}
+
+async function runSeedance16(chatId, concept) {
+  const msgId = await send(chatId, '🌅 *Seedance 16:9*\n' + bar(0,10) + '\n_Generando horizontal..._');
+  if (!OPENROUTER_KEY) { await edit(chatId, msgId, '❌ OPENROUTER_KEY no configurada.'); return; }
+  const sceneKey = concept?.toLowerCase().trim();
+  const prompt = SCENES[sceneKey] || concept || SCENES.intro;
+  const vid = await seedanceVideo16(prompt);
+  if (vid) {
+    try {
+      const vb = await (await fetch(vid, { headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY } })).arrayBuffer();
+      const filename = 'seedance16_' + (sceneKey || 'clip') + '_' + Date.now() + '.mp4';
+      const r2u = await uploadToR2(vb, filename, 'video/mp4'); saveClip(chatId, r2u || vid);
+      const form = new FormData();
+      form.append('chat_id', String(chatId));
+      form.append('video', new Blob([vb], { type: 'video/mp4' }), filename);
+      form.append('caption', '🌅 Seedance 16:9 — ' + (sceneKey || 'clip'));
+      await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', { method: 'POST', body: form });
+      await edit(chatId, msgId, '🌅 *Seedance 16:9*\n' + bar(10,10) + '\n✅ *Completado*');
+    } catch(e) { await edit(chatId, msgId, '✅ Video listo: ' + vid); }
+  } else { await edit(chatId, msgId, '❌ No generó. Verifica créditos OpenRouter.'); }
+}
+
 // COMMAND HANDLER
 async function handle(msg) {
   const chatId = msg.chat.id;
@@ -613,6 +659,13 @@ async function handle(msg) {
 
   if (text === '/squad') {
     runSquad(chatId).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/seedance16')) {
+    const concept = text.replace('/seedance16', '').trim();
+    if (!concept) { await send(chatId, '🌅 Uso: `/seedance16 [escena]` — ej: `/seedance16 andino-intro`'); return; }
+    runSeedance16(chatId, concept).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
 
