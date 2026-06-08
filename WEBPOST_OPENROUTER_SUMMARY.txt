@@ -1,0 +1,113 @@
+═══════════════════════════════════════════════════════════════════════════════
+                        /webpost-openrouter COMMAND
+                   SEARCH + POST + VIDEO (NO GROK, NO DEEPSEEK)
+═══════════════════════════════════════════════════════════════════════════════
+
+📋 WHAT'S READY
+
+✅ webpost-openrouter-module.js (340 lines)
+   • Main class: WebPostOpenRouter
+   • Methods: searchBrave(), generatePostOpenRouter(), generateVideoRunway(), run()
+   • Output: Telegram-formatted results
+
+✅ WEBPOST_OPENROUTER_INTEGRATION.md (5K)
+   • Full setup instructions
+   • Usage examples
+   • Troubleshooting guide
+   • Architecture diagrams
+
+✅ BOT_WEBPOST_OPENROUTER_SNIPPET.js (4K)
+   • Copy-paste code for bot.js
+   • Command handlers
+   • Integration checklist
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔄 PIPELINE
+
+User input: /webpost Chile tech startups
+    ↓
+[SEARCH] Brave API (0 tokens) → 5 articles
+    ↓
+[POST] OpenRouter Llama 2 (~200 tokens) → Hook + body + CTA
+    ↓
+[VIDEO] Runway ML (async) → 8-sec mobile video
+    ↓
+[OUTPUT] Telegram message with sources + token count
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📊 TOKEN COSTS
+
+Command        Search    Model         Tokens   Video
+─────────────────────────────────────────────────────
+/post          —         Grok          ~350     ✅
+/webpost       Brave ✅  OpenRouter    ~200     ✅
+/webpost-carousel  Web   OpenRouter    ~300     ✅
+/webpost-openrouter  Brave ✅  OpenRouter    ~200     ✅ ← YOU ARE HERE
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🚀 QUICK START
+
+1. cd /tmp/map
+
+2. Add to bot.js (top):
+   const { WebPostOpenRouter } = require('./webpost-openrouter-module.js');
+   const webpostOpenRouter = new WebPostOpenRouter();
+
+3. Add to message handler:
+   if (msg.text?.startsWith('/webpost ')) {
+     const query = msg.text.replace('/webpost ', '').trim();
+     const result = await webpostOpenRouter.run(query);
+     const formatted = webpostOpenRouter.formatForTelegram(result);
+     await bot.sendMessage(chatId, formatted, { parse_mode: 'Markdown' });
+   }
+
+4. Set env vars:
+   BRAVE_SEARCH_API_KEY=your_key
+   OPENROUTER_API_KEY=your_key
+   RUNWAY_API_KEY=your_key (optional)
+
+5. Test: /webpost Chile tech startups
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 FEATURES
+
+✅ Brave search (instant, 0 tokens)
+✅ OpenRouter post generation (200 tokens)
+✅ Runway video (async, non-blocking)
+✅ Token tracking (integrated with token-monitor.js)
+✅ Markdown output for Telegram
+✅ Source attribution (links included)
+✅ Fallback to mock search (works without Brave key)
+✅ Error handling (graceful failures)
+✅ Loading states (UX friendly)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📂 FILES IN /tmp/map/
+
+webpost-openrouter-module.js ..................... Implementation
+WEBPOST_OPENROUTER_INTEGRATION.md ............... Full guide
+BOT_WEBPOST_OPENROUTER_SNIPPET.js .............. Copy-paste code
+WEBPOST_OPENROUTER_SUMMARY.txt ................. This file
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✨ READY TO DEPLOY
+
+Status: All code written, tested, syntax-checked
+Branch: Ready for bot.js integration
+Risk: LOW (backwards compatible, no breaking changes)
+
+Next steps:
+☐ Copy snippet to bot.js
+☐ Set env vars
+☐ Test locally: /webpost your-topic
+☐ Deploy to Render
+☐ Test in Telegram
+☐ Done!
+
+═══════════════════════════════════════════════════════════════════════════════
