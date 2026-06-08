@@ -3,7 +3,7 @@
 // v7.3 — oracle backgrounds + start menu updated
 const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
+const OPENROUTER_KEY = process.env.OPENROUTER_KEY || process.env.OPENROUT_KEY;
 const TokenMonitor = require('./token-monitor');
 const WebPostGenerator = require('./webpost-module');
 const WebPostCarouselGenerator = require('./webpost-carousel-module');
@@ -730,14 +730,14 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7.3*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n📸 *Foto* — Runway la convierte en video 5s');
+    await send(chatId, '🎨 *maarmapa factory v7.3*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/seedance16 [escena]` 🆕 — Seedance en HORIZONTAL 16:9 widescreen\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n📸 *Foto* — Runway la convierte en video 5s');
     return;
   }
 
   if (text.startsWith('/post ')) { runFactory(chatId, text.replace('/post ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text.startsWith('/boykot ')) { runBoykotPost(chatId, text.replace('/boykot ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text.startsWith('/anime') || text === '/anime') { runAnime(chatId, text.replace('/anime', '').trim() || 'southside').catch(e => send(chatId, '❌ ' + e.message)); return; }
-  if (text.startsWith("/oracle-bg")) { const bgCity = text.replace("/oracle-bg", "").trim() || null; runOracleBackgrounds(chatId, bgCity)(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
+  if (text.startsWith("/oracle-bg")) { const bgCity = text.replace("/oracle-bg", "").trim() || null; runOracleBackgrounds(chatId, bgCity).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text === '/squad') { runSquad(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
 
   if (text.startsWith('/seedance16')) {
