@@ -690,6 +690,50 @@ function logAccess(msg, authorized) {
   }));
 }
 
+// === REFRAME 16:9 con Runway Aleph (video-to-video) ===
+async function reframeVideo(videoUrl, prompt) {
+  if (!process.env.RUNWAY_KEY) return { error: 'RUNWAY_KEY no configurada' };
+  try {
+    const r = await fetch('https://api.dev.runwayml.com/v1/video_to_video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
+      body: JSON.stringify({
+        model: 'gen4_aleph',
+        videoUri: videoUrl,
+        promptText: prompt || 'Expand the scene to a wide 16:9 frame. Keep the original subject centered and unchanged. Fill the new left and right areas with coherent matching dark cinematic environment (ruins, smoke), solid and detailed, no transparent or ghostly elements.',
+        ratio: '1280:720'
+      })
+    });
+    const txt = await r.text();
+    console.log('Reframe:', txt.slice(0, 250));
+    let d; try { d = JSON.parse(txt); } catch(e) { return { error: 'resp no-JSON: ' + txt.slice(0,150) }; }
+    if (!d.id) return { error: txt.slice(0, 220) };
+    for (let i = 0; i < 60; i++) {
+      await new Promise(res => setTimeout(res, 10000));
+      const t = await (await fetch('https://api.dev.runwayml.com/v1/tasks/' + d.id, { headers: { 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' } })).json();
+      if (t.status === 'SUCCEEDED') return { url: t.output?.[0] };
+      if (t.status === 'FAILED') return { error: 'FAILED: ' + JSON.stringify(t.failure || t.failureCode || t).slice(0, 200) };
+    }
+    return { error: 'timeout (>10min)' };
+  } catch(e) { return { error: e.message }; }
+}
+
+async function runReframe(chatId, videoUrl) {
+  const msgId = await send(chatId, '🔄 *Reframe 16:9 (Runway Aleph)*\n' + bar(0,10) + '\n_Procesando... puede tardar varios min_');
+  const res = await reframeVideo(videoUrl, null);
+  if (res && res.url) {
+    await video(chatId, res.url, '🔄 Reframe 16:9 — Runway Aleph');
+    try {
+      const vb = await (await fetch(res.url)).arrayBuffer();
+      const r2u = await uploadToR2(vb, 'reframe_' + Date.now() + '.mp4', 'video/mp4');
+      if (r2u) saveClip(chatId, r2u);
+    } catch(e) {}
+    await edit(chatId, msgId, '🔄 *Reframe 16:9*\n' + bar(10,10) + '\n✅ *Completado*');
+  } else {
+    await edit(chatId, msgId, '❌ Reframe falló:\n`' + (res?.error || 'sin detalle') + '`');
+  }
+}
+
 // COMMAND HANDLER
 async function handle(msg) {
   const chatId = msg.chat.id;
@@ -730,7 +774,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7.3*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/seedance16 [escena]` 🆕 — Seedance en HORIZONTAL 16:9 widescreen\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n📸 *Foto* — Runway la convierte en video 5s');
+    await send(chatId, '🎨 *maarmapa factory v7.3*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/seedance16 [escena]` 🆕 — Seedance en HORIZONTAL 16:9 widescreen\n`/reframe [URL]` 🔄 — Reencuadra un video existente a 16:9 (Runway Aleph)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n📸 *Foto* — Runway la convierte en video 5s');
     return;
   }
 
@@ -739,6 +783,13 @@ async function handle(msg) {
   if (text.startsWith('/anime') || text === '/anime') { runAnime(chatId, text.replace('/anime', '').trim() || 'southside').catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text.startsWith("/oracle-bg")) { const bgCity = text.replace("/oracle-bg", "").trim() || null; runOracleBackgrounds(chatId, bgCity).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text === '/squad') { runSquad(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
+
+  if (text.startsWith('/reframe')) {
+    const url = text.replace('/reframe', '').trim();
+    if (!url.startsWith('http')) { await send(chatId, '🔄 Uso: `/reframe [URL del video]`\nReencuadra de vertical a 16:9 rellenando los lados (Runway Aleph). Ojo: Aleph tiene límite de duración, probá con clips cortos.'); return; }
+    runReframe(chatId, url).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
 
   if (text.startsWith('/seedance16')) {
     const concept = text.replace('/seedance16', '').trim();
