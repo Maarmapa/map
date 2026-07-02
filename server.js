@@ -12,6 +12,44 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Rate limiting (in-memory, per-IP+route) ──────────────────────────────
+// Este server no tiene auth: cualquiera con la URL puede llamar /chat, /post,
+// /marketing, /factory, /grok, y cada llamada gasta API_KEY (Anthropic) y/o
+// GROK_KEY (x.ai) real. Sin límite, un spam script podía generar costos sin
+// techo — /factory en particular dispara 1 llamada Claude + 8 generaciones de
+// imagen Grok por request. Instancia única en Railway → Map en memoria basta,
+// no hace falta Redis.
+const rateLimitBuckets = new Map(); // `${path}:${ip}` -> { count, windowStart }
+
+function rateLimit({ windowMs, max }) {
+  return (req, res, next) => {
+    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+    const key = `${req.path}:${ip}`;
+    const now = Date.now();
+    const bucket = rateLimitBuckets.get(key);
+    if (!bucket || now - bucket.windowStart > windowMs) {
+      rateLimitBuckets.set(key, { count: 1, windowStart: now });
+      return next();
+    }
+    if (bucket.count >= max) {
+      const retryAfterSec = Math.ceil((windowMs - (now - bucket.windowStart)) / 1000);
+      res.set('Retry-After', String(retryAfterSec));
+      return res.status(429).json({ error: 'rate_limited', retry_after_seconds: retryAfterSec });
+    }
+    bucket.count++;
+    next();
+  };
+}
+
+// Limpieza periódica para que el Map no crezca sin límite.
+setInterval(() => {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  for (const [key, b] of rateLimitBuckets) if (b.windowStart < cutoff) rateLimitBuckets.delete(key);
+}, 10 * 60 * 1000).unref();
+
+const standardLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 }); // 20 req / 15 min por ruta+IP
+const expensiveLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 3 }); // /factory: 3 req / hora por IP (8 imágenes c/u)
+
 let substackCache = { posts: [], lastFetch: 0 };
 
 async function fetchSubstackRSS() {
@@ -112,7 +150,7 @@ async function runWithTools(messages, system, maxTokens) {
   return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || '...';
 }
 
-app.post('/chat', async (req, res) => {
+app.post('/chat', standardLimit, async (req, res) => {
   const { messages, mode } = req.body;
   if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages array required' });
   try {
@@ -129,7 +167,7 @@ app.post('/chat', async (req, res) => {
   }
 });
 
-app.post('/post', async (req, res) => {
+app.post('/post', standardLimit, async (req, res) => {
   const { topic } = req.body;
   if (!topic) return res.status(400).json({ error: 'topic required' });
   try {
@@ -144,7 +182,7 @@ app.post('/post', async (req, res) => {
   }
 });
 
-app.get('/digest', async (req, res) => {
+app.get('/digest', standardLimit, async (req, res) => {
   try {
     const posts = await fetchSubstackRSS();
     const ctx = buildSubstackContext(posts);
@@ -179,7 +217,7 @@ MAARMAPA CONTEXT: Started in streets (stencil/spray), now canvas + IPFS/blockcha
 
 Respond in Spanish. Be specific, actionable and creative. Connect ideas to maarmapa's unique position at the intersection of street art, blockchain and Latin American urban culture.`;
 
-app.post('/marketing', async (req, res) => {
+app.post('/marketing', standardLimit, async (req, res) => {
   const { query } = req.body || {};
   const userQuery = query || 'mejores ideas creativas premiadas Cannes Lions marketing redes sociales 2026';
   try {
@@ -261,7 +299,7 @@ async function generateImages(slides) {
   return results.map(r => r.status === 'fulfilled' ? r.value : { url: null });
 }
 
-app.post('/factory', async (req, res) => {
+app.post('/factory', expensiveLimit, async (req, res) => {
   const { topic } = req.body;
   if (!topic) return res.status(400).json({ error: 'topic required' });
   
@@ -354,13 +392,13 @@ async function callGrok(userMessage) {
   }
 }
 
-app.post('/grok', async (req, res) => {
+app.post('/grok', standardLimit, async (req, res) => {
   const { query } = req.body;
   if (!query) return res.status(400).json({ error: 'query required' });
   res.json({ reply: await callGrok(query), source: 'grok-4-1-fast + x_search' });
 });
 
-app.get('/digest/full', async (req, res) => {
+app.get('/digest/full', standardLimit, async (req, res) => {
   try {
     const posts = await fetchSubstackRSS();
     const ctx = buildSubstackContext(posts);
