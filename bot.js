@@ -1,6 +1,6 @@
 // maarmapa — Telegram Bot v7
 // Claude + Grok + Runway + Seedance + DeepSeek + Shotstack + R2
-// v7.3 — oracle backgrounds + start menu updated
+// v7.5 — comandos de modelos vía OpenRouter (seedance mini/4k, seedream, omni flash, seed audio) + /probemodelos
 const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY || process.env.OPENROUT_KEY;
@@ -19,6 +19,7 @@ const MODELS = {
   text: { fast: 'deepseek/deepseek-chat', pro: 'deepseek/deepseek-r1', gpt: 'openai/gpt-4o' },
   video: { seedance_fast: 'bytedance/seedance-2.0-fast', seedance: 'bytedance/seedance-2.0', veo: 'google/veo-3.1' }
 };
+// v7.5 — los comandos nuevos resuelven el ID real contra GET /models de OpenRouter (ver resolveOR)
 let currentTextModel = MODELS.text.fast;
 let currentVideoModel = MODELS.video.seedance_fast;
 
@@ -167,6 +168,139 @@ async function seedanceVideo(prompt, imageUrl) {
     }
     return null;
   } catch(e) { console.error('Seedance error:', e.message); return null; }
+}
+
+// ── v7.5: modelos dinámicos vía OpenRouter ────────────────────────────────
+let orModelsCache = { at: 0, list: [] };
+async function orModels() {
+  if (Date.now() - orModelsCache.at < 3600000 && orModelsCache.list.length) return orModelsCache.list;
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/models', { headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY } });
+    const d = await r.json();
+    orModelsCache = { at: Date.now(), list: d.data || [] };
+  } catch(e) { console.error('orModels:', e.message); }
+  return orModelsCache.list;
+}
+// busca el ID real por palabras clave (ej "seedance mini" → bytedance/seedance-x-mini)
+async function resolveOR(hint) {
+  const toks = hint.toLowerCase().split(/[\s\-_.]+/).filter(Boolean);
+  const list = await orModels();
+  const hits = list.filter(m => { const id = (m.id + ' ' + (m.name || '')).toLowerCase(); return toks.every(t => id.includes(t)); });
+  if (!hits.length) return null;
+  hits.sort((a, b) => a.id.length - b.id.length);
+  return hits[0];
+}
+function modalidad(m) {
+  const out = ((m && m.architecture && m.architecture.output_modalities) || []).join(',');
+  if (out.includes('video')) return 'video';
+  if (out.includes('audio')) return 'audio';
+  if (out.includes('image')) return 'image';
+  return 'video';
+}
+async function orVideoGen(prompt, opts = {}) {
+  const body = { model: opts.model, prompt, aspect_ratio: opts.aspect || '9:16', duration: opts.duration || 5, resolution: opts.resolution || '720p' };
+  if (opts.imageUrl) body.frame_images = [{ url: opts.imageUrl, frame_type: 'first_frame' }];
+  const r = await fetch('https://openrouter.ai/api/v1/videos', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo', 'X-Title': 'maarmapa' },
+    body: JSON.stringify(body)
+  });
+  const text = await r.text();
+  console.log('orVideo', opts.model, ':', text.slice(0, 150));
+  let d; try { d = JSON.parse(text); } catch(e) { throw new Error(text.slice(0, 200)); }
+  if (!d.id) throw new Error((d.error && d.error.message) || text.slice(0, 200));
+  const pollUrl = d.polling_url || ('https://openrouter.ai/api/v1/videos/' + d.id);
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 10000));
+    const t = await (await fetch(pollUrl, { headers: { 'Authorization': 'Bearer ' + OPENROUTER_KEY } })).json();
+    console.log('orVideo poll ' + i + ':', t.status);
+    if (t.status === 'completed') return 'https://openrouter.ai/api/v1/videos/' + d.id + '/content?index=0';
+    if (t.status === 'failed') throw new Error((t.error && t.error.message) || 'generación falló');
+  }
+  throw new Error('timeout esperando el video');
+}
+async function orImageGen(prompt, model) {
+  const r = await fetch('https://openrouter.ai/api/v1/images/generations', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo', 'X-Title': 'maarmapa' },
+    body: JSON.stringify({ model, prompt, n: 1 })
+  });
+  const text = await r.text();
+  console.log('orImage', model, ':', text.slice(0, 150));
+  let d; try { d = JSON.parse(text); } catch(e) { throw new Error(text.slice(0, 200)); }
+  const img = d.data && d.data[0];
+  if (!img) throw new Error((d.error && d.error.message) || text.slice(0, 200));
+  if (img.url) return img.url;
+  if (img.b64_json) {
+    const buf = Buffer.from(img.b64_json, 'base64');
+    const r2 = await uploadToR2(buf, model.split('/').pop() + '_' + Date.now() + '.png', 'image/png');
+    if (r2) return r2;
+  }
+  throw new Error('sin imagen en la respuesta');
+}
+async function orAudioGen(prompt, model) {
+  const r = await fetch('https://openrouter.ai/api/v1/audio/generations', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENROUTER_KEY, 'HTTP-Referer': 'https://maarmapa.eth.limo', 'X-Title': 'maarmapa' },
+    body: JSON.stringify({ model, prompt })
+  });
+  const text = await r.text();
+  console.log('orAudio', model, ':', text.slice(0, 150));
+  let d; try { d = JSON.parse(text); } catch(e) { throw new Error(text.slice(0, 200)); }
+  const a = (d.data && d.data[0]) || d;
+  if (a.url) return a.url;
+  const b64 = a.b64_json || a.audio;
+  if (b64) {
+    const buf = Buffer.from(b64, 'base64');
+    const r2 = await uploadToR2(buf, 'seedaudio_' + Date.now() + '.mp3', 'audio/mpeg');
+    if (r2) return r2;
+  }
+  throw new Error((d.error && d.error.message) || 'sin audio en la respuesta');
+}
+// comando genérico: resuelve el modelo real y llama según su modalidad
+async function runORModel(chatId, hint, prompt, opts = {}) {
+  const msgId = await send(chatId, '🧪 Buscando modelo "' + hint + '" en OpenRouter...');
+  const m = await resolveOR(hint);
+  if (!m) { await edit(chatId, msgId, '❌ Ningún modelo calza con "' + hint + '". Usa /probemodelos para ver los disponibles.'); return; }
+  const kind = opts.kind || modalidad(m);
+  await edit(chatId, msgId, '🧪 *' + m.id + '* (' + kind + (opts.resolution ? ' ' + opts.resolution : '') + ')\n_generando..._');
+  try {
+    if (kind === 'video') {
+      const url = await orVideoGen(prompt, Object.assign({}, opts, { model: m.id }));
+      await video(chatId, url, '🎬 ' + m.id);
+    } else if (kind === 'image') {
+      const url = await orImageGen(prompt, m.id);
+      await photo(chatId, url, '🖼 ' + m.id);
+    } else {
+      const url = await orAudioGen(prompt, m.id);
+      await send(chatId, '🎵 *' + m.id + '*\n' + url);
+    }
+    await edit(chatId, msgId, '✅ *' + m.id + '* listo');
+  } catch(e) {
+    await edit(chatId, msgId, '❌ *' + m.id + '*: ' + String(e.message).slice(0, 300));
+  }
+}
+// inventario: qué modelos generativos hay en OpenRouter + qué acepta la API de Runway
+async function probeModelos(chatId) {
+  const msgId = await send(chatId, '🔬 Consultando catálogos...');
+  const list = await orModels();
+  const interesantes = list.filter(m => /seedance|seedream|seed[-_ ]?audio|omni|veo|kling|runway|sora|wan/i.test(m.id));
+  const porTipo = {};
+  interesantes.forEach(m => { const k = modalidad(m); (porTipo[k] = porTipo[k] || []).push(m.id); });
+  let out = '🔬 *OpenRouter — modelos generativos (' + interesantes.length + '):*\n';
+  for (const k of Object.keys(porTipo)) out += '\n*' + k + ':*\n' + porTipo[k].map(i => '`' + i + '`').join('\n') + '\n';
+  try {
+    const r = await fetch('https://api.dev.runwayml.com/v1/text_to_image', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
+      body: JSON.stringify({ model: '__list__', promptText: 'x', ratio: '1920:1080' })
+    });
+    out += '\n*Runway text\\_to\\_image dice:* ' + (await r.text()).replace(/[*_`]/g, '').slice(0, 350);
+  } catch(e) {}
+  try {
+    const r2 = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
+      body: JSON.stringify({ model: '__list__', promptImage: 'https://map-ai-portfolio.vercel.app/portfolio_assets/thumbs/v01.jpg', promptText: 'x', ratio: '720:1280' })
+    });
+    out += '\n\n*Runway image\\_to\\_video dice:* ' + (await r2.text()).replace(/[*_`]/g, '').slice(0, 350);
+  } catch(e) {}
+  await edit(chatId, msgId, out.slice(0, 3900));
 }
 
 // DeepSeek
@@ -774,7 +908,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7.3*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/seedance16 [escena]` 🆕 — Seedance en HORIZONTAL 16:9 widescreen\n`/reframe [URL]` 🔄 — Reencuadra un video existente a 16:9 (Runway Aleph)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n📸 *Foto* — Runway la convierte en video 5s');
+    await send(chatId, '🎨 *maarmapa factory v7.5*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/seedance16 [escena]` 🆕 — Seedance en HORIZONTAL 16:9 widescreen\n`/reframe [URL]` 🔄 — Reencuadra un video existente a 16:9 (Runway Aleph)\n`/seedancemini [prompt]` 🆕 — Seedance Mini (rápido/barato)\n`/seedance4k [prompt]` 🆕 — Seedance en 4K\n`/seedream [prompt]` 🆕 — Imagen Seedream 5.0\n`/omniflash [prompt]` 🆕 — Google Omni Flash\n`/seedaudio [texto]` 🆕 — Seed Audio 1.0\n`/probemodelos` 🔬 — Lista los modelos disponibles (OpenRouter + Runway)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n📸 *Foto* — Runway la convierte en video 5s');
     return;
   }
 
@@ -790,6 +924,43 @@ async function handle(msg) {
     runReframe(chatId, url).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
+
+  if (text.startsWith('/seedancemini')) {
+    const p = text.replace('/seedancemini', '').trim();
+    if (!p) { await send(chatId, '🌱 Uso: `/seedancemini [prompt]` — video 9:16 720p con Seedance Mini'); return; }
+    runORModel(chatId, 'seedance mini', p, { kind: 'video' }).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/seedance4k')) {
+    const p = text.replace('/seedance4k', '').trim();
+    if (!p) { await send(chatId, '🌱 Uso: `/seedance4k [prompt]` — video Seedance en resolución 4K (más lento/caro)'); return; }
+    runORModel(chatId, 'seedance', p, { kind: 'video', resolution: '4k' }).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/seedream')) {
+    const p = text.replace('/seedream', '').trim();
+    if (!p) { await send(chatId, '🖼 Uso: `/seedream [prompt]` — imagen con Seedream 5.0'); return; }
+    runORModel(chatId, 'seedream 5', p, { kind: 'image' }).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/omniflash')) {
+    const p = text.replace('/omniflash', '').trim();
+    if (!p) { await send(chatId, '⚡ Uso: `/omniflash [prompt]` — Google Omni Flash (detecta solo si es video o imagen)'); return; }
+    runORModel(chatId, 'omni flash', p, {}).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text.startsWith('/seedaudio')) {
+    const p = text.replace('/seedaudio', '').trim();
+    if (!p) { await send(chatId, '🎵 Uso: `/seedaudio [texto o descripción]` — audio con Seed Audio 1.0'); return; }
+    runORModel(chatId, 'seed audio', p, { kind: 'audio' }).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text === '/probemodelos') { probeModelos(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
 
   if (text.startsWith('/seedance16')) {
     const concept = text.replace('/seedance16', '').trim();
