@@ -10,6 +10,9 @@ type Msg = { role: 'user' | 'assistant'; content: string; cards?: Card[] };
 
 const ipfs = (u: string) => u.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${u.slice(7)}` : u;
 
+// El modelo escribe **negritas** — se renderizan, no se muestran los asteriscos.
+const negrita = (t: string) => t.split('**').map((s, i) => i % 2 ? <b key={i}>{s}</b> : s);
+
 const SUGERENCIAS = [
   'Muéstrame todas las obras',
   '¿Cuál es la pieza más grande?',
@@ -163,7 +166,7 @@ export default function Chat() {
               <div style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 7, background: 'linear-gradient(135deg,#e91e63,#7c3aed)', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 12, color: '#fff', marginTop: 2 }}>m</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 15, lineHeight: 1.65, whiteSpace: 'pre-wrap', color: '#e8e6ef' }}>
-                  {m.content || (busy && i === msgs.length - 1 ? <span><span className="dot" /><span className="dot" /><span className="dot" /></span> : '')}
+                  {m.content ? negrita(m.content) : (busy && i === msgs.length - 1 ? <span><span className="dot" /><span className="dot" /><span className="dot" /></span> : '')}
                 </div>
                 {m.cards && m.cards.length > 0 && (() => {
                   const esUltima = i === msgs.length - 1 || (i === msgs.length - 2 && msgs[msgs.length - 1].role === 'user');

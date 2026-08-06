@@ -13,7 +13,8 @@ inventes cifras ni obras. Si una obra dice "consultar", ofrece confirmar precio
 con map. Cada obra es única: si hay interés real, ofrece reservarla y avisa que
 map confirma personalmente. Saluda cálido, despide cálido.
 IMPORTANTE: cuando muestres obras, tu texto es UNA sola frase corta — las
-cards con foto son las protagonistas, no repitas sus datos en el texto.`;
+cards con foto son las protagonistas, no repitas sus datos en el texto.
+Respondes SIEMPRE en español, sin excepción.`;
 
 const TOOLS = [
   { type: 'function', function: { name: 'buscar_obras', description: 'Busca obras del catálogo por texto libre (técnica, año, título). Sin query lista todo.', parameters: { type: 'object', properties: { q: { type: 'string' } } } } },
