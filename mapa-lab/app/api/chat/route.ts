@@ -1,7 +1,7 @@
 // Cerebro del chat — streaming + tools ancladas al catálogo (cero alucinación).
 // Modelo vía OpenRouter (env OPENROUTER_API_KEY, CHAT_MODEL). Ruta flaca:
 // las tools ejecutan contra lib/obras; el modelo solo redacta.
-import { buscarObras, getObra, card } from '@/lib/obras';
+import { buscarObras, getObra, card, obras } from '@/lib/obras';
 
 export const runtime = 'nodejs';
 
@@ -59,6 +59,7 @@ export async function POST(req: Request) {
       const reader = upstream.body!.getReader();
       const dec = new TextDecoder();
       let buf = '';
+      let textoFinal = '';
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -68,10 +69,19 @@ export async function POST(req: Request) {
           if (!line.startsWith('data: ') || line.includes('[DONE]')) continue;
           try {
             const delta = JSON.parse(line.slice(6)).choices?.[0]?.delta?.content;
-            if (delta) ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'text', delta })}\n\n`));
+            if (delta) { textoFinal += delta; ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'text', delta })}\n\n`)); }
           } catch { /* frag */ }
         }
       }
+      // Toda obra MENCIONADA en el texto viaja con su card (foto siempre acompaña).
+      const ya = new Set(cards.map(c => (c as { slug?: string }).slug));
+      const limpio = (s: string) => s.toLowerCase().replace(/[©®]/g, '').trim();
+      const texto = limpio(textoFinal);
+      const mencionadas = obras
+        .filter(o => !ya.has(o.slug) && texto.includes(limpio(o.titulo)))
+        .slice(0, 6)
+        .map(card);
+      if (mencionadas.length) ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'cards', cards: mencionadas })}\n\n`));
       ctrl.enqueue(enc.encode('data: {"type":"done"}\n\n'));
       ctrl.close();
     },

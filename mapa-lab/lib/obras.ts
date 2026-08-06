@@ -5,7 +5,7 @@ export interface Obra {
   slug: string; titulo: string; tecnica: string; medidas: string;
   anio: number; precio_clp: number | null; precio_usd?: number | null;
   estado: 'disponible' | 'reservada' | 'vendida';
-  img: string; historia: string;
+  img: string; historia: string; video?: string;
 }
 
 export const obras = (catalogo.obras as Obra[]);
@@ -25,4 +25,6 @@ export const card = (o: Obra) => ({
   anio: o.anio, estado: o.estado, img: o.img,
   precio: o.precio_clp ? `$${o.precio_clp.toLocaleString('es-CL')} CLP` : 'consultar',
   precio_usd: o.precio_usd ? `US$${o.precio_usd.toLocaleString('en-US')}` : undefined,
+  historia: o.historia,
+  ...(o.video ? { video: o.video } : {}),
 });
