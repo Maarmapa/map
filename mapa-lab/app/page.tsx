@@ -91,8 +91,9 @@ export default function Chat() {
   const vacio = msgs.length === 0;
 
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: '#0d0d10', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0d', overflow: 'hidden', position: 'relative' }}>
       <style>{`
+        @keyframes levitarLente { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-9px) } }
         @keyframes pulso { 0%,80%,100% { opacity:.25 } 40% { opacity:1 } }
         .dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#8a8794; margin-right:4px; animation:pulso 1.2s infinite }
         .dot:nth-child(2){ animation-delay:.2s } .dot:nth-child(3){ animation-delay:.4s }
@@ -122,6 +123,9 @@ export default function Chat() {
       {BURBUJAS.map((b, i) => (
         <div key={i} className="burbuja" style={{ width: b.s, height: b.s, left: b.x, top: b.y, background: b.c, animationDuration: `${b.d}s` }} />
       ))}
+
+      {/* EL LENTE: el chat entero es UNA gran card que levita sobre las burbujas */}
+      <div style={{ position: 'relative', zIndex: 1, width: 'min(760px, 100vw - 12px)', height: 'min(94dvh, 100dvh - 10px)', display: 'flex', flexDirection: 'column', background: '#0d0d10', border: '1px solid #26262e', borderRadius: 26, boxShadow: '0 24px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(233,30,99,.06), 0 8px 44px rgba(124,58,237,.08)', animation: 'levitarLente 7s ease-in-out infinite', overflow: 'hidden' }}>
 
       <header style={{ padding: '14px 20px', borderBottom: '1px solid #1c1c22', display: 'flex', alignItems: 'center', gap: 10, position: 'relative', zIndex: 1 }}>
         <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#e91e63,#7c3aed)', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 14, color: '#fff' }}>m</div>
@@ -185,7 +189,7 @@ export default function Chat() {
                           {([
                             ['💳 Comprar una obra', () => enviar('Quiero comprar una de estas obras — ¿cómo lo hacemos?')],
                             ['✉️ Escribir a map', () => { window.location.href = 'mailto:mario@boykot.cl?subject=Sobre%20tu%20obra%20—%20Mapa%20Lab'; }],
-                            ['🔔 Avisarme de nuevas obras', () => enviar('Quiero que me avisen cuando haya obras nuevas')],
+                            ['🔔 Avisarme de nuevas obras', () => { window.location.href = 'mailto:mario@boykot.cl?subject=Av%C3%ADsame%20de%20nuevas%20obras%20—%20Mapa%20Lab&body=Hola%20map%2C%20quiero%20enterarme%20cuando%20publiques%20obra%20nueva.'; }],
                           ] as Array<[string, () => void]>).map(([t, fn], k) => (
                             <button key={t} className="accion" onClick={fn}
                               style={{ ['--del' as string]: `${0.5 + k * 0.12}s`, animationDelay: `${0.5 + k * 0.12}s`,
@@ -207,9 +211,9 @@ export default function Chat() {
 
       {obraSel && (
         <div onClick={() => setObraSel(null)}
-          style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.78)', display: 'grid', placeItems: 'center', padding: 16, backdropFilter: 'blur(4px)' }}>
+          style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.78)', display: 'grid', placeItems: 'center', padding: 16, backdropFilter: 'blur(4px)' }}>
           <div className="popup" onClick={e => e.stopPropagation()}
-            style={{ maxWidth: 460, width: '100%', maxHeight: '88dvh', overflowY: 'auto', background: '#16161b', border: '1px solid #2a2a32', borderRadius: 20, overflow: 'hidden' }}>
+            style={{ maxWidth: 460, width: '100%', maxHeight: '100%', overflowY: 'auto', background: '#16161b', border: '1px solid #2a2a32', borderRadius: 20, overflow: 'hidden' }}>
             {obraSel.video
               ? <video src={obraSel.video} controls autoPlay muted playsInline style={{ width: '100%', display: 'block', background: '#000' }} />
               : <img src={ipfs(obraSel.img)} alt={obraSel.titulo} style={{ width: '100%', display: 'block', background: '#101014' }} />}
@@ -249,6 +253,7 @@ export default function Chat() {
         <p style={{ maxWidth: 720, margin: '8px auto 0', textAlign: 'center', color: '#5c5964', fontSize: 11 }}>
           Los precios y datos de obra salen del catálogo real del estudio. Cada venta la confirma map personalmente.
         </p>
+      </div>
       </div>
     </div>
   );
