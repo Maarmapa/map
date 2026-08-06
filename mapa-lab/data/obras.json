@@ -1,27 +1,89 @@
 {
-  "_nota": "Fuente de verdad del catálogo. Curada a mano por map. precio_clp: null = consultar (la tool NUNCA inventa). estado: disponible | reservada | vendida.",
+  "_nota": "Fuente de verdad del catálogo. Portado desde maarmapa-web/data/artworks.json (7 obras reales). precio null = consultar (la tool NUNCA inventa). estado: disponible | reservada | vendida.",
   "obras": [
     {
-      "slug": "ejemplo-obra-1",
-      "titulo": "Sin título I",
-      "tecnica": "Acrílico y tinta sobre tela",
-      "medidas": "100 × 80 cm",
-      "anio": 2025,
-      "precio_clp": null,
+      "slug": "pachamama-fruits",
+      "titulo": "Pachamama Fruits ©",
+      "tecnica": "Acrílico sobre lino",
+      "medidas": "40 × 140 cm",
+      "anio": 2015,
+      "precio_clp": 6500000,
+      "precio_usd": 6800,
       "estado": "disponible",
-      "img": "ipfs://REEMPLAZAR",
-      "historia": "Escribir 2-3 frases: origen de la obra, serie, contexto. Esto es lo que los asistentes de IA citan."
+      "img": "https://maarmapa-web.vercel.app/artworks/pachamama-fruits.png",
+      "historia": "Frutos de la tierra como manifiesto. Pachamama Fruits ©, acrílico sobre lino ejecutado en 2015. Original — pieza única Firmado, titulado y fechado al reverso."
     },
     {
-      "slug": "ejemplo-obra-2",
-      "titulo": "Sin título II",
-      "tecnica": "Mixta sobre papel",
-      "medidas": "50 × 35 cm",
-      "anio": 2026,
-      "precio_clp": 450000,
+      "slug": "globefish",
+      "titulo": "GlobeFish",
+      "tecnica": "Óleo sobre lienzo",
+      "medidas": "Consultar",
+      "anio": 2024,
+      "precio_clp": 9000000,
+      "precio_usd": 9400,
       "estado": "disponible",
-      "img": "ipfs://REEMPLAZAR",
-      "historia": "…"
+      "img": "https://maarmapa-web.vercel.app/artworks/globefish.png",
+      "historia": "El globo como océano. El pez como viajero. GlobeFish es una pintura al óleo original que medita sobre la globalización a través de la mirada de un artista urbano chileno. Original — One of a Kind Firmado por el artista al reverso."
+    },
+    {
+      "slug": "strawberry-gummy-plant",
+      "titulo": "Strawberry Gummy Plant ©",
+      "tecnica": "Acrílico sobre lienzo",
+      "medidas": "100 × 100 cm",
+      "anio": 2015,
+      "precio_clp": 7000000,
+      "precio_usd": 7300,
+      "estado": "disponible",
+      "img": "https://maarmapa-web.vercel.app/artworks/strawberry-gummy-plant.png",
+      "historia": "Strawberry Gummy Plant ©. Acrílico sobre lienzo 100×100cm. Ejecutado en 2015. Original — pieza única Firmado, titulado y fechado al reverso."
+    },
+    {
+      "slug": "mario-bros-roses",
+      "titulo": "Mario Bros Roses",
+      "tecnica": "Óleo sobre lienzo",
+      "medidas": "Gran formato — consultar",
+      "anio": 2024,
+      "precio_clp": 50000000,
+      "precio_usd": 52000,
+      "estado": "disponible",
+      "img": "https://maarmapa-web.vercel.app/artworks/mario-bros-roses.png",
+      "historia": "Cultura pop reencarnada en pintura. El pixel se vuelve pincelada. Mario Bros Roses es una pintura al óleo de gran formato del artista chileno maarmapa. Original — One of a Kind Firmado por el artista."
+    },
+    {
+      "slug": "cities-0",
+      "titulo": "Cities 0",
+      "tecnica": "Óleo sobre lienzo",
+      "medidas": "Consultar",
+      "anio": 2024,
+      "precio_clp": 5000000,
+      "precio_usd": 5200,
+      "estado": "disponible",
+      "img": "https://maarmapa-web.vercel.app/artworks/cities-0.png",
+      "historia": "El punto de partida. La ciudad antes de ser ciudad — azul, abierta, eléctrica. Cero como origen. Original — One of a Kind Firmado por el artista."
+    },
+    {
+      "slug": "city-love",
+      "titulo": "City Love",
+      "tecnica": "Óleo sobre lienzo",
+      "medidas": "Consultar",
+      "anio": 2024,
+      "precio_clp": 5000000,
+      "precio_usd": 5200,
+      "estado": "disponible",
+      "img": "https://maarmapa-web.vercel.app/artworks/city-love.png",
+      "historia": "El amor como arquitectura. Calles que palpitan, edificios que respiran, una ciudad pintada en oro y negro. Original — One of a Kind Firmado por el artista."
+    },
+    {
+      "slug": "city-og",
+      "titulo": "City OG",
+      "tecnica": "Óleo sobre lienzo",
+      "medidas": "Consultar",
+      "anio": 2024,
+      "precio_clp": 6700000,
+      "precio_usd": 7000,
+      "estado": "disponible",
+      "img": "https://maarmapa-web.vercel.app/artworks/city-og.png",
+      "historia": "La ciudad original. Memoria urbana como trazo colectivo — edificios, calles e infraestructura registrados al óleo sobre lienzo. Original — One of a Kind Firmado por el artista."
     }
   ]
 }

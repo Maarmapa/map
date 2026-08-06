@@ -3,7 +3,7 @@ import catalogo from '@/data/obras.json';
 
 export interface Obra {
   slug: string; titulo: string; tecnica: string; medidas: string;
-  anio: number; precio_clp: number | null;
+  anio: number; precio_clp: number | null; precio_usd?: number | null;
   estado: 'disponible' | 'reservada' | 'vendida';
   img: string; historia: string;
 }
@@ -24,4 +24,5 @@ export const card = (o: Obra) => ({
   slug: o.slug, titulo: o.titulo, tecnica: o.tecnica, medidas: o.medidas,
   anio: o.anio, estado: o.estado, img: o.img,
   precio: o.precio_clp ? `$${o.precio_clp.toLocaleString('es-CL')} CLP` : 'consultar',
+  precio_usd: o.precio_usd ? `US$${o.precio_usd.toLocaleString('en-US')}` : undefined,
 });
