@@ -16,14 +16,14 @@
     {
       "slug": "globefish",
       "titulo": "GlobeFish",
-      "tecnica": "Óleo sobre lienzo",
+      "tecnica": "Acrílico sobre lienzo",
       "medidas": "Consultar",
       "anio": 2024,
       "precio_clp": 9000000,
       "precio_usd": 9400,
       "estado": "disponible",
       "img": "https://maarmapa-web.vercel.app/artworks/globefish.png",
-      "historia": "El globo como océano. El pez como viajero. GlobeFish es una pintura al óleo original que medita sobre la globalización a través de la mirada de un artista urbano chileno. Original — One of a Kind Firmado por el artista al reverso."
+      "historia": "El globo como océano. El pez como viajero. GlobeFish es una pintura acrílica original que medita sobre la globalización a través de la mirada de un artista urbano chileno. Original — One of a Kind Firmado por el artista al reverso."
     },
     {
       "slug": "strawberry-gummy-plant",
@@ -40,19 +40,19 @@
     {
       "slug": "mario-bros-roses",
       "titulo": "Mario Bros Roses",
-      "tecnica": "Óleo sobre lienzo",
+      "tecnica": "Acrílico sobre lienzo",
       "medidas": "Gran formato — consultar",
       "anio": 2024,
       "precio_clp": 50000000,
       "precio_usd": 52000,
       "estado": "disponible",
       "img": "https://maarmapa-web.vercel.app/artworks/mario-bros-roses.png",
-      "historia": "Cultura pop reencarnada en pintura. El pixel se vuelve pincelada. Mario Bros Roses es una pintura al óleo de gran formato del artista chileno maarmapa. Original — One of a Kind Firmado por el artista."
+      "historia": "Cultura pop reencarnada en pintura. El pixel se vuelve pincelada. Mario Bros Roses es una pintura acrílica de gran formato del artista chileno maarmapa. Original — One of a Kind Firmado por el artista."
     },
     {
       "slug": "cities-0",
       "titulo": "Cities 0",
-      "tecnica": "Óleo sobre lienzo",
+      "tecnica": "Acrílico sobre lienzo",
       "medidas": "Consultar",
       "anio": 2024,
       "precio_clp": 5000000,
@@ -64,7 +64,7 @@
     {
       "slug": "city-love",
       "titulo": "City Love",
-      "tecnica": "Óleo sobre lienzo",
+      "tecnica": "Acrílico sobre lienzo",
       "medidas": "Consultar",
       "anio": 2024,
       "precio_clp": 5000000,
@@ -76,14 +76,14 @@
     {
       "slug": "city-og",
       "titulo": "City OG",
-      "tecnica": "Óleo sobre lienzo",
+      "tecnica": "Acrílico sobre lienzo",
       "medidas": "Consultar",
       "anio": 2024,
       "precio_clp": 6700000,
       "precio_usd": 7000,
       "estado": "disponible",
       "img": "https://maarmapa-web.vercel.app/artworks/city-og.png",
-      "historia": "La ciudad original. Memoria urbana como trazo colectivo — edificios, calles e infraestructura registrados al óleo sobre lienzo. Original — One of a Kind Firmado por el artista."
+      "historia": "La ciudad original. Memoria urbana como trazo colectivo — edificios, calles e infraestructura registrados en acrílico sobre lienzo. Original — One of a Kind Firmado por el artista."
     }
   ]
 }
