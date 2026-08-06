@@ -1,7 +1,7 @@
 'use client';
 // Mapa Lab — la web ES el chat. Cada chat es un usuario, un carro.
 // Burbujas + cards de obra; el checkout llegará como una card más.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type Card = { slug: string; titulo: string; tecnica: string; medidas: string; anio: number; estado: string; img: string; precio: string };
 type Msg = { role: 'user' | 'assistant'; content: string; cards?: Card[] };
@@ -16,6 +16,21 @@ export default function Chat() {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+  const hidratado = useRef(false);
+
+  // La conversación ES el carro: sobrevive refresh, navegación y cierres.
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem('mapalab.chat');
+      if (guardado) { const j = JSON.parse(guardado); if (Array.isArray(j) && j.length) setMsgs(j); }
+      if (!localStorage.getItem('mapalab.chatId')) localStorage.setItem('mapalab.chatId', crypto.randomUUID());
+    } catch { /* modo incógnito estricto: seguimos en memoria */ }
+    hidratado.current = true;
+  }, []);
+  useEffect(() => {
+    if (!hidratado.current) return;
+    try { localStorage.setItem('mapalab.chat', JSON.stringify(msgs.slice(-60))); } catch { /* lleno */ }
+  }, [msgs]);
 
   async function enviar() {
     const texto = input.trim();
@@ -46,7 +61,8 @@ export default function Chat() {
         }
       }
     } catch {
-      setMsgs(cur => [...cur.slice(0, -1), { role: 'assistant', content: 'Se cortó la conexión — ¿me repites eso?' }]);
+      setInput(texto); // lo escrito NUNCA se pierde: vuelve al input listo para reenviar
+      setMsgs(cur => [...cur.slice(0, -2), { role: 'assistant', content: 'Se cortó la conexión — tu mensaje quedó abajo, dale enviar de nuevo.' }]);
     }
     setBusy(false);
   }
