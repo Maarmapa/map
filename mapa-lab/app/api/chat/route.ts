@@ -25,6 +25,7 @@ function runTool(name: string, args: Record<string, unknown>) {
 }
 
 async function llm(messages: unknown[], stream: boolean, tools = true) {
+  if (!process.env.OPENROUTER_API_KEY) throw new Error('falta OPENROUTER_API_KEY en las env del proyecto');
   return fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, 'content-type': 'application/json' },
@@ -33,11 +34,13 @@ async function llm(messages: unknown[], stream: boolean, tools = true) {
 }
 
 export async function POST(req: Request) {
+  try {
   const { messages } = await req.json() as { messages: { role: string; content: string }[] };
   const convo: unknown[] = [{ role: 'system', content: SYSTEM }, ...messages.slice(-20)];
 
   // Pasada 1 (sin stream): ¿necesita tools?
   const first = await (await llm(convo, false)).json();
+  if (first.error) throw new Error(first.error.message ?? `openrouter ${first.error.code ?? ''}`);
   const msg = first.choices?.[0]?.message;
   const cards: unknown[] = [];
   if (msg?.tool_calls?.length) {
@@ -87,4 +90,8 @@ export async function POST(req: Request) {
     },
   });
   return new Response(stream, { headers: { 'content-type': 'text/event-stream' } });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'error interno';
+    return new Response(JSON.stringify({ error: msg }), { status: 502, headers: { 'content-type': 'application/json' } });
+  }
 }

@@ -58,7 +58,12 @@ export default function Chat() {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ messages: historia.map(({ role, content }) => ({ role, content })) }),
       });
-      if (!res.ok || !res.body) throw new Error('api');
+      if (!res.ok) {
+        let detalle = '';
+        try { detalle = (await res.json()).error ?? ''; } catch { /* no json */ }
+        throw new Error(detalle || `error ${res.status}`);
+      }
+      if (!res.body) throw new Error('sin stream');
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
       for (;;) {
         const { done, value } = await reader.read(); if (done) break;
@@ -75,9 +80,10 @@ export default function Chat() {
           });
         }
       }
-    } catch {
+    } catch (e) {
       setInput(texto);
-      setMsgs(cur => [...cur.slice(0, -2), { role: 'assistant', content: 'Se cortó la conexión — tu mensaje quedó abajo, dale enviar de nuevo.' }]);
+      const detalle = e instanceof Error ? ` (${e.message})` : '';
+      setMsgs(cur => [...cur.slice(0, -2), { role: 'assistant', content: `Se cortó la conexión${detalle} — tu mensaje quedó abajo, dale enviar de nuevo.` }]);
     }
     setBusy(false);
   }
