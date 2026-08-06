@@ -1,0 +1,27 @@
+{
+  "_nota": "Fuente de verdad del catálogo. Curada a mano por map. precio_clp: null = consultar (la tool NUNCA inventa). estado: disponible | reservada | vendida.",
+  "obras": [
+    {
+      "slug": "ejemplo-obra-1",
+      "titulo": "Sin título I",
+      "tecnica": "Acrílico y tinta sobre tela",
+      "medidas": "100 × 80 cm",
+      "anio": 2025,
+      "precio_clp": null,
+      "estado": "disponible",
+      "img": "ipfs://REEMPLAZAR",
+      "historia": "Escribir 2-3 frases: origen de la obra, serie, contexto. Esto es lo que los asistentes de IA citan."
+    },
+    {
+      "slug": "ejemplo-obra-2",
+      "titulo": "Sin título II",
+      "tecnica": "Mixta sobre papel",
+      "medidas": "50 × 35 cm",
+      "anio": 2026,
+      "precio_clp": 450000,
+      "estado": "disponible",
+      "img": "ipfs://REEMPLAZAR",
+      "historia": "…"
+    }
+  ]
+}
