@@ -54,7 +54,12 @@ export async function POST(req: Request) {
   }
 
   // Pasada 2 (stream): redacción final. Las cards viajan como evento aparte.
-  const upstream = await llm(convo, true, false);
+  const upstream = await llm(convo, true);
+  if (!upstream.ok) {
+    let detalle = `openrouter ${upstream.status}`;
+    try { const j = await upstream.json(); detalle = j.error?.message ?? detalle; } catch { /* no json */ }
+    throw new Error(detalle);
+  }
   const enc = new TextEncoder();
   const stream = new ReadableStream({
     async start(ctrl) {
@@ -75,6 +80,11 @@ export async function POST(req: Request) {
             if (delta) { textoFinal += delta; ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'text', delta })}\n\n`)); }
           } catch { /* frag */ }
         }
+      }
+      if (!textoFinal.trim()) {
+        const respaldo = 'Aquí tienes — y si quieres saber más de alguna obra, tócala o pregúntame.';
+        textoFinal = respaldo;
+        ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'text', delta: respaldo })}\n\n`));
       }
       // Toda obra MENCIONADA en el texto viaja con su card (foto siempre acompaña).
       const ya = new Set(cards.map(c => (c as { slug?: string }).slug));
