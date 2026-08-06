@@ -103,6 +103,18 @@ export default function Chat() {
         .cardobra:hover { transform:translateY(-3px); border-color:#e91e63 !important; box-shadow:0 8px 24px rgba(233,30,99,.15) }
         @keyframes aparecer { from { opacity:0; transform:scale(.96) translateY(8px) } to { opacity:1; transform:none } }
         .popup { animation:aparecer .18s ease-out }
+        @keyframes brotar { 0% { opacity:0; transform:translateY(46px) rotate(var(--rot)) scale(.7) } 60% { opacity:1; transform:translateY(-10px) rotate(var(--rot)) scale(1.04) } 100% { opacity:1; transform:translateY(0) rotate(var(--rot)) scale(1) } }
+        @keyframes levitar { 0%,100% { transform:translateY(0) rotate(var(--rot)) } 50% { transform:translateY(-7px) rotate(var(--rot)) } }
+        .naipe { animation: brotar .7s cubic-bezier(.2,1.4,.4,1) backwards, levitar 4.5s ease-in-out infinite; animation-delay: var(--del), calc(var(--del) + .7s) }
+        .mazo { display:flex; padding:18px 8px 10px 26px }
+        .mazo .naipe { margin-left:-58px; box-shadow:-8px 10px 24px rgba(0,0,0,.45) }
+        .mazo .naipe:first-child { margin-left:0 }
+        .mazo .naipe:hover { transform:translateY(-14px) rotate(0deg) scale(1.05) !important; z-index:9 !important; animation:none }
+        .viejas .naipe { filter:blur(1.6px) saturate(.6); opacity:.5; animation:none; transition:all .3s }
+        .viejas .naipe:hover { filter:none; opacity:1 }
+        @keyframes burbujear { 0% { opacity:0; transform:translateY(14px) scale(.8) } 100% { opacity:1; transform:none } }
+        .accion { animation:burbujear .4s cubic-bezier(.2,1.4,.4,1) backwards }
+        .accion:hover { transform:translateY(-3px); border-color:#e91e63 !important; color:#fff !important }
         input:focus { outline:none }
         * { box-sizing:border-box }
       `}</style>
@@ -149,22 +161,44 @@ export default function Chat() {
                 <div style={{ fontSize: 15, lineHeight: 1.65, whiteSpace: 'pre-wrap', color: '#e8e6ef' }}>
                   {m.content || (busy && i === msgs.length - 1 ? <span><span className="dot" /><span className="dot" /><span className="dot" /></span> : '')}
                 </div>
-                {m.cards && m.cards.length > 0 && (
-                  <div style={{ display: 'flex', gap: 10, overflowX: 'auto', marginTop: 12, paddingBottom: 6 }}>
-                    {m.cards.map(c => (
-                      <div key={c.slug} className="cardobra" onClick={() => setObraSel(c)}
-                        style={{ minWidth: 200, maxWidth: 200, background: '#16161b', border: '1px solid #26262e', borderRadius: 14, overflow: 'hidden' }}>
-                        <img src={ipfs(c.img)} alt={c.titulo} loading="lazy" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', background: '#101014', display: 'block' }} />
-                        <div style={{ padding: '10px 12px 12px', fontSize: 12.5 }}>
-                          <b style={{ fontSize: 13 }}>{c.titulo}</b>
-                          <div style={{ color: '#8a8794', marginTop: 2 }}>{c.tecnica} · {c.anio}</div>
-                          <div style={{ marginTop: 6, color: '#e91e63', fontWeight: 700 }}>{c.precio}</div>
-                          <div style={{ marginTop: 3, color: c.estado === 'disponible' ? '#7ee2a0' : '#8a8794', fontSize: 11 }}>● {c.estado} · toca para ver</div>
-                        </div>
+                {m.cards && m.cards.length > 0 && (() => {
+                  const esUltima = i === msgs.length - 1 || (i === msgs.length - 2 && msgs[msgs.length - 1].role === 'user');
+                  const n = m.cards.length; const centro = (n - 1) / 2;
+                  return (
+                    <>
+                      <div className={`mazo ${esUltima ? '' : 'viejas'}`} style={{ overflowX: 'auto', marginTop: 8 }}>
+                        {m.cards.map((c, k) => (
+                          <div key={c.slug} className="cardobra naipe" onClick={() => setObraSel(c)}
+                            style={{ ['--rot' as string]: `${(k - centro) * 3.5}deg`, ['--del' as string]: `${k * 0.09}s`,
+                              zIndex: k, minWidth: 190, maxWidth: 190, background: '#16161b', border: '1px solid #26262e', borderRadius: 16, overflow: 'hidden' }}>
+                            <img src={ipfs(c.img)} alt={c.titulo} loading="lazy" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', background: '#101014', display: 'block' }} />
+                            <div style={{ padding: '9px 12px 11px', fontSize: 12.5 }}>
+                              <b style={{ fontSize: 13 }}>{c.titulo}</b>
+                              <div style={{ color: '#8a8794', marginTop: 2 }}>{c.tecnica} · {c.anio}</div>
+                              <div style={{ marginTop: 5, color: '#e91e63', fontWeight: 700 }}>{c.precio}</div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                      {esUltima && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                          {([
+                            ['💳 Comprar una obra', () => enviar('Quiero comprar una de estas obras — ¿cómo lo hacemos?')],
+                            ['✉️ Escribir a map', () => { window.location.href = 'mailto:mario@boykot.cl?subject=Sobre%20tu%20obra%20—%20Mapa%20Lab'; }],
+                            ['🔔 Avisarme de nuevas obras', () => enviar('Quiero que me avisen cuando haya obras nuevas')],
+                          ] as Array<[string, () => void]>).map(([t, fn], k) => (
+                            <button key={t} className="accion" onClick={fn}
+                              style={{ ['--del' as string]: `${0.5 + k * 0.12}s`, animationDelay: `${0.5 + k * 0.12}s`,
+                                background: 'rgba(22,22,27,.85)', border: '1px solid #2a2a32', color: '#b9b6c0',
+                                borderRadius: 999, padding: '8px 14px', fontSize: 12.5, cursor: 'pointer', transition: 'all .15s', backdropFilter: 'blur(6px)' }}>
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ))}

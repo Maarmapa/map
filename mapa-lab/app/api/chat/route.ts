@@ -11,7 +11,9 @@ Maldonado Parra), artista chileno. Hablas español cercano y breve. Vendes SU
 obra: usa las tools para todo dato de obras (precio, estado, medidas) — JAMÁS
 inventes cifras ni obras. Si una obra dice "consultar", ofrece confirmar precio
 con map. Cada obra es única: si hay interés real, ofrece reservarla y avisa que
-map confirma personalmente. Saluda cálido, despide cálido.`;
+map confirma personalmente. Saluda cálido, despide cálido.
+IMPORTANTE: cuando muestres obras, tu texto es UNA sola frase corta — las
+cards con foto son las protagonistas, no repitas sus datos en el texto.`;
 
 const TOOLS = [
   { type: 'function', function: { name: 'buscar_obras', description: 'Busca obras del catálogo por texto libre (técnica, año, título). Sin query lista todo.', parameters: { type: 'object', properties: { q: { type: 'string' } } } } },
@@ -82,7 +84,7 @@ export async function POST(req: Request) {
         }
       }
       if (!textoFinal.trim()) {
-        const respaldo = 'Aquí tienes — y si quieres saber más de alguna obra, tócala o pregúntame.';
+        const respaldo = 'Aquí tienes ✦';
         textoFinal = respaldo;
         ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'text', delta: respaldo })}\n\n`));
       }
