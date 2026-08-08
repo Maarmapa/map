@@ -69,11 +69,18 @@
 
 ## Pendientes abiertos
 
-- **`rag-blindado`** — pipeline RAG (Postgres + pgvector, embeddings open
-  source locales, generación anclada, controles OWASP LLM Top 10, evals con
-  Ragas bloqueantes en GitHub Actions; 22 tests pasando). Construido y
-  commiteado, **falta publicarlo**: crear el repo vacío y pushear. El zip se
-  entregó por el chat.
+- ✅ **`rag-blindado` — EL REPO YA EXISTE**: `Maarmapa/rag-blindado`, creado
+  el 8-ago-2026 desde la sesión local del Mini (que sí tiene scope `repo`;
+  las remotas reciben 403). Está **vacío, público, rama `main`, sin README ni
+  licencia** — justo para que el push no choque. **Solo falta pushear** el
+  pipeline ya commiteado (Postgres + pgvector, embeddings locales, generación
+  anclada, OWASP LLM Top 10, evals Ragas bloqueantes en CI, 22 tests).
+  ⚠️ Es PÚBLICO a propósito (para que un revisor externo pueda leerlo), así
+  que **revisar el contenido antes de pushear**: secretos, endpoints internos,
+  correos o nombres de clientes no deben viajar. Una vez pusheado, la historia
+  de git ya no se borra sin reescribirla.
+  **Corolario operativo**: cuando una sesión remota se tranque creando algo en
+  GitHub, pedírselo a la sesión local — ese 403 no aplica allá.
 - **Agent Card A2A v1.0** para `mapa-lab` — JSON conforme a los ocho campos
   requeridos del spec v1.0 (`supportedInterfaces` reemplazó al `url` único).
   Bloqueado: necesita el dominio real del deploy de mapa-lab; hoy tiene
