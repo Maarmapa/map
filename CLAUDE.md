@@ -109,6 +109,13 @@
   **Nota de coordinación**: la sesión del Mini tocó ese repo a las 10:10 hora
   de Chile. Antes de pushear ahí, verificar que no haya trabajo en vuelo.
 
+- 🔧 **Página `/tech` del portfolio — entregada, sin desplegar.** Un
+  `tech.html` responsive (ocho proyectos, anchors por proyecto, meta tags OG)
+  quedó entregado por el chat. Va como `tech/index.html` en el deploy estático
+  de `maarmapa-portfolio` y lo publica Mario desde su terminal — recordar que
+  ese sitio no tiene repo en GitHub (regla de arriba). Referencia a
+  `rag-blindado`, que ya está vivo, así que no deja links muertos.
+
 - Mientras la card no esté conforme, **el material público no debe afirmar
   "Agent Card conforme a A2A v1.0"** (regla de arriba: nada que no se pueda
   defender). El repo de `rag-blindado` sí se puede referenciar: está vivo.
