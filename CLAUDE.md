@@ -49,6 +49,38 @@
 - Cada repo con trabajo agéntico lleva sus propias notas (este archivo aquí;
   `NOTAS_AGENTICAS.md` en otros). Al retomar un proyecto, leerlas primero.
 
+## Límites conocidos de las sesiones remotas
+
+- **Una sesión NO puede crear repositorios en GitHub.** La app devuelve
+  `403 Resource not accessible by integration`. Y tampoco puede pushear a un
+  repo que no exista: el proxy de git responde `not in this session's
+  authorized repository set`, y `add_repo` falla con `repository was not
+  found`. Es un círculo cerrado. Para publicar un proyecto nuevo, el repo
+  vacío lo crea Mario en github.com/new (Public, sin README ni licencia,
+  para evitar conflictos) y recién ahí la sesión puede pushear.
+- Las memorias locales viven en el disco de cada máquina
+  (`~/.claude/projects/-Users-map/memory/`, ~155 archivos indexados por
+  `MEMORY.md`) y **no se sincronizan** con las sesiones en la nube. Una
+  sesión remota no tiene acceso a ellas: si el contexto histórico importa,
+  hay que subir el archivo por el chat.
+- El proxy de red bloquea varios dominios externos (SSRN, a2a-protocol.org,
+  sitios propios en Vercel). Para verificar algo de esos, usar búsqueda web
+  o pedirle el dato a Mario — no concluir por ausencia.
+
+## Pendientes abiertos
+
+- **`rag-blindado`** — pipeline RAG (Postgres + pgvector, embeddings open
+  source locales, generación anclada, controles OWASP LLM Top 10, evals con
+  Ragas bloqueantes en GitHub Actions; 22 tests pasando). Construido y
+  commiteado, **falta publicarlo**: crear el repo vacío y pushear. El zip se
+  entregó por el chat.
+- **Agent Card A2A v1.0** para `mapa-lab` — JSON conforme a los ocho campos
+  requeridos del spec v1.0 (`supportedInterfaces` reemplazó al `url` único).
+  Bloqueado: necesita el dominio real del deploy de mapa-lab; hoy tiene
+  `REEMPLAZAR-DOMINIO`. Va en `mapa-lab/public/.well-known/agent-card.json`.
+- Mientras esos dos no estén vivos, **el material público no debe
+  referenciarlos como existentes** (regla de arriba: nada de links muertos).
+
 ## Referencia de gobernanza
 
 Estas reglas siguen el espíritu de la gobernanza ágil de IA: controles
