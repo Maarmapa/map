@@ -69,24 +69,49 @@
 
 ## Pendientes abiertos
 
-- ✅ **`rag-blindado` — EL REPO YA EXISTE**: `Maarmapa/rag-blindado`, creado
-  el 8-ago-2026 desde la sesión local del Mini (que sí tiene scope `repo`;
-  las remotas reciben 403). Está **vacío, público, rama `main`, sin README ni
-  licencia** — justo para que el push no choque. **Solo falta pushear** el
-  pipeline ya commiteado (Postgres + pgvector, embeddings locales, generación
-  anclada, OWASP LLM Top 10, evals Ragas bloqueantes en CI, 22 tests).
-  ⚠️ Es PÚBLICO a propósito (para que un revisor externo pueda leerlo), así
-  que **revisar el contenido antes de pushear**: secretos, endpoints internos,
-  correos o nombres de clientes no deben viajar. Una vez pusheado, la historia
-  de git ya no se borra sin reescribirla.
-  **Corolario operativo**: cuando una sesión remota se tranque creando algo en
-  GitHub, pedírselo a la sesión local — ese 403 no aplica allá.
-- **Agent Card A2A v1.0** para `mapa-lab` — JSON conforme a los ocho campos
-  requeridos del spec v1.0 (`supportedInterfaces` reemplazó al `url` único).
-  Bloqueado: necesita el dominio real del deploy de mapa-lab; hoy tiene
-  `REEMPLAZAR-DOMINIO`. Va en `mapa-lab/public/.well-known/agent-card.json`.
-- Mientras esos dos no estén vivos, **el material público no debe
-  referenciarlos como existentes** (regla de arriba: nada de links muertos).
+- ✅ **`rag-blindado` — HECHO, PUSHEADO Y VIVO**: `Maarmapa/rag-blindado`,
+  público, commit `993c3d2`, 24 archivos. El repo lo creó la sesión del Mini
+  el 8-ago 09:44 (hora de Chile) y una sesión remota le pusheó el pipeline
+  ese mismo día. Contenido: Postgres + pgvector con índice HNSW, embeddings
+  open source locales, generación anclada con citación, controles mapeados a
+  OWASP LLM Top 10 (LLM01/02/06/08/09), evals Ragas bloqueantes en GitHub
+  Actions y 22 tests deterministas que corren sin credenciales.
+  Antes de pushear se escaneó archivo por archivo: sin secretos, sin nombres
+  de clientes, sin endpoints internos. Los únicos hits del escaneo eran
+  placeholders (`usuario:password@host` del `.env.example` y el
+  `postgres:postgres@localhost` del servicio de CI).
+  **Corolario operativo que quedó probado**: cuando una sesión remota se
+  tranque creando algo en GitHub (403), pedírselo a la sesión local — ese
+  límite no aplica allá. La remota sí puede pushear una vez que el repo
+  existe (`add_repo` con `access: "push"`).
+
+- 🔧 **Agent Card A2A v1.0 para `mapa-lab` — A MEDIO CAMINO**.
+  **`mapa-lab` ya NO vive dentro de `map`**: tiene repo propio,
+  `Maarmapa/mapa-lab` (público, TypeScript), creado el 8-ago 09:47 hora de
+  Chile. El card vive en `public/.well-known/agent-card.json` y **ya tiene el
+  dominio resuelto** (`https://mapa-lab.vercel.app`) — el `REEMPLAZAR-DOMINIO`
+  quedó atrás.
+  ⚠️ **Pero NO es conforme a A2A v1.0**: le faltan seis de los ocho campos
+  requeridos por `a2a.proto` v1.0 — `version`, `capabilities`,
+  `supportedInterfaces`, `defaultInputModes`, `defaultOutputModes` y `skills`.
+  Lo que tiene en su lugar son campos propios (`artist`, `payments`, `trust`,
+  `services`) y un `url` único, que es justo lo que v1.0 reemplazó por
+  `supportedInterfaces[]` (con `protocolBinding` y `protocolVersion` por
+  interfaz — el "multi-protocol support" del release). Un cliente A2A estándar
+  la rechaza por esquema inválido.
+  **La versión conforme ya está escrita y validada** (ocho campos completos,
+  tres skills declaradas — `search_obras`, `get_obra`, `reservar_obra` — con
+  esquema de seguridad por skill, el MCP preservado como interfaz adicional y
+  la metadata de artista/pagos/ERC-8004 movida a una clave `x-maarmapa` para
+  no romper el esquema). **Se entregó por el chat; falta aplicarla y
+  desplegarla.** Ojo con el `url` del `supportedInterfaces`: apunta a
+  `/api/a2a`, endpoint que hay que verificar que exista o crear.
+  **Nota de coordinación**: la sesión del Mini tocó ese repo a las 10:10 hora
+  de Chile. Antes de pushear ahí, verificar que no haya trabajo en vuelo.
+
+- Mientras la card no esté conforme, **el material público no debe afirmar
+  "Agent Card conforme a A2A v1.0"** (regla de arriba: nada que no se pueda
+  defender). El repo de `rag-blindado` sí se puede referenciar: está vivo.
 
 ## Referencia de gobernanza
 
