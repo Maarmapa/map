@@ -142,6 +142,14 @@ Se clonaron y grepearon **los 17 repos de la cuenta** (15 públicos + `BOYKOT`,
   exige (`LangchainLLMWrapper`, `LangchainEmbeddingsWrapper`). Es dependencia
   transitiva, no decisión de arquitectura.
 
+⚠️ **Matiz que salió después, mirando el log de CI**: "cero LangGraph" es cierto
+**en el código**, pero el job `evals` de `rag-blindado` instala
+`langgraph 1.2.10` + `langgraph-checkpoint` + `langgraph-prebuilt` +
+`langgraph-sdk`, porque `ragas` depende de `langchain` 1.x y esa depende de
+LangGraph. Nadie lo eligió, pero está en el árbol de dependencias.
+**La respuesta honesta a "¿usas LangGraph?" es: no en el código; sí aparece en
+las dependencias de las evals.**
+
 Los repos públicos **no necesitan `add_repo`**: el proxy de git de la sesión
 sirve lecturas anónimas de GitHub público directo. Solo los privados requieren
 adjuntarlos. Dato operativo que ahorra tiempo la próxima vez.
@@ -211,17 +219,37 @@ Todos quedaron como **draft**, ninguno mergeado: la decisión de mergear es suya
 | Repo | Rama | PR | Estado de CI |
 |---|---|---|---|
 | `map` | `claude/presupuesto-cotizacion-fek80w` | [#3](https://github.com/Maarmapa/map/pull/3) | Vercel ✅ · Cloudflare ❌ (ver abajo) |
-| `rag-blindado` | `claude/crag-self-rag` | [#1](https://github.com/Maarmapa/rag-blindado/pull/1) | `guards` ✅ (33 tests) · `evals` corriendo |
+| `rag-blindado` | `claude/crag-self-rag` | [#1](https://github.com/Maarmapa/rag-blindado/pull/1) | `guards` ✅ (33 tests) · `evals` ❌ (ver abajo) |
 | `mapa-lab` | `claude/rondas-de-tools` | [#1](https://github.com/Maarmapa/mapa-lab/pull/1) | Vercel ✅ |
 | `BOYKOT` | `claude/hermes-escalada-humano` | [#52](https://github.com/Maarmapa/BOYKOT/pull/52) | Vercel ✅ (compila) |
 
-**Ruido conocido de CI en `map`**: el check `Workers Builds: maarmapa-media`
-falla. **No lo causa este trabajo**: el repo `map` no tiene `wrangler.toml` ni
-código de worker — el proyecto de Cloudflare está apuntado a un repo que no
-tiene nada que construir, así que falla en cualquier commit. Vale la pena
-desconectarlo o darle su propio repo, pero es tarea aparte. (No se pudo
-confirmar contra `main` con las herramientas de la sesión; la inferencia es del
-contenido del repo, no de haber visto el check en `main`.)
+### Dos rojos de CI que son deuda previa, no de este trabajo
+
+**1. `Workers Builds: maarmapa-media` en `map`.** El repo no tiene
+`wrangler.toml` ni código de worker: el proyecto de Cloudflare está apuntado a
+un repo donde no hay nada que construir. **Verificado, no inferido**: volvió a
+fallar en `d7c5b09`, un commit que solo cambia `CLAUDE.md`. Un archivo markdown
+no rompe un build de worker. Toca desconectar ese proyecto de Cloudflare o
+darle su propio repo — tarea aparte.
+
+**2. El job `evals` de `rag-blindado` NUNCA ha pasado**, desde `993c3d2`.
+Dos bloqueos encadenados, ninguno del CRAG (el PR #1 no toca `cli.py` ni el
+workflow):
+
+- **Orden de argumentos.** `.github/workflows/evals.yml:50` corre
+  `python -m ragb.cli ingest corpus/ --tenant eval --write`, pero `--tenant`
+  está declarado en el parser de nivel superior (`ragb/cli.py:18`), no en el
+  subcomando, así que argparse lo rechaza con `unrecognized arguments`.
+  Lo correcto es `python -m ragb.cli --tenant eval ingest corpus/ --write`.
+  **Arreglo de una línea, sin pushear** — toca el workflow, fuera del alcance
+  del PR, y de todas formas no llegaría a verde por lo siguiente.
+- **Falta el secret `ANTHROPIC_API_KEY`** en el repo: llega vacío al env del
+  job. No es que la cuenta esté sin créditos — el secret no está configurado.
+  Lo pone Mario en Settings → Secrets; no hay parche de código que lo cubra.
+
+**Lección**: un workflow que se escribe y se pushea sin verlo correr una vez
+puede estar roto en su primera línea durante días. El job `guards`, que sí se
+miró, funciona perfecto.
 
 **Lo que NO se probó en vivo**: que la escalada de Hermes llegue de verdad a
 Supabase. Eso necesita un DM real. Typecheck y build de Vercel están limpios,
