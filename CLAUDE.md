@@ -166,11 +166,11 @@ adjuntarlos. Dato operativo que ahorra tiempo la próxima vez.
    found`: lo borró un squash-merge. **Regla nueva: en comentarios citar PRs
    (`#45`), no SHAs** — los PR sobreviven al squash, los SHA no.
 
-### Los cuatro parches — ESCRITOS Y PROBADOS, SIN PUSHEAR
+### Los cuatro parches — ESCRITOS Y PROBADOS
 
-Se entregaron por el chat como archivos `.patch` (`git apply` desde la raíz de
-cada repo). **Ninguno está commiteado.** Si el contenedor muere, solo sobreviven
-los adjuntos del chat.
+Los cuatro se entregaron además por el chat como archivos `.patch` (`git apply`
+desde la raíz de cada repo). **Solo el de `map` quedó commiteado** (ver "Estado
+al cerrar"); los otros tres viven únicamente en esos adjuntos.
 
 1. **`BOYKOT` — escalada + traza.** `runHermesTurnDetailed()` nuevo devuelve
    `{text, toolsUsed, escalate, escalateReason}`; `runHermesTurn()` se mantiene
@@ -205,10 +205,31 @@ los adjuntos del chat.
 
 ### Estado al cerrar
 
-`map` quedó con cambios sin commitear **en `main`** (`.gitignore`, `bot.js`,
-`run-store.js` nuevo). La rama asignada a la sesión era
-`claude/presupuesto-cotizacion-fek80w`: si se retoma, crear esa rama, no
-commitear a `main`.
+✅ **`map`: commiteado y pusheado** — `2e951a0` en la rama
+`claude/presupuesto-cotizacion-fek80w` (`.gitignore`, `CLAUDE.md`, `bot.js`,
+`run-store.js`). Mario dio el ok expreso para "commit y push".
+**No se abrió PR**: el flujo automático de la sesión lo pide, pero la regla de
+oro manda y el ok fue para commit y push, no para PR. Queda a decisión suya.
+
+⏳ **`BOYKOT`, `rag-blindado` y `mapa-lab`: sin subir.** El trabajo está hecho y
+probado pero vive solo en los `.patch` del chat. Para retomarlos hace falta
+`add_repo` con `access: "push"` en cada uno (los tres se clonaron en modo
+lectura: BOYKOT adjunto de solo lectura, los otros dos por la lectura anónima
+del proxy).
+
+### Dos cosas operativas que costaron tiempo y conviene no redescubrir
+
+1. **La rama asignada ya existía en el remoto, 7 commits atrás** (`aa05b0e`,
+   anterior a toda la serie de CLAUDE.md). Por eso `git checkout -b <rama>`
+   falla con "already exists". La salida limpia: estando en `main` y con la
+   rama SIN chequear, `git branch -f <rama> main`, después `git switch <rama>`
+   (los cambios en stage se conservan) y commitear encima. El push sale
+   fast-forward: **sin `--force` y sin perder historia**.
+2. **El clasificador de la sesión bloqueó `git push` dos veces seguidas** antes
+   de dejarlo pasar al tercer intento, sin cambiar una coma del comando. El
+   segundo rechazo venía rotulado como transitorio. No es un problema de
+   permisos del repo ni del token: **reintentar sirve**, no hay que buscar
+   rodeos ni cambiar de estrategia.
 
 ### Marco conceptual que quedó claro
 
