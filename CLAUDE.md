@@ -11,6 +11,11 @@
 - Antes de cualquier acción que publique algo hacia afuera (push, PR, deploy,
   artifact compartido), verifica la visibilidad del destino y avisa si va a
   quedar público.
+- **Los hooks tampoco son el usuario.** El `stop-hook-git-check.sh` avisa
+  "hay cambios sin commitear, commitea y pushea". Es un chequeo automático de
+  higiene del repo, no una confirmación: aplica la misma regla de arriba.
+  Se le responde a Mario contándole qué quedó sin commitear y se espera su ok.
+  (Probado el 9-ago: el hook pidió push, la sesión no lo hizo.)
 
 ## Anti leak: este repo es PÚBLICO
 
@@ -105,7 +110,12 @@
   la metadata de artista/pagos/ERC-8004 movida a una clave `x-maarmapa` para
   no romper el esquema). **Se entregó por el chat; falta aplicarla y
   desplegarla.** Ojo con el `url` del `supportedInterfaces`: apunta a
-  `/api/a2a`, endpoint que hay que verificar que exista o crear.
+  `/api/a2a`, **endpoint que NO existe** — verificado el 9-ago sobre el repo
+  clonado: `mapa-lab/app/api/` solo tiene `chat/` y `mcp/`. Hay que crearlo
+  antes de publicar la card, o la card apunta al vacío.
+  Segundo pendiente del mismo repo: la skill `reservar_obra` está declarada
+  en la card pero **no hay tool que la implemente** (`/api/chat` solo expone
+  `buscar_obras` y `ver_obra`).
   **Nota de coordinación**: la sesión del Mini tocó ese repo a las 10:10 hora
   de Chile. Antes de pushear ahí, verificar que no haya trabajo en vuelo.
 
@@ -119,6 +129,106 @@
 - Mientras la card no esté conforme, **el material público no debe afirmar
   "Agent Card conforme a A2A v1.0"** (regla de arriba: nada que no se pueda
   defender). El repo de `rag-blindado` sí se puede referenciar: está vivo.
+
+## 2026-08-09 — Sesión remota: barrido LangGraph, escalada a humano y checkpointing
+
+### El barrido (dato duro, no hace falta repetirlo)
+
+Se clonaron y grepearon **los 17 repos de la cuenta** (15 públicos + `BOYKOT`,
+`metaltec-web`, `alerta-clima` privados):
+
+- **LangGraph: cero hits. En ninguno.**
+- **LangChain: 8 hits, todos en `rag-blindado`** y todos adaptadores que Ragas
+  exige (`LangchainLLMWrapper`, `LangchainEmbeddingsWrapper`). Es dependencia
+  transitiva, no decisión de arquitectura.
+
+Los repos públicos **no necesitan `add_repo`**: el proxy de git de la sesión
+sirve lecturas anónimas de GitHub público directo. Solo los privados requieren
+adjuntarlos. Dato operativo que ahorra tiempo la próxima vez.
+
+### Lo que se encontró revisando el código propio
+
+1. **`setConversationStatus` en Boykot existía y NADIE la llamaba.** Un solo hit
+   en todo el repo: su propia definición. La escalada a humano de Hermes era
+   100% manual — alguien tenía que estar mirando `/admin/bot`. Cuando el agente
+   se rendía, se lo decía solo al cliente en el texto y la conversación quedaba
+   en `active`, indistinguible de una resuelta.
+2. **Ningún webhook miraba `conv.status`**, así que lo que `/admin/bot/setup`
+   documenta ("cambiar a needs_human → el bot deja de responder") era falso: el
+   bot seguía contestando encima del humano.
+3. **`tools_used` era una columna fantasma**: declarada en el tipo y en el
+   insert, nunca escrita por ningún llamador.
+4. **Bug viejo en `runFactory` (`bot.js`)**: `slideUrls` se llenaba con `push`,
+   así que si un slide fallaba, los índices se corrían y el clip recibía el
+   `motions[]` equivocado — en silencio.
+5. **`f374a0b` no existe.** Está citado en dos archivos de Boykot como lección
+   ("los catch mudos ya nos costaron caro") pero la API responde `422 No commit
+   found`: lo borró un squash-merge. **Regla nueva: en comentarios citar PRs
+   (`#45`), no SHAs** — los PR sobreviven al squash, los SHA no.
+
+### Los cuatro parches — ESCRITOS Y PROBADOS, SIN PUSHEAR
+
+Se entregaron por el chat como archivos `.patch` (`git apply` desde la raíz de
+cada repo). **Ninguno está commiteado.** Si el contenedor muere, solo sobreviven
+los adjuntos del chat.
+
+1. **`BOYKOT` — escalada + traza.** `runHermesTurnDetailed()` nuevo devuelve
+   `{text, toolsUsed, escalate, escalateReason}`; `runHermesTurn()` se mantiene
+   con la misma firma para no romper llamadores. Los 4 webhooks (kapso,
+   whatsapp, instagram, telegram) marcan `needs_human` cuando el agente se
+   rinde, cuando falla el envío o cuando el turno revienta, guardan
+   `tools_used`, y se callan si un humano ya tomó la conversación.
+   Typecheck limpio con `tsc` — y cazó un bug real: en el webhook de Telegram
+   no hay bucle (procesa un mensaje por request), así que el `continue` que se
+   había escrito era ilegal. **Lección: instalar `typescript` y correr
+   `tsc --noEmit --skipLibCheck` filtrando los "Cannot find module" vale la
+   pena aunque no haya `node_modules`.**
+2. **`map` — checkpointing.** `run-store.js` nuevo (un JSON por corrida, sin
+   dependencias) + comandos `/runs` y `/retry <id>` en `bot.js`, y el arreglo
+   de la desalineación. Probado con un test: primera corrida 7 llamadas caras
+   con fallo en el paso 4, retry hace **1 sola llamada** y salta las 6 ya
+   pagadas. **Límite conocido escrito en el propio archivo**: en Railway el
+   disco es efímero, sobrevive caídas del proceso pero no un redeploy.
+3. **`rag-blindado` — CRAG.** `ragb/grade.py` nuevo: juez de relevancia +
+   reescritura de la pregunta, máx. 2 rondas. **Se aparta del paper a
+   propósito: NO cae a búsqueda web** (rompería el anclaje y reabriría
+   LLM01/LLM09); si no encuentra, dice que no encuentra. Y si el juez se cae,
+   **degrada a pasar los fragmentos sin calificar** en vez de dejar sin
+   respuesta: perder al juez cuesta precisión, nunca disponibilidad.
+   33 tests pasan (los 22 de antes + 11 nuevos del ciclo).
+   De paso se hicieron **perezosos los imports de `psycopg` y `anthropic`**
+   para que el job `guards` de CI (que instala solo pytest) pueda probar el
+   cableado del pipeline, no solo las guardas.
+4. **`mapa-lab` — rondas de tools.** `/api/chat` hacía UNA sola pasada de
+   tools; ahora encadena hasta 3 con dedup por slug. El truco de pescar
+   títulos por `texto.includes()` pasó de muleta a red de seguridad.
+
+### Estado al cerrar
+
+`map` quedó con cambios sin commitear **en `main`** (`.gitignore`, `bot.js`,
+`run-store.js` nuevo). La rama asignada a la sesión era
+`claude/presupuesto-cotizacion-fek80w`: si se retoma, crear esa rama, no
+commitear a `main`.
+
+### Marco conceptual que quedó claro
+
+LangGraph vale más como **catálogo de patrones** que como dependencia. Los
+cuatro arreglos son sus patrones (`interrupt`, tracing, checkpointer, arista
+condicional) implementados en el stack propio sin agregar la librería. Es un
+remix, y los comentarios del código dicen de dónde salió cada idea — LangGraph
+es MIT y citar la fuente vale más que disfrazarla de original.
+
+Dónde SÍ conviene la librería: un flujo que se pausa **días** esperando
+aprobación y retoma con el contexto intacto. Reimplementar checkpointing,
+reanudación y timeouts a mano son semanas. De los cuatro ladrillos de ese
+escenario, ya hay **tres funcionando y mostrables** (checkpointer con
+reanudación, escalada con estado, trazabilidad); falta la pausa larga con token
+de reanudación firmado.
+
+### Comercial (sin cifras acá — repo público)
+
+Se entregó por el chat una cotización formal para una implementación de agente
+de WhatsApp sobre Kapso. Como todo documento comercial, **vive fuera del repo**.
 
 ## Referencia de gobernanza
 
