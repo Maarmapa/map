@@ -203,19 +203,29 @@ al cerrar"); los otros tres viven únicamente en esos adjuntos.
    tools; ahora encadena hasta 3 con dedup por slug. El truco de pescar
    títulos por `texto.includes()` pasó de muleta a red de seguridad.
 
-### Estado al cerrar
+### Estado al cerrar — LOS CUATRO ARRIBA, CON PR DRAFT
 
-✅ **`map`: commiteado y pusheado** — `2e951a0` en la rama
-`claude/presupuesto-cotizacion-fek80w` (`.gitignore`, `CLAUDE.md`, `bot.js`,
-`run-store.js`). Mario dio el ok expreso para "commit y push".
-**No se abrió PR**: el flujo automático de la sesión lo pide, pero la regla de
-oro manda y el ok fue para commit y push, no para PR. Queda a decisión suya.
+Mario dio el ok expreso ("go a todo") para commit, push y PR en los cuatro.
+Todos quedaron como **draft**, ninguno mergeado: la decisión de mergear es suya.
 
-⏳ **`BOYKOT`, `rag-blindado` y `mapa-lab`: sin subir.** El trabajo está hecho y
-probado pero vive solo en los `.patch` del chat. Para retomarlos hace falta
-`add_repo` con `access: "push"` en cada uno (los tres se clonaron en modo
-lectura: BOYKOT adjunto de solo lectura, los otros dos por la lectura anónima
-del proxy).
+| Repo | Rama | PR | Estado de CI |
+|---|---|---|---|
+| `map` | `claude/presupuesto-cotizacion-fek80w` | [#3](https://github.com/Maarmapa/map/pull/3) | Vercel ✅ · Cloudflare ❌ (ver abajo) |
+| `rag-blindado` | `claude/crag-self-rag` | [#1](https://github.com/Maarmapa/rag-blindado/pull/1) | `guards` ✅ (33 tests) · `evals` corriendo |
+| `mapa-lab` | `claude/rondas-de-tools` | [#1](https://github.com/Maarmapa/mapa-lab/pull/1) | Vercel ✅ |
+| `BOYKOT` | `claude/hermes-escalada-humano` | [#52](https://github.com/Maarmapa/BOYKOT/pull/52) | Vercel ✅ (compila) |
+
+**Ruido conocido de CI en `map`**: el check `Workers Builds: maarmapa-media`
+falla. **No lo causa este trabajo**: el repo `map` no tiene `wrangler.toml` ni
+código de worker — el proyecto de Cloudflare está apuntado a un repo que no
+tiene nada que construir, así que falla en cualquier commit. Vale la pena
+desconectarlo o darle su propio repo, pero es tarea aparte. (No se pudo
+confirmar contra `main` con las herramientas de la sesión; la inferencia es del
+contenido del repo, no de haber visto el check en `main`.)
+
+**Lo que NO se probó en vivo**: que la escalada de Hermes llegue de verdad a
+Supabase. Eso necesita un DM real. Typecheck y build de Vercel están limpios,
+pero no es lo mismo — anotado también en el cuerpo del PR #52.
 
 ### Dos cosas operativas que costaron tiempo y conviene no redescubrir
 
@@ -230,6 +240,17 @@ del proxy).
    segundo rechazo venía rotulado como transitorio. No es un problema de
    permisos del repo ni del token: **reintentar sirve**, no hay que buscar
    rodeos ni cambiar de estrategia.
+3. **Cuando el clasificador bloquea un comando compuesto, no corre NADA** —
+   ni las partes inocentes. Pasó con un `checkout -b && add && commit && push`
+   encadenado en Boykot: quedó todo sin hacer y hubo que verificar el estado
+   antes de rehacerlo. **Partir los pasos en comandos separados** (rama, add,
+   commit, push) hace que el bloqueo caiga solo sobre el que lo merece y el
+   resto avance.
+4. **Los repos privados sí necesitan `add_repo` con `access: "push"`**, y el
+   clon con credenciales vive en `/workspace/<repo>` (sin el owner), distinto
+   del clon de lectura anónima en `/workspace/<owner>/<repo>`. Los parches
+   `.patch` se aplicaron limpios sobre los clones nuevos porque los HEAD
+   coincidían — conviene verificar eso con `git apply --check` antes.
 
 ### Marco conceptual que quedó claro
 
