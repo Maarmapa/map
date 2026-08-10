@@ -119,6 +119,29 @@
 
 ## Pendientes abiertos
 
+- 🔴 **Formalizar el protocolo de verificación antes de publicar hacia afuera.**
+  Mario lo pidió expresamente el 10-ago después de que **dos de los tres errores
+  de esa sesión los cazara él, no la sesión**. Que un error se atrape solo si el
+  usuario está mirando la pantalla no es un control, es suerte.
+  Borrador de checklist, sacado de lo que efectivamente falló ese día. Antes de
+  mandar un issue, un PR o un reporte a un tercero:
+  1. ¿La afirmación se verificó contra **la rama destino**, no contra el paquete
+     instalado ni contra el release de PyPI?
+  2. ¿Las citas `archivo:línea` calzan con esa rama **hoy**? (se movieron dos
+     veces en una sola sesión)
+  3. ¿El nombre canónico del repo, del owner y de la rama está **verificado**
+     —en el remoto o en la UI— y no inferido de cómo se encontró el proyecto?
+     (acá se invirtió el sentido de un rename)
+  4. ¿Hay alguna rama en vuelo que vuelva obsoleto el hallazgo, o que lo haga
+     ver como "wontfix"?
+  5. ¿El idioma coincide con el del proyecto? (se redactó todo en español para
+     un repo que trabaja en inglés)
+  6. ¿Algo de esto ya lo arreglamos nosotros en otro PR, y por lo tanto ya no
+     corresponde reportarlo como abierto?
+  7. ¿Se re-verificó **justo antes de publicar**, y no solo cuando se escribió?
+  Falta discutirlo bien y decidir si se vuelve regla dura, si aplica también a
+  los repos propios, y qué se hace cuando un chequeo no se puede correr.
+
 - ✅ **`rag-blindado` — HECHO, PUSHEADO Y VIVO**: `Maarmapa/rag-blindado`,
   público, commit `993c3d2`, 24 archivos. El repo lo creó la sesión del Mini
   el 8-ago 09:44 (hora de Chile) y una sesión remota le pusheó el pipeline
@@ -429,6 +452,18 @@ alcance acotado, criterio de aceptación obvio, cero riesgo de romper nada. Se
 verifica con `git apply --check` contra la rama destino y, si es RST, validándolo
 con docutils a `halt_level=2` (warnings tratados como error) antes de mandarlo.
 
+**La apuesta salió bien y vale como evidencia, no como intuición: lo mergearon el
+mismo día.** En un repo con 91 ramas en vuelo y 2 issues abiertos, un PR de
+alguien de afuera mergeado en horas dice que la vía funciona cuando el aporte es
+angosto y obviamente correcto. Verificado por tres caminos independientes: el
+`CONTRIBUTING.rst` de `develop` quedó byte por byte idéntico al commit del PR, el
+ref `refs/pull/805/merge` desapareció —solo existe mientras el PR está abierto— y
+en `develop` ya no queda ni `ionelmc` ni `tox`.
+
+Corolario para la próxima vez que haya que entrar a un proyecto ajeno: **el
+primer aporte no se elige por importancia, se elige por lo fácil que es decir que
+sí.** Los hallazgos grandes se mandan después, cuando ya no eres un desconocido.
+
 ### Límites de sesión que se volvieron a confirmar
 
 - **No se puede crear repos ni forkear desde una sesión remota**, y `add_repo`
@@ -460,15 +495,42 @@ Ambas se iban a recomendar y ambas se cayeron al mirar la actividad real.
 **Mirar la fecha del último commit antes de recomendar una dependencia** cuesta
 diez segundos y evita una mala recomendación.
 
+### Estado al cerrar el día
+
+- ✅ **Forkeado, PR abierto y MERGEADO el mismo día.** Mario lo hizo a mano
+  siguiendo la guía paso a paso; era su primer fork y su primer parche aplicado.
+- ✅ **Un issue publicado**, el que pregunta por la evaluación del RAG. Sin
+  respuesta todavía.
+- ⏳ Los demás issues siguen redactados y sin publicar, espaciados a propósito.
+  Ver el archivo externo.
+
 ### Pendiente de Mario (nada de esto lo puede hacer una sesión remota)
 
 - Crear el repo vacío `dashai-mcp` (Public, sin README ni licencia) para que una
   sesión pueda pushear el MCP.
-- Forkear el repo ajeno, aplicar los parches y abrir los PRs.
-- Publicar los issues que están redactados (ver el archivo externo).
+- Publicar los issues restantes y mandar el PR del pruner (ver el archivo
+  externo para el orden).
 - Correr `bench_embeddings_rag.py` en el Mini y mandar la salida.
 - Reportar el bug de la app de Claude (el borrador que se pierde al salir del
   campo de texto) con `reporte-bug-app-claude.md`.
+
+### Lo operativo que costó tiempo y conviene no redescubrir
+
+- **Un `.patch` bajado desde el chat puede perder los guiones del nombre**
+  (`fix-contributing-dashai.patch` llegó como `fixcontributingdashai.patch`).
+  Verificar con `ls -lat ~/Downloads | head` antes de pelear con la ruta.
+- **Distinguir el tipo de parche antes de aplicarlo**: los de `git format-patch`
+  traen el mensaje de commit adentro y van con `git am`; un diff pelado va con
+  `git apply` y se commitea a mano. Usar el equivocado falla de forma confusa.
+- **Al forkear hay que desmarcar la casilla "copy the default branch only"**, o
+  el fork no trae la rama a la que apunta el PR.
+- **Al abrir el PR, GitHub apunta la base a la rama por defecto del upstream.**
+  Hay que cambiarla a mano a la rama de desarrollo.
+- **Al pegar código en un editor web, los saltos de línea se pueden perder.** Un
+  archivo con comentarios `//` se destruye entero si eso pasa (el primer
+  comentario se traga el resto). Para pegar en un panel web conviene una versión
+  sin comentarios de línea y con punto y coma en cada sentencia — se comprueba
+  colapsando el archivo con `tr '\n' ' '` y pasándole `node --check`.
 
 ## Referencia de gobernanza
 
