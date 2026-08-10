@@ -238,7 +238,10 @@ SOLO EL POST, nada más.`;
       const r2Url = `${this.r2Worker}/${filename}`;
       const uploadRes = await fetch(r2Url, {
         method: 'PUT',
-        headers: { 'Content-Type': 'image/jpeg' },
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'Authorization': `Bearer ${process.env.R2_UPLOAD_TOKEN || ''}`
+        },
         body: buffer,
         signal: AbortSignal.timeout(20000)
       });

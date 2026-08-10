@@ -2,6 +2,7 @@
 // Trackea consumo de APIs en tiempo real + logs en R2
 
 const R2_WORKER = 'https://maarmapa-media.mario-25d.workers.dev';
+const R2_UPLOAD_TOKEN = process.env.R2_UPLOAD_TOKEN || '';
 
 class TokenMonitor {
   constructor() {
@@ -115,7 +116,10 @@ class TokenMonitor {
       
       const res = await fetch(`${R2_WORKER}/${filename}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${R2_UPLOAD_TOKEN}`
+        },
         body: payload
       });
       

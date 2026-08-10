@@ -93,6 +93,30 @@
   sitios propios en Vercel). Para verificar algo de esos, usar búsqueda web
   o pedirle el dato a Mario — no concluir por ausencia.
 
+## Infraestructura propia: cosas que sorprenden si no las sabes
+
+- **El worker `maarmapa-media` exige token desde el 10-ago-2026.** Hasta ese día
+  su `PUT` no pedía nada: cualquiera con la URL podía subir archivos al bucket o
+  pisar los que ya estaban. Se verificó con un `curl` sin credenciales que
+  devolvió 200 y subió el archivo. Ahora ese mismo `curl` devuelve 401.
+  - Bucket: **`maarmapa`**. Dominio público:
+    `pub-5dd65bdf9977446c93204c83d30ec735.r2.dev`.
+  - Para subir hay que mandar `Authorization: Bearer <token>`. En Cloudflare el
+    secret se llama `UPLOAD_TOKEN`; el bot lo lee de `R2_UPLOAD_TOKEN` del
+    entorno. **Sin esa variable, todo `PUT` da 401 — no es un bug, es la guarda.**
+  - Falla cerrado a propósito: si el secret desaparece, el worker rechaza todas
+    las subidas en vez de volver a quedar abierto.
+  - `GET` y `?list=true` quedaron intactos, así que nada que consuma los medios
+    necesitó cambiar.
+- ⚠️ **El código de ese worker vive SOLO en Cloudflare**, no está en ningún repo.
+  Si se borra o se pisa, se perdió. Darle su propio repo es tarea pendiente — y
+  **ojo: `map` no puede ser ese repo**. El proyecto de Cloudflare está apuntado a
+  `map`, que no tiene worker que construir, y por eso el check
+  `Workers Builds: maarmapa-media` sale rojo en cada PR. Agregarle un
+  `wrangler.toml` a `map` no arregla eso: **desplegaría encima del worker vivo y
+  lo rompería**. El arreglo es desconectar el Git de ese proyecto, o darle repo
+  propio con su `wrangler.toml`.
+
 ## Pendientes abiertos
 
 - ✅ **`rag-blindado` — HECHO, PUSHEADO Y VIVO**: `Maarmapa/rag-blindado`,

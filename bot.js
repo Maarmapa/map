@@ -15,6 +15,10 @@ const WebPostOpenRouter = require('./webpost-openrouter-module');
 const SOUTHSIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH%20SIDE%20CRIMINI.mp3';
 const R2_BASE = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/';
 const R2_WORKER = 'https://maarmapa-media.mario-25d.workers.dev';
+// Token de subida al worker de R2. Antes el PUT del worker no pedia nada:
+// cualquiera con la URL podia subir archivos al bucket o pisar los que ya
+// estaban. Va por entorno, nunca en el codigo.
+const R2_UPLOAD_TOKEN = process.env.R2_UPLOAD_TOKEN || '';
 
 const MODELS = {
   text: { fast: 'deepseek/deepseek-chat', pro: 'deepseek/deepseek-r1', gpt: 'openai/gpt-4o' },
@@ -96,7 +100,12 @@ function bar(n, t) { const f = Math.round((n/t)*10); return '[' + '█'.repeat(f
 async function uploadToR2(buffer, filename, contentType) {
   try {
     const r = await fetch(R2_WORKER + '/' + filename, {
-      method: 'PUT', headers: { 'Content-Type': contentType || 'video/mp4' }, body: buffer
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType || 'video/mp4',
+        'Authorization': 'Bearer ' + R2_UPLOAD_TOKEN
+      },
+      body: buffer
     });
     const d = await r.json();
     console.log('R2 upload:', d.url);
