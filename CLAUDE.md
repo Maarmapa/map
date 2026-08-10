@@ -108,14 +108,38 @@
     las subidas en vez de volver a quedar abierto.
   - `GET` y `?list=true` quedaron intactos, así que nada que consuma los medios
     necesitó cambiar.
+  - ⚠️ **El `?list=true` filtra por `.mp4`.** Cualquier archivo de otro tipo es
+    invisible desde ahí — la carpeta `token-logs/` con los JSON del
+    `token-monitor`, por ejemplo. Para auditar el bucket de verdad hay que abrirlo
+    en el panel de R2, no confiar en ese endpoint.
+  - Los nombres que genera el bot siguen patrones fijos: `<tema>-<n>-<timestamp>.jpg`,
+    `carousel_…`, `grok_…`, `runway_…`, `seedance_…`, `squad_…`, `reframe_…`,
+    `token-logs/…`. Lo que **no** calce con eso es lo que habría que mirar.
 - ⚠️ **El código de ese worker vive SOLO en Cloudflare**, no está en ningún repo.
-  Si se borra o se pisa, se perdió. Darle su propio repo es tarea pendiente — y
-  **ojo: `map` no puede ser ese repo**. El proyecto de Cloudflare está apuntado a
-  `map`, que no tiene worker que construir, y por eso el check
-  `Workers Builds: maarmapa-media` sale rojo en cada PR. Agregarle un
-  `wrangler.toml` a `map` no arregla eso: **desplegaría encima del worker vivo y
-  lo rompería**. El arreglo es desconectar el Git de ese proyecto, o darle repo
-  propio con su `wrangler.toml`.
+  Si se borra o se pisa, se perdió. Darle su propio repo sigue pendiente — y
+  **ojo: `map` no puede ser ese repo**.
+  - El proyecto de Cloudflare estaba apuntado a `map`, que no tiene worker que
+    construir. El log del build lo dice exacto: corre
+    `npx wrangler versions upload` y falla con
+    `Missing entry-point to Worker script`.
+  - **Corrección de un diagnóstico previo**: acá decía que agregarle un
+    `wrangler.toml` a `map` "desplegaría encima del worker vivo y lo rompería".
+    Es más suave: el comando es `versions upload`, que **sube una versión sin
+    ponerla a recibir tráfico**. El riesgo real es dejar una versión construida
+    desde el repo equivocado, lista para promoverse por error. Sigue siendo mala
+    idea, pero no es el desastre instantáneo.
+  - ✅ **El 10-ago se desconectó el Git de ese proyecto**, así que el check rojo
+    `Workers Builds: maarmapa-media` no debería volver a aparecer. El worker sigue
+    desplegado y funcionando: no necesita build para operar.
+- **El otro worker, `okfscrew-media`, está limpio.** Se revisó por si tenía el
+  mismo agujero: es solo de lectura, no tiene rama `PUT`. Sin tocar desde abril.
+- **`map` arrastra vulnerabilidades de npm** — 13 al 10-ago (2 críticas, 2 altas).
+  `npm audit fix` a secas arregla `axios` y `body-parser` sin romper nada.
+  ⚠️ **Nunca `npm audit fix --force` en este repo**: propone instalar
+  `node-telegram-bot-api@1.2.0`, marcado como breaking, que es la librería sobre
+  la que corre todo `bot.js`. Las críticas (`form-data`, `qs`, `request`) son
+  transitivas de esa librería, que sigue usando `request`, deprecado hace años —
+  no se arreglan desde acá.
 
 ## Pendientes abiertos
 
@@ -479,12 +503,25 @@ sí.** Los hallazgos grandes se mandan después, cuando ya no eres un desconocid
 - Dominios bloqueados por el proxy en esta sesión: `share.google`, `dash-ai.com`,
   `docs.dash-ai.com`, `huggingface.co`. Los tres primeros se rodearon leyendo el
   `docs/` del propio repo (el CNAME confirma que publica desde ahí).
-  **HuggingFace no se pudo rodear**: las descargas de modelos dan 403 en el
-  gateway, así que cualquier benchmark que baje modelos hay que correrlo en el
-  Mini.
+- **HuggingFace: hay dos rutas y conviene no confundirlas.** El conector MCP
+  funciona y está autenticado (búsqueda de modelos, tarjetas, datasets). Las
+  **descargas de pesos desde Python** no: `huggingface_hub` va por HTTPS directo
+  y el proxy las corta con 403. Abrir o cerrar el conector no cambia eso — el
+  bloqueo es de la política de red del entorno. Cualquier benchmark que baje
+  modelos hay que correrlo en el Mini.
 - El `venv` del contenedor puede no traer `ensurepip`: `python -m venv` falla sin
   dejar `bin/pip`. Si ya hay un venv de otra instalación a mano, reutilizarlo
   sale más barato que pelear con eso.
+- **Se puede correr la suite de tests de un proyecto ajeno acá, y sale barato.**
+  La de dashAI son 779 tests y corrió entera en **2 min 19** en este contenedor
+  sin GPU: 772 pasaron, y las 7 fallas fueron todas ambientales y explicables
+  —una por el frontend sin compilar, seis por los modelos de HuggingFace que el
+  proxy bloquea—. Vale la pena hacerlo antes de mandar un parche: es la
+  diferencia entre "creo que no rompe nada" y "no rompe ninguno de los 772 que
+  este entorno puede ejecutar".
+- ⚠️ **pytest rechaza los flags desconocidos, no los ignora.** Un `--timeout=300`
+  sin `pytest-timeout` instalado aborta la corrida entera con `EXIT=4`. Comprobar
+  qué plugins hay antes de agregar flags.
 
 ### Bibliotecas descartadas tras verificar (no recomendarlas)
 
