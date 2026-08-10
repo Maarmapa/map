@@ -5,6 +5,7 @@ const AGENT_URL = process.env.AGENT_URL || 'https://maarmapa-agent.onrender.com'
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY || process.env.OPENROUT_KEY;
 const TokenMonitor = require('./token-monitor');
+const runs = require('./run-store');
 const WebPostGenerator = require('./webpost-module');
 const WebPostCarouselGenerator = require('./webpost-carousel-module');
 const WebPostHaikuImages = require('./webpost-haiku-images-ultra-simple');
@@ -14,6 +15,10 @@ const WebPostOpenRouter = require('./webpost-openrouter-module');
 const SOUTHSIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH%20SIDE%20CRIMINI.mp3';
 const R2_BASE = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/';
 const R2_WORKER = 'https://maarmapa-media.mario-25d.workers.dev';
+// Token de subida al worker de R2. Antes el PUT del worker no pedia nada:
+// cualquiera con la URL podia subir archivos al bucket o pisar los que ya
+// estaban. Va por entorno, nunca en el codigo.
+const R2_UPLOAD_TOKEN = process.env.R2_UPLOAD_TOKEN || '';
 
 const MODELS = {
   text: { fast: 'deepseek/deepseek-chat', pro: 'deepseek/deepseek-r1', gpt: 'openai/gpt-4o' },
@@ -95,7 +100,12 @@ function bar(n, t) { const f = Math.round((n/t)*10); return '[' + '█'.repeat(f
 async function uploadToR2(buffer, filename, contentType) {
   try {
     const r = await fetch(R2_WORKER + '/' + filename, {
-      method: 'PUT', headers: { 'Content-Type': contentType || 'video/mp4' }, body: buffer
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType || 'video/mp4',
+        'Authorization': 'Bearer ' + R2_UPLOAD_TOKEN
+      },
+      body: buffer
     });
     const d = await r.json();
     console.log('R2 upload:', d.url);
@@ -333,21 +343,28 @@ async function wakeAgent(chatId, msgId) {
 }
 
 // POST FACTORY
-async function runFactory(chatId, topic) {
-  const msgId = await send(chatId, '🏭 *maarmapa factory*\n' + bar(0, 10) + '\n_Iniciando..._');
+async function runFactory(chatId, topic, run = null) {
+  // Sin `run` es una corrida nueva; con `run` venimos de /retry y los pasos
+  // que ya salieron bien se saltan (no se vuelven a pagar).
+  if (!run) run = runs.startRun({ chatId, kind: '/post', topic });
+  const msgId = await send(chatId, '🏭 *maarmapa factory*\n' + bar(0, 10) + '\n_Iniciando..._ `' + run.id + '`');
   const awake = await wakeAgent(chatId, msgId);
   if (!awake) { await edit(chatId, msgId, '❌ Agente no responde. Intenta en 1 minuto.'); return; }
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(1, 10) + '\n_Buscando contenido..._');
-  let postData = {};
-  try {
+  const postData = await runs.step(run, 'post', async () => {
     const res = await fetch(AGENT_URL + '/post', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic, search_official: true, include_images: true })
     });
     const r = await res.json();
-    postData = r.post || r;
-  } catch(e) { await edit(chatId, msgId, '❌ Error: ' + e.message); return; }
+    return r.post || r;
+  });
+  if (!postData) {
+    runs.finishRun(run);
+    await edit(chatId, msgId, '❌ Error: ' + run.steps['post'].error + '\n\nReintentar: `/retry ' + run.id + '`');
+    return;
+  }
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(2, 10) + '\n_Generando narrativa visual..._');
   const title = (postData.title || topic).slice(0, 120);
   const body = (postData.body || '').replace(/<cite[^>]*>[\s\S]*?<\/cite>/gi, '').replace(/#{1,3} [^\n]+\n?/g, '\n').replace(/\*\*/g, '').trim().slice(0, 900);
@@ -361,7 +378,11 @@ async function runFactory(chatId, topic) {
   if (caption) await send(chatId, '📌 _Caption:_\n' + caption);
   await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(3, 10) + '\n_🖼 Thumbnail..._');
   const thumbPrompt = postData.thumbnail_prompt || ('Dark editorial cinematic. Topic: ' + title + '. Moody atmospheric urban contemporary art. Black background. Dramatic lighting. High contrast.');
-  const thumbUrl = await grokImg(thumbPrompt);
+  const thumbUrl = await runs.step(run, 'thumb', async () => {
+    const u = await grokImg(thumbPrompt);
+    if (!u) throw new Error('Grok no devolvió thumbnail');
+    return u;
+  });
   if (thumbUrl) await photo(chatId, thumbUrl, '🖼 Thumbnail');
   const T = title.toUpperCase().slice(0, 38);
   const style = postData.visual_style || 'dark editorial cinematic';
@@ -374,12 +395,20 @@ async function runFactory(chatId, topic) {
     'Square 1:1 editorial Instagram. White #f5f5f0. Safe zone 120px. Centered Bebas Neue: provocative question about "' + title + '". 06/07.',
     'Square 1:1 editorial Instagram. Dark. Safe zone 120px. Urban pattern 5%. ' + style + '. @maarmapa.eth. 07/07. CLOSURE.'
   ];
-  const slideUrls = [];
+  // Array de 7 posiciones FIJAS. Antes era un push: si el slide 3 fallaba,
+  // el 4 se corría al índice 3 y más abajo recibía motions[3] — el movimiento
+  // equivocado. Con posiciones fijas el índice siempre significa lo mismo.
+  const slides = new Array(7).fill(null);
   for (let i = 0; i < 7; i++) {
     await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(4 + i, 10) + '\n_📸 Slide ' + (i + 1) + '/7..._');
-    const url = await grokImg(coherentPrompts[i]);
-    if (url) { slideUrls.push(url); await photo(chatId, url, 'Slide ' + (i + 1) + '/7'); }
+    const url = await runs.step(run, 'slide-' + i, async () => {
+      const u = await grokImg(coherentPrompts[i]);
+      if (!u) throw new Error('Grok no devolvió imagen');
+      return u;
+    });
+    if (url) { slides[i] = url; await photo(chatId, url, 'Slide ' + (i + 1) + '/7'); }
   }
+  const slideUrls = slides.filter(Boolean);
   let clips = 0;
   if (process.env.RUNWAY_KEY && slideUrls.length > 0) {
     const motions = [
@@ -391,14 +420,31 @@ async function runFactory(chatId, topic) {
       'PROVOCATION. Letters explode outward. Kinetic energy.',
       'RESOLUTION. Fade to deep black. @maarmapa.eth sharp.'
     ];
-    for (let i = 0; i < Math.min(slideUrls.length, 7); i++) {
-      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/' + slideUrls.length + '..._');
-      const vid = await runwayVideo(slideUrls[i], motions[i], 4);
+    for (let i = 0; i < 7; i++) {
+      if (!slides[i]) continue; // sin slide no hay nada que animar
+      await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/7..._');
+      const vid = await runs.step(run, 'clip-' + i, async () => {
+        const v = await runwayVideo(slides[i], motions[i], 4);
+        if (!v) throw new Error('Runway no devolvió video');
+        return v;
+      });
       if (vid) { await video(chatId, vid, '🎬 Clip ' + (i + 1)); clips++; }
     }
   }
-  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(10, 10) + '\n✅ *Completado*');
-  await send(chatId, '✅ *Listo*\n📸 Slides: ' + slideUrls.length + '\n🎬 Clips: ' + clips);
+  runs.finishRun(run);
+  const fallidos = runs.failedSteps(run);
+  await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(10, 10) +
+    (fallidos.length ? '\n⚠️ *Parcial*' : '\n✅ *Completado*'));
+
+  let resumen = (fallidos.length ? '⚠️ *Parcial*' : '✅ *Listo*') +
+    '\n📸 Slides: ' + slideUrls.length + '/7\n🎬 Clips: ' + clips;
+  if (fallidos.length) {
+    // Antes esto era silencio: se veía "Slides: 6" y nunca cuál faltó.
+    resumen += '\n\n*Fallaron ' + fallidos.length + ' pasos:*\n' +
+      fallidos.map(f => '• `' + f.id + '` — ' + f.error).join('\n') +
+      '\n\nRetomar solo lo que falta:\n`/retry ' + run.id + '`';
+  }
+  await send(chatId, resumen);
 }
 
 // ANIME FACTORY
@@ -908,7 +954,7 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7.5*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/seedance16 [escena]` 🆕 — Seedance en HORIZONTAL 16:9 widescreen\n`/reframe [URL]` 🔄 — Reencuadra un video existente a 16:9 (Runway Aleph)\n`/seedancemini [prompt]` 🆕 — Seedance Mini (rápido/barato)\n`/seedance4k [prompt]` 🆕 — Seedance en 4K\n`/seedream [prompt]` 🆕 — Imagen Seedream 5.0\n`/omniflash [prompt]` 🆕 — Google Omni Flash\n`/seedaudio [texto]` 🆕 — Seed Audio 1.0\n`/probemodelos` 🔬 — Lista los modelos disponibles (OpenRouter + Runway)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n📸 *Foto* — Runway la convierte en video 5s');
+    await send(chatId, '🎨 *maarmapa factory v7.5*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/seedance16 [escena]` 🆕 — Seedance en HORIZONTAL 16:9 widescreen\n`/reframe [URL]` 🔄 — Reencuadra un video existente a 16:9 (Runway Aleph)\n`/seedancemini [prompt]` 🆕 — Seedance Mini (rápido/barato)\n`/seedance4k [prompt]` 🆕 — Seedance en 4K\n`/seedream [prompt]` 🆕 — Imagen Seedream 5.0\n`/omniflash [prompt]` 🆕 — Google Omni Flash\n`/seedaudio [texto]` 🆕 — Seed Audio 1.0\n`/probemodelos` 🔬 — Lista los modelos disponibles (OpenRouter + Runway)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n`/runs` 🆕 — Últimas corridas y su estado\n`/retry [id]` 🆕 — Retoma una corrida sin volver a pagar lo ya generado\n📸 *Foto* — Runway la convierte en video 5s');
     return;
   }
 
@@ -957,6 +1003,26 @@ async function handle(msg) {
     const p = text.replace('/seedaudio', '').trim();
     if (!p) { await send(chatId, '🎵 Uso: `/seedaudio [texto o descripción]` — audio con Seed Audio 1.0'); return; }
     runORModel(chatId, 'seed audio', p, { kind: 'audio' }).catch(e => send(chatId, '❌ ' + e.message));
+    return;
+  }
+
+  if (text === '/runs') {
+    const lista = runs.listRuns(chatId, 10);
+    await send(chatId, lista.length
+      ? '🗂 *Últimas corridas*\n\n' + lista.map(runs.resumen).join('\n')
+      : 'No hay corridas registradas todavía.');
+    return;
+  }
+
+  if (text.startsWith('/retry ')) {
+    const rid = text.replace('/retry ', '').trim();
+    const prev = runs.getRun(rid);
+    if (!prev) { await send(chatId, '❌ No encuentro la corrida `' + rid + '`. Mira `/runs`.'); return; }
+    if (String(prev.chatId) !== String(chatId)) { await send(chatId, '❌ Esa corrida no es de este chat.'); return; }
+    if (prev.kind !== '/post') { await send(chatId, '⚠️ Por ahora solo se puede retomar `/post`. Esa es ' + prev.kind + '.'); return; }
+    const pendientes = runs.failedSteps(prev).length;
+    await send(chatId, '🔁 Retomando `' + prev.id + '` — ' + pendientes + ' pasos pendientes, el resto se salta.');
+    runFactory(chatId, prev.topic, prev).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
 

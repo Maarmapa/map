@@ -1,2 +1,7 @@
 node_modules/
-node_modules/
+.runs/
+
+# Nunca commitear secretos: R2_UPLOAD_TOKEN, claves de API, tokens de bot.
+.env
+.env.*
+!.env.example

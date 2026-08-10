@@ -389,7 +389,10 @@ ONLY JSON, no other text.`;
       const r2Url = `${this.r2Worker}/${filename}`;
       const res = await fetch(r2Url, {
         method: 'PUT',
-        headers: { 'Content-Type': contentType },
+        headers: {
+          'Content-Type': contentType,
+          'Authorization': `Bearer ${process.env.R2_UPLOAD_TOKEN || ''}`
+        },
         body: buffer,
         signal: AbortSignal.timeout(20000)
       });
