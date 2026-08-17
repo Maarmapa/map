@@ -92,7 +92,7 @@ async function photo(chatId, url, caption) {
   } catch(e) { console.error('Photo error:', e.message); }
 }
 async function video(chatId, url, caption) {
-  try { await tg('sendVideo', { chat_id: chatId, video: url, caption }); saveClip(chatId, url); } catch(e) {}
+  try { await tg('sendVideo', { chat_id: chatId, video: url, caption }); saveClip(chatId, url); } catch(e) { console.error('sendVideo failed:', e.message); }
 }
 function bar(n, t) { const f = Math.round((n/t)*10); return '[' + '█'.repeat(f) + '░'.repeat(10-f) + '] ' + Math.round((n/t)*100) + '%'; }
 
@@ -515,7 +515,7 @@ async function runSquad(chatId) {
           const vb = await vr.arrayBuffer();
           const r2u = await uploadToR2(vb, 'squad_' + i + '_' + Date.now() + '.mp4', 'video/mp4');
           if (r2u) saveClip(chatId, r2u);
-        } catch(e) {}
+        } catch(e) { console.error('R2 upload (squad) failed:', e.message); }
         clips.push(vid);
       }
     }
@@ -1173,6 +1173,13 @@ async function handle(msg) {
   }
 
   if (text.startsWith('/webpost-adobe ')) {
+    // Requiere un servidor MCP (MCP_ENDPOINT). El default es localhost:3000, que
+    // NO existe en el deploy de Railway → el comando siempre fallaba con un error
+    // de conexión confuso. Avisamos claro y sugerimos las variantes que sí andan.
+    if (!process.env.MCP_ENDPOINT || process.env.MCP_ENDPOINT.includes('localhost')) {
+      await send(chatId, '⚙️ `/webpost-adobe` necesita un servidor MCP configurado (`MCP_ENDPOINT`) y no está disponible en este deploy.\nUsá `/webpost-haiku-images` o `/webpost-openrouter` en su lugar.');
+      return;
+    }
     const query = text.replace('/webpost-adobe ', '').trim();
     const loadingMsg = await send(chatId, '🔍 Searching "' + query + '"...');
     try {
