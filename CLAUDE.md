@@ -731,20 +731,25 @@ De ahí salió la **Regla cero** de arriba y su Bloque 0.
 
 ### Coda: lo que pasó DESPUÉS de escribir esta nota
 
-Escrita la nota y mergeado el PR #7, `main` **ya se había movido**: otra sesión
-remota mergeó el PR #4 —`npm audit fix` sin `--force`, más su propia nota del
-mismo día—. Ninguna de las dos sesiones supo de la otra mientras corría.
+⚠️ **Corrección a la primera versión de esta coda.** Decía *"no hubo conflicto
+ni pérdida, los dos merges convivieron limpio"*. **Falso, y falso por el mismo
+vicio que documenta esta nota**: se escribió mirando solo un lado. Desde acá el
+merge fue limpio; **desde la otra sesión no**: su `map#4` reventó con un 405
+*"has merge conflicts"* causado por el merge del #7, y tuvo que rebasar y
+resolver. Ver su coda al final del archivo, que lo cuenta de primera mano.
 
-- **No hubo conflicto ni pérdida.** Los dos merges convivieron limpio porque
-  tocaron partes distintas del archivo. **Salió bien por suerte, no por
-  diseño**: las dos estaban editando `CLAUDE.md` a la vez.
-- Sí hubo **colisión de nombres**: dos secciones con encabezado idéntico. De ahí
-  la numeración `(i)`/`(ii)` por orden de merge, el tema en el título, y el
-  aviso cruzado que lleva cada una. Quien lea una sola se lleva media jornada.
+Lo que sí se sostiene:
+
+- **Colisión de nombres**: dos secciones del mismo día con encabezado idéntico.
+  De ahí la numeración `(i)`/`(ii)` por orden de merge, el tema en el título, y
+  el aviso cruzado que lleva cada una. Quien lea una sola se lleva media jornada.
 - La nota de coordinación que ya estaba en este archivo —*"antes de pushear ahí,
-  verificar que no haya trabajo en vuelo"*— **se validó en vivo**. El chequeo
-  barato es `git log --oneline -1 origin/main` **justo antes de commitear**, no
-  al empezar: entre que clonas y pusheas pueden pasar horas.
+  verificar que no haya trabajo en vuelo"*— **se validó en vivo, dos veces**.
+  El chequeo barato es `git log --oneline -1 origin/main` **justo antes de
+  commitear y otra vez justo antes de mergear**, no al empezar: entre que clonas
+  y pusheas pueden pasar horas, y acá `main` se movió tres veces en una mañana.
+- **Lo que no se puede saber solo**: si tu merge fue limpio, no sabes si el de
+  al lado lo fue. Una sesión ve su mitad. Por eso las dos codas se quedan.
 
 ### Dos cosas operativas de esta sesión que conviene no redescubrir
 
@@ -882,7 +887,7 @@ estos repos (los `(#N)` del historial).
 
 1. **El merge de `map#4` falló con 405 "has merge conflicts" aunque el PR
    estaba limpio al abrirse.** Causa: minutos antes se había mergeado el #7 —
-   la sesión del Mini metió SU nota del 25-ago en este archivo la misma
+   la otra sesión remota metió SU nota del 25-ago en este archivo la misma
    mañana. Dos sesiones escribiendo la misma sección de CLAUDE.md el mismo
    día ya no es hipótesis, pasó. **La mergeabilidad de un PR es una foto**:
    antes de apretar merge, re-fetch de main; y si truena, el arreglo es
