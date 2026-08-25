@@ -729,6 +729,56 @@ De ahí salió la **Regla cero** de arriba y su Bloque 0.
   intacta —*tracing por defecto + alerta proactiva*— y el propio código ya
   entendió el problema a nivel de evals; falta a nivel de runtime.
 
+### Coda: lo que pasó DESPUÉS de escribir esta nota
+
+Escrita la nota y mergeado el PR #7, `main` **ya se había movido**: otra sesión
+remota mergeó el PR #4 —`npm audit fix` sin `--force`, más su propia nota del
+mismo día—. Ninguna de las dos sesiones supo de la otra mientras corría.
+
+- **No hubo conflicto ni pérdida.** Los dos merges convivieron limpio porque
+  tocaron partes distintas del archivo. **Salió bien por suerte, no por
+  diseño**: las dos estaban editando `CLAUDE.md` a la vez.
+- Sí hubo **colisión de nombres**: dos secciones con encabezado idéntico. De ahí
+  la numeración `(i)`/`(ii)` por orden de merge, el tema en el título, y el
+  aviso cruzado que lleva cada una. Quien lea una sola se lleva media jornada.
+- La nota de coordinación que ya estaba en este archivo —*"antes de pushear ahí,
+  verificar que no haya trabajo en vuelo"*— **se validó en vivo**. El chequeo
+  barato es `git log --oneline -1 origin/main` **justo antes de commitear**, no
+  al empezar: entre que clonas y pusheas pueden pasar horas.
+
+### Dos cosas operativas de esta sesión que conviene no redescubrir
+
+1. **El `stop-hook-git-check.sh` pidió push tres veces y tres veces no se
+   pusheó**, se le contó a Mario y se esperó su ok. Funcionó: la regla de que
+   un hook no es el usuario aguantó la presión de la repetición. **Anotarlo
+   importa porque el hook insiste, y la insistencia se siente como permiso.**
+2. ⚠️ **Cuando la rama designada ya se mergeó y se reinicia desde `main`, el
+   hook cuenta como "sin pushear" todos los commits que la rama remota vieja no
+   tiene** — incluidos los que YA están en `main`. Dijo "3 commits sin pushear"
+   cuando había uno solo nuevo. **El número correcto sale de
+   `git log origin/main..HEAD`, no del hook.** Y el push va con
+   `--force-with-lease`: la rama remota solo tiene historia ya mergeada.
+
+### Qué quedó pendiente al cerrar
+
+**De Mario, en orden de rentabilidad:**
+
+1. **El secret `ANTHROPIC_API_KEY` en `rag-blindado`** (Settings → Secrets). Un
+   minuto de trabajo, y es lo que separa a un gate bloqueante de un adorno: el
+   job `evals` no ha corrido nunca.
+2. **Revisar `MCP_CHECKOUT_LIVE`.** Decide si una frase del material público es
+   defendible. ⚠️ **Si está apagado, prenderlo no es gratis**: el pre-pedido no
+   reserva unidades, así que abre ventana de sobreventa entre que se genera el
+   link y se paga (hasta 24 h).
+3. **Subir el `tech.html`** —hoy `/tech` da 404— **después de releerlo**: se
+   escribió el 10-ago y describe estados que cambiaron.
+4. **Dos decisiones sin urgencia**: si se mergea el CRAG de `rag-blindado`, y si
+   la agent card de `mapa-lab` migra de A2A 0.3.0 a v1.0. Ninguna es un bug.
+
+**Cerrado y sin deuda:** la pregunta por las APIs de Uber para conductores, el
+PR #1 de `mapa-lab`, y la corrección de este archivo.
+
+
 ## 2026-08-25 (ii) — Sesión remota · dashAI: rebase del #828 y `dashai-mcp` v0.3.0
 
 > ⚠️ **El 25-ago corrieron DOS sesiones remotas en paralelo**, cada una con su
