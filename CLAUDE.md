@@ -699,3 +699,35 @@ La regla que queda: **cuando un análisis produce una recomendación
 destructiva** —dar de baja, poner en cero, eliminar— **verificar el dato de
 entrada una vez más antes de recomendarla**, aunque el análisis se vea
 sólido. El costo de esa verificación es siempre menor que el de la acción.
+
+### Cierre operativo de esa misma sesión
+
+Cosas que se aprendieron después de escribir lo de arriba y que conviene
+tener a mano.
+
+**Cuando el canal falla, cambiar de canal — no insistir.** Mandé un archivo
+por correo tres veces; el API confirmaba el adjunto y el destinatario no lo
+veía. Discutir quién tenía razón no servía de nada. La salida fue subirlo al
+propio servidor y mandar el link, que es el mecanismo que ya había funcionado
+ese mismo día para otra cosa. **Regla: al segundo "no me llegó", cambiar de
+método.** El costo de insistir lo paga el usuario.
+
+**Los endpoints de dry-run suelen estar detrás de la sesión del navegador.**
+El de este proyecto valida `isAdmin()` por cookie, así que una sesión agéntica
+no lo puede correr — lo abre el usuario. Vale la pena leer la autenticación
+del endpoint ANTES de ofrecerse a ejecutarlo, para no prometer algo que no se
+puede hacer.
+
+**Para probar una rama sin mergear**: el preview de Vercel de esa rama sí
+tiene el cambio, producción no. La URL sigue el patrón
+`<proyecto>-git-<rama-con-guiones>-<team>.vercel.app`. Un 302 ahí significa
+que existe y pide login, no que falle.
+
+**Los bots de soporte de un proveedor sirven para dos cosas**: contestar lo
+que está documentado, y **decirte oficialmente que algo no lo está**. Esa
+segunda respuesta es la valiosa — es lo que justifica escalar a un humano sin
+que te devuelvan al bot. Conviene citarla al abrir el caso formal.
+
+**El canal formal y el chat rápido no son intercambiables.** El chat lleva al
+bot; para algo que el bot ya declaró fuera de su alcance, hay que ir al
+formulario de casos. Volver al chat es garantía de recibir la misma respuesta.
