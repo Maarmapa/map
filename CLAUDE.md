@@ -1140,3 +1140,50 @@ que te devuelvan al bot. Conviene citarla al abrir el caso formal.
 **El canal formal y el chat rápido no son intercambiables.** El chat lleva al
 bot; para algo que el bot ya declaró fuera de su alcance, hay que ir al
 formulario de casos. Volver al chat es garantía de recibir la misma respuesta.
+
+### Estado al cerrar — identificadores concretos
+
+Para que una sesión nueva no tenga que redescubrirlos.
+
+**Correos de win-back en Mailchimp** (los cuatro en borrador, sin enviar):
+
+| campaña | id | destinatarios |
+|---|---|---|
+| Arsenal Congelado | `004007f3da` | 69 |
+| Angelus | `fe722dacf8` | 236 |
+| Copic | `513f3a4109` | 47 |
+| Holbein | `29c353db97` | 36 |
+
+Los cuatro son `content_type: html` (editables por API sin romper nada).
+Segmentos estáticos: `8987754` Arsenal original, `8987757` Angelus,
+`8987758` Copic, `8987759` Holbein, y `8987760` creado para excluir el
+solapamiento — sin ese último, 313 personas recibían dos correos.
+
+Cupón **`VOLVER15`** en WooCommerce (id 241454): 15%, uso individual,
+excluye rebajados, uno por persona, vence 15-sep-2026. Distinto de
+`VUELVE15`, que es el del carro abandonado, para poder medirlos por
+separado.
+
+**PRs abiertos**: `Maarmapa/BOYKOT#101` (los 51 alias del sync, draft) y
+`Maarmapa/map#11` (esta nota).
+
+Antes de mergear el #101: correr el dry-run en el preview de la rama, no en
+producción — producción no tiene los alias. El endpoint es
+`/api/admin/cencosud/sync`, fuerza `dryRun` siempre y pide cookie de admin,
+así que lo abre el usuario en su navegador. Confirmar que `unmatched` baja
+en 51 y que ninguna cae en `duplicateSkipped`.
+
+**Kapso**: proyecto `boykot`, número de tipo sandbox (no productivo), una
+conversación activa `68026efa-ed13-43ef-b409-89f12437ff90`. El MCP quedó
+registrado bajo el proyecto `~/Documents/DashAI`, no bajo este — por eso no
+aparece acá. Se le habla igual por `curl`.
+
+**Archivos que sobreviven fuera de git**: en el Escritorio quedaron
+`paris-51-skuseller.csv` (el bueno, el que va al ticket) y la carpeta
+`boykot-instagram/`. En el servidor, bajo `wp-content/uploads/ig/`, están
+las piezas de Instagram y ese mismo CSV con link público — útil cuando los
+adjuntos de correo no llegan.
+
+**Rama obsoleta**: `fix/security-proxy-ratelimit` quedó atrás de `main` y
+arrastra `mapa-lab/`, que este repo sacó a propósito. Sus commits útiles ya
+entraron por otra vía. Conviene borrarla.
