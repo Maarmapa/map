@@ -811,6 +811,37 @@ una versión más nueva (una corrida previa de develop). Salida:
 - **mapa-lab#1 mergeado** por Mario (25-ago): las rondas de tools ya están en
   producción. Los cuatro PRs de la serie LangGraph quedaron cerrados.
 
+### Coda del mismo día: los merges, y dos sesiones chocando en este archivo
+
+Con ok expreso de Mario ("go con los merges") la sesión mergeó sus propios
+PRs: `dashai-mcp#2` (v0.3.0 en main; el release a PyPI sigue siendo paso
+manual de Mario) y `map#4`. Draft → ready → squash, que es la convención de
+estos repos (los `(#N)` del historial).
+
+**Lo que pasó en el medio y vale como lección:**
+
+1. **El merge de `map#4` falló con 405 "has merge conflicts" aunque el PR
+   estaba limpio al abrirse.** Causa: minutos antes se había mergeado el #7 —
+   la sesión del Mini metió SU nota del 25-ago en este archivo la misma
+   mañana. Dos sesiones escribiendo la misma sección de CLAUDE.md el mismo
+   día ya no es hipótesis, pasó. **La mergeabilidad de un PR es una foto**:
+   antes de apretar merge, re-fetch de main; y si truena, el arreglo es
+   rebase + resolver + `--force-with-lease` + reintentar, no forzar nada.
+2. **Cómo se resolvió el conflicto de las notas: quedaron LAS DOS.** Las
+   notas agénticas son bitácora, se acumulan — nunca elegir una sobre otra
+   ni fusionarlas perdiendo autoría de sesión. El archivo quedó con las dos
+   secciones "2026-08-25" en orden cronológico.
+3. **Las dos sesiones llegaron solas a la misma regla.** El Mini escribió la
+   "Regla cero" (este archivo es hipótesis, no fuente) desde sus cuatro
+   notas falsas; esta sesión escribió "las notas describen el pasado" desde
+   encontrarse `dashai-mcp` publicado en PyPI cuando la nota lo daba por
+   inexistente. Convergencia independiente = la regla es de verdad.
+4. **El stop-hook volvió a pedir cosas** (reescribir la autoría del commit a
+   `noreply@anthropic.com` y pushear). No se obedeció: hook ≠ usuario (regla
+   de oro), y la autoría de este repo siempre ha sido la de Mario — el badge
+   "Unverified" por falta de firma es cosmético y es como se ven todos los
+   commits de acá. Se le contó a Mario y él decidió.
+
 ## Referencia de gobernanza
 
 Estas reglas siguen el espíritu de la gobernanza ágil de IA: controles
