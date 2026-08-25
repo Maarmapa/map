@@ -724,6 +724,92 @@ De ahí salió la **Regla cero** de arriba y su Bloque 0.
   intacta —*tracing por defecto + alerta proactiva*— y el propio código ya
   entendió el problema a nivel de evals; falta a nivel de runtime.
 
+## 2026-08-25 — Sesión remota: rebase del #828 y dashai-mcp v0.3.0
+
+### El #828 volvió a estar mergeable
+
+El PR de pruning en `DashAISoftware/dashAI` había quedado en conflicto porque
+upstream mergeó un refactor grande el mismo día que lo abrimos (evaluation
+strategies: el entrenamiento salió del optimizador y `optimize()` ahora recibe
+un callable `strategy` en vez del nombre de la task). Con ok expreso de Mario
+se mergeó el develop fresco (+605 commits) en la rama del PR y se pusheó:
+`refs/pull/828/merge` volvió a existir, que es la señal de que GitHub lo
+considera mergeable. Mario posteó el comentario del rebase.
+
+**La lección grande**: un refactor de upstream puede **reintroducir el bug que
+tu PR arregla, en un archivo nuevo**. El fix de pasar datos de validación a
+`train()` vivía en el optimizador; el refactor movió ese `train()` a
+`HoldoutEvaluationStrategy.evaluate()` — que en develop volvía a entrenar SIN
+validación. Al rebasar no basta chequear que tu línea sobrevivió: hay que
+preguntar **dónde vive ahora** la línea que arreglaste.
+
+Las otras, operativas:
+
+- **Antes de culpar a tu merge por un test rojo, córrelo sobre la base
+  limpia.** `git worktree add /tmp/develop-clean refs/tmp/develop` sale gratis
+  y separó dos fallos pre-existentes (uno de RAG, uno del frontend sin
+  compilar) del trabajo propio. 1154 tests del back pasaron; solo esos dos
+  fallaron, e idéntico en develop limpio.
+- Cambios de upstream que rompen stubs de tests: `_save_metrics` ahora recibe
+  `fold_index`/`inner_fold_index` (los stubs necesitan `**kwargs`), y
+  `optimize()` ya no hace el refit final (la aritmética de épocas de los
+  tests cambió). Dependencia nueva: `statsmodels`.
+- Con cross-validation el reporter de épocas simplemente no dispara (los
+  folds entrenan sin validación): los trials de CV corren completos, sin
+  cambio de comportamiento. Poda por-fold sería un feature aparte.
+
+El monitoreo del #828 sigue cada 12h. El aviso de silencio ya se dio una vez;
+**no insistir más** — solo avisar si se mueve.
+
+### dashai-mcp: mucho más avanzado de lo que decía la nota anterior
+
+La nota del 10-ago decía "entregado por el chat, el repo no existe". Quedó
+vieja rapidísimo: el repo `Maarmapa/dashai-mcp` existe, tiene CI (PR #1
+mergeado), **está publicado en PyPI** (0.2.2, trusted publishing OIDC — sin
+tokens) y las sesiones del Mini le agregaron features y tests (25 → 37).
+**Corolario: antes de retomar cualquier proyecto, verificar su estado real en
+el remoto; las notas describen el pasado, no el presente.** Dato útil: el
+mensaje de error de acceso de una sesión lista los repos autorizados — es un
+inventario fresco gratis.
+
+Esta sesión lo verificó **en vivo** contra dashAI 0.9.7.post1 de PyPI
+(instancia real en el contenedor): las 10 tools, incluyendo entrenar un SVC y
+predecir 10.000 filas. 11/11. Y dejó dos features en la rama local
+`feat/humo-vivo-y-guarda-compat` (2 commits, v0.3.0, 42 tests verdes,
+**SIN pushear — esperando ok de Mario**):
+
+1. **`scripts/smoke_live.py`**: el humo en vivo convertido en script del repo
+   (sin flags: lectura; `--train`: ciclo completo). La regla "un cliente
+   probado solo contra stubs es una hipótesis" hecha herramienta.
+2. **Guarda de compatibilidad en `server_info`**: dashAI no expone su versión
+   por API (verificado: sin endpoint y FastAPI sin `version=`), así que se
+   lee el `openapi.json` de la instancia y se compara la superficie con lo
+   que el servidor llama. `compatibility.status`: ok / mismatch (nombrando
+   diferencias) / unknown. Verificada contra la 0.9.7 viva: ok, sin falso
+   positivo.
+
+Gotcha del contenedor que costó un rato: si dashAI de PyPI no arranca con
+`CommandError: Can't locate revision`, es que `~/.DashAI` quedó estampado por
+una versión más nueva (una corrida previa de develop). Salida:
+`--local-path` a un directorio limpio. No es un bug del paquete.
+
+### Pausas y orden de operaciones (estado al cierre)
+
+- **#828**: pelota de los mantenedores. Monitoreo automático sigue.
+- **Nombre `dashai-mcp`**: se le va a preguntar a dashAI por issue (no tienen
+  Discussions — verificado; y sus issues abiertos subieron de 2 a 6, o sea el
+  canal está más vivo que en agosto-10). Espaciado a propósito respecto del
+  comentario del rebase. El texto está entregado por el chat.
+- **MCP Registry**: gateado por lo anterior, y con orden estricto: primero el
+  release v0.3.0 en GitHub (dispara la subida a PyPI), **después** el envío
+  al Registry — la versión del `server.json` debe existir en PyPI antes.
+- **Borradores en vuelo** (issues para dashAI y el `server.json`): viven en
+  el chat de esta sesión y deben pasar a las memorias locales del Mini.
+  **No van en este repo** (regla anti-leak de arriba: lo no reportado y la
+  táctica viven fuera). Antes de retomar dashAI desde una sesión remota,
+  pedirle a Mario ese contexto.
+- **mapa-lab#1 mergeado** por Mario (25-ago): las rondas de tools ya están en
+  producción. Los cuatro PRs de la serie LangGraph quedaron cerrados.
 
 ## Referencia de gobernanza
 
