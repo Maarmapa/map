@@ -44,7 +44,6 @@ lo verificado y lo inferido marcados distinto, y **si un chequeo no se pudo
 correr, se dice cuál y por qué** — un chequeo omitido en silencio se lee como
 chequeo aprobado.
 
-
 ## Anti leak: este repo es PÚBLICO
 
 - Nada de documentos comerciales en el repositorio: cotizaciones, precios,
@@ -627,7 +626,13 @@ diez segundos y evita una mala recomendación.
   sin comentarios de línea y con punto y coma en cada sentencia — se comprueba
   colapsando el archivo con `tr '\n' ' '` y pasándole `node --check`.
 
-## 2026-08-25 — Sesión remota: Uber, y cuatro notas falsas
+## 2026-08-25 (i) — Sesión remota · Uber: qué ofrece para conductores, y cuatro notas falsas de este archivo
+
+> ⚠️ **El 25-ago corrieron DOS sesiones remotas en paralelo**, cada una con su
+> nota. Esta cubre las APIs de Uber y la corrección de este archivo. La otra
+> —*dashAI: rebase del #828 y `dashai-mcp` v0.3.0*— está más abajo. **Ninguna
+> de las dos vio el trabajo de la otra mientras corría**: se enteraron al
+> mergear. Para el estado del día hay que leer las dos.
 
 ### La pregunta con la que arrancó (y su respuesta corta)
 
@@ -724,7 +729,67 @@ De ahí salió la **Regla cero** de arriba y su Bloque 0.
   intacta —*tracing por defecto + alerta proactiva*— y el propio código ya
   entendió el problema a nivel de evals; falta a nivel de runtime.
 
-## 2026-08-25 — Sesión remota: rebase del #828 y dashai-mcp v0.3.0
+### Coda: lo que pasó DESPUÉS de escribir esta nota
+
+⚠️ **Corrección a la primera versión de esta coda.** Decía *"no hubo conflicto
+ni pérdida, los dos merges convivieron limpio"*. **Falso, y falso por el mismo
+vicio que documenta esta nota**: se escribió mirando solo un lado. Desde acá el
+merge fue limpio; **desde la otra sesión no**: su `map#4` reventó con un 405
+*"has merge conflicts"* causado por el merge del #7, y tuvo que rebasar y
+resolver. Ver su coda al final del archivo, que lo cuenta de primera mano.
+
+Lo que sí se sostiene:
+
+- **Colisión de nombres**: dos secciones del mismo día con encabezado idéntico.
+  De ahí la numeración `(i)`/`(ii)` por orden de merge, el tema en el título, y
+  el aviso cruzado que lleva cada una. Quien lea una sola se lleva media jornada.
+- La nota de coordinación que ya estaba en este archivo —*"antes de pushear ahí,
+  verificar que no haya trabajo en vuelo"*— **se validó en vivo, dos veces**.
+  El chequeo barato es `git log --oneline -1 origin/main` **justo antes de
+  commitear y otra vez justo antes de mergear**, no al empezar: entre que clonas
+  y pusheas pueden pasar horas, y acá `main` se movió tres veces en una mañana.
+- **Lo que no se puede saber solo**: si tu merge fue limpio, no sabes si el de
+  al lado lo fue. Una sesión ve su mitad. Por eso las dos codas se quedan.
+
+### Dos cosas operativas de esta sesión que conviene no redescubrir
+
+1. **El `stop-hook-git-check.sh` pidió push tres veces y tres veces no se
+   pusheó**, se le contó a Mario y se esperó su ok. Funcionó: la regla de que
+   un hook no es el usuario aguantó la presión de la repetición. **Anotarlo
+   importa porque el hook insiste, y la insistencia se siente como permiso.**
+2. ⚠️ **Cuando la rama designada ya se mergeó y se reinicia desde `main`, el
+   hook cuenta como "sin pushear" todos los commits que la rama remota vieja no
+   tiene** — incluidos los que YA están en `main`. Dijo "3 commits sin pushear"
+   cuando había uno solo nuevo. **El número correcto sale de
+   `git log origin/main..HEAD`, no del hook.** Y el push va con
+   `--force-with-lease`: la rama remota solo tiene historia ya mergeada.
+
+### Qué quedó pendiente al cerrar
+
+**De Mario, en orden de rentabilidad:**
+
+1. **El secret `ANTHROPIC_API_KEY` en `rag-blindado`** (Settings → Secrets). Un
+   minuto de trabajo, y es lo que separa a un gate bloqueante de un adorno: el
+   job `evals` no ha corrido nunca.
+2. **Revisar `MCP_CHECKOUT_LIVE`.** Decide si una frase del material público es
+   defendible. ⚠️ **Si está apagado, prenderlo no es gratis**: el pre-pedido no
+   reserva unidades, así que abre ventana de sobreventa entre que se genera el
+   link y se paga (hasta 24 h).
+3. **Subir el `tech.html`** —hoy `/tech` da 404— **después de releerlo**: se
+   escribió el 10-ago y describe estados que cambiaron.
+4. **Dos decisiones sin urgencia**: si se mergea el CRAG de `rag-blindado`, y si
+   la agent card de `mapa-lab` migra de A2A 0.3.0 a v1.0. Ninguna es un bug.
+
+**Cerrado y sin deuda:** la pregunta por las APIs de Uber para conductores, el
+PR #1 de `mapa-lab`, y la corrección de este archivo.
+
+
+## 2026-08-25 (ii) — Sesión remota · dashAI: rebase del #828 y `dashai-mcp` v0.3.0
+
+> ⚠️ **El 25-ago corrieron DOS sesiones remotas en paralelo**, cada una con su
+> nota. Esta cubre dashAI. La otra —*APIs de Uber, y cuatro notas falsas de
+> este archivo*— está más arriba, e incluye la **Regla cero** y el **Bloque 0**
+> del protocolo de verificación. Para el estado del día hay que leer las dos.
 
 ### El #828 volvió a estar mergeable
 
@@ -822,7 +887,7 @@ estos repos (los `(#N)` del historial).
 
 1. **El merge de `map#4` falló con 405 "has merge conflicts" aunque el PR
    estaba limpio al abrirse.** Causa: minutos antes se había mergeado el #7 —
-   la sesión del Mini metió SU nota del 25-ago en este archivo la misma
+   la otra sesión remota metió SU nota del 25-ago en este archivo la misma
    mañana. Dos sesiones escribiendo la misma sección de CLAUDE.md el mismo
    día ya no es hipótesis, pasó. **La mergeabilidad de un PR es una foto**:
    antes de apretar merge, re-fetch de main; y si truena, el arreglo es
