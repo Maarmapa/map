@@ -627,6 +627,104 @@ diez segundos y evita una mala recomendación.
   sin comentarios de línea y con punto y coma en cada sentencia — se comprueba
   colapsando el archivo con `tr '\n' ' '` y pasándole `node --check`.
 
+## 2026-08-25 — Sesión remota: Uber, y cuatro notas falsas
+
+### La pregunta con la que arrancó (y su respuesta corta)
+
+*"¿Qué ofrece Uber de API, CLI o algo agéntico para conductores?"*
+
+**Nada construible.** La Driver API (`/partners/me`, `/trips`, `/payments`)
+existe pero está en acceso limitado tras aprobación desde que Uber cortó el
+API público en 2019 con siete días de aviso. El Supplier Platform —que sí
+tiene datos ricos: ubicación en vivo de la flota, pagos por conductor— exige
+ser socio de flota con acuerdo comercial. **No hay CLI**, y los SDKs son de la
+era pre-2019. Lo agéntico existe (Uber Assistant con OpenAI dentro de la app
+del conductor, y MCP oficial en `mcp.uber.com`) pero es **producto cerrado,
+del lado del pasajero, y US-only**.
+
+La única puerta abierta de verdad para datos de conductor con su permiso son
+los agregadores de ingresos tipo Argyle o Pinwheel — con la advertencia de que
+funcionan con las credenciales del trabajador, no con un scope acotado.
+
+**Conclusión: no es un camino, es un callejón.** Queda respondido; no hace
+falta volver a investigarlo.
+
+### El método, que es lo que sí se transfiere
+
+- **`WebFetch` quedó inservible** en esta sesión: 403 en el CONNECT para todo
+  lo externo que se probó. Ver "Límites conocidos" para la lista.
+- **El truco que salvó la investigación entera**: `WebSearch` con
+  `allowed_domains: ["dominio.com"]` devuelve el contenido de una página
+  bloqueada, porque el índice del buscador ya la leyó. Es fuente secundaria
+  —sirve para orientarse, jamás para citar— pero convierte un muro en un
+  inconveniente.
+- **Un dataset puede tener dos capas y solo una al día.** El
+  `zenml/llmops-database` de HuggingFace tiene el parquet vivo (2.100 filas) y
+  los `.md` de `markdown_data/` congelados en 2024. Se perdió tiempo buscando
+  en la capa muerta. **Antes de confiar en un mirror, comparar su fecha con la
+  del original.**
+
+### Lo que de verdad importó: cuatro afirmaciones falsas
+
+La sesión razonó sobre `CLAUDE.md` en vez de sobre el código y **afirmó cuatro
+cosas falsas con total confianza**. Las cuatro se cayeron con un `git clone`:
+
+| # | Se afirmó | Realidad |
+|---|---|---|
+| 1 | El bug de argparse de `rag-blindado` sigue abierto | Ya estaba arreglado en `main` |
+| 2 | Falta trazabilidad: solo entrada y salida | Ya existía, y `evals/run.py` había crecido a 561 líneas |
+| 3 | La degradación del juez CRAG es un catch mudo | Devuelve `graded=False` + `error`, expuestos en `rounds[]` |
+| 4 | `mapa-lab` declara `reservar_obra` sin implementación y `/api/a2a` no existe | Las dos cosas resueltas; la card desplegada es byte-idéntica al repo |
+
+**Ninguna era mentira cuando se escribió.** El código avanzó y las notas no.
+De ahí salió la **Regla cero** de arriba y su Bloque 0.
+
+### Las lecciones
+
+1. **Este archivo es una hipótesis, no la fuente.** Es lo primero que lee cada
+   sesión, así que un dato viejo acá se convierte en un razonamiento entero
+   construido sobre arena. La regla de *verificar contra la rama* ya estaba
+   escrita; lo que faltaba era aplicársela al archivo mismo.
+2. **El deploy es verificable desde una sesión remota.** Los sitios propios en
+   Vercel no están bloqueados. Eso convirtió "¿lo desplegado coincide con el
+   repo?" en un chequeo real, y en esta sesión rindió tres veces: confirmó la
+   card de `mapa-lab`, descubrió el 404 de `/tech`, y resolvió una pregunta
+   sobre material público consultando un endpoint en vivo.
+3. **Corregir la descripción de un PR antes de mergearlo.** El PR #1 de
+   `mapa-lab` listaba dos pendientes que ya eran falsos. Mergearlo tal cual
+   habría dejado el dato equivocado clavado en el historial para siempre.
+4. **El 95% offline es la trampa.** De la ficha de Uber sobre evaluación de
+   agentes: su agente de reserva por voz marcaba 95% en evals offline y en
+   producción malinterpretaba conversaciones de fondo. Lo detectó una
+   diseñadora conversacional, no un ingeniero. **Un checklist de
+   auto-verificación no se atrapa a sí mismo**; por eso el Bloque 2 del
+   protocolo es sobre cómo se entrega, no sobre cómo se revisa.
+5. **Un 100% de aprobación sigue siendo una señal de alarma** (ya estaba
+   anotado el 10-ago, se volvió a confirmar): acá la sesión pasó su propio
+   checklist de siete puntos y aun así falló cuatro veces, porque los siete
+   asumían que ya estabas mirando la fuente correcta.
+
+### Lo que quedó hecho
+
+| Repo | Qué | Estado |
+|---|---|---|
+| `mapa-lab` | PR #1 — encadenar hasta 3 rondas de tools | ✅ **mergeado** (squash `a83ee81`), verificado antes: merge limpio, features conviven, `tsc` sin errores propios |
+| `map` | PR #7 — corregir el estado real en `CLAUDE.md` | 📝 draft |
+
+### Pendientes que dejó abiertos
+
+- **`tech.html` sigue sin desplegar** (404 verificado) y **hay que releerlo
+  antes de subirlo**: se escribió el 10-ago y describe estados que cambiaron.
+- **Decidir si la agent card de `mapa-lab` migra de A2A 0.3.0 a v1.0.** Hoy es
+  consistente y honesta; no es un bug, es una decisión.
+- **El CRAG de `rag-blindado` sigue sin mergear** y el secret
+  `ANTHROPIC_API_KEY` sigue faltando.
+- **Lo único abierto de verdad en `rag-blindado`**: la traza existe pero nadie
+  la mira. Sin logging, sin persistencia, sin alerta. Es la lección de Uber
+  intacta —*tracing por defecto + alerta proactiva*— y el propio código ya
+  entendió el problema a nivel de evals; falta a nivel de runtime.
+
+
 ## Referencia de gobernanza
 
 Estas reglas siguen el espíritu de la gobernanza ágil de IA: controles
