@@ -44,7 +44,6 @@ lo verificado y lo inferido marcados distinto, y **si un chequeo no se pudo
 correr, se dice cuál y por qué** — un chequeo omitido en silencio se lee como
 chequeo aprobado.
 
-
 ## Anti leak: este repo es PÚBLICO
 
 - Nada de documentos comerciales en el repositorio: cotizaciones, precios,
@@ -627,7 +626,13 @@ diez segundos y evita una mala recomendación.
   sin comentarios de línea y con punto y coma en cada sentencia — se comprueba
   colapsando el archivo con `tr '\n' ' '` y pasándole `node --check`.
 
-## 2026-08-25 — Sesión remota: Uber, y cuatro notas falsas
+## 2026-08-25 (i) — Sesión remota · Uber: qué ofrece para conductores, y cuatro notas falsas de este archivo
+
+> ⚠️ **El 25-ago corrieron DOS sesiones remotas en paralelo**, cada una con su
+> nota. Esta cubre las APIs de Uber y la corrección de este archivo. La otra
+> —*dashAI: rebase del #828 y `dashai-mcp` v0.3.0*— está más abajo. **Ninguna
+> de las dos vio el trabajo de la otra mientras corría**: se enteraron al
+> mergear. Para el estado del día hay que leer las dos.
 
 ### La pregunta con la que arrancó (y su respuesta corta)
 
@@ -724,7 +729,12 @@ De ahí salió la **Regla cero** de arriba y su Bloque 0.
   intacta —*tracing por defecto + alerta proactiva*— y el propio código ya
   entendió el problema a nivel de evals; falta a nivel de runtime.
 
-## 2026-08-25 — Sesión remota: rebase del #828 y dashai-mcp v0.3.0
+## 2026-08-25 (ii) — Sesión remota · dashAI: rebase del #828 y `dashai-mcp` v0.3.0
+
+> ⚠️ **El 25-ago corrieron DOS sesiones remotas en paralelo**, cada una con su
+> nota. Esta cubre dashAI. La otra —*APIs de Uber, y cuatro notas falsas de
+> este archivo*— está más arriba, e incluye la **Regla cero** y el **Bloque 0**
+> del protocolo de verificación. Para el estado del día hay que leer las dos.
 
 ### El #828 volvió a estar mergeable
 
