@@ -709,7 +709,7 @@ De ahí salió la **Regla cero** de arriba y su Bloque 0.
 | Repo | Qué | Estado |
 |---|---|---|
 | `mapa-lab` | PR #1 — encadenar hasta 3 rondas de tools | ✅ **mergeado** (squash `a83ee81`), verificado antes: merge limpio, features conviven, `tsc` sin errores propios |
-| `map` | PR #7 — corregir el estado real en `CLAUDE.md` | 📝 draft |
+| `map` | PR #7 — corregir el estado real en `CLAUDE.md` + esta misma nota | ✅ mergeado |
 
 ### Pendientes que dejó abiertos
 
