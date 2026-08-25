@@ -907,6 +907,77 @@ estos repos (los `(#N)` del historial).
    "Unverified" por falta de firma es cosmético y es como se ven todos los
    commits de acá. Se le contó a Mario y él decidió.
 
+## 2026-08-25 (noche) — El #828 mergeado, y un lint que no corrí
+
+### Desenlace
+
+**`DashAISoftware/dashAI#828` fue aprobado y mergeado a `develop`** el mismo día
+del rebase, nueve horas después de pushearlo: `@cristian-tamblay` aprobó y
+mergeó a las 20:13 UTC (`merged_at: 2026-08-25T20:13:11Z`, commit `fb84c5cc8`).
+Verificado contra la API de GitHub, no solo por el correo de notificación.
+
+Con eso son **tres PRs mergeados en dashAI** (#805 docs, #810 best_params, #828
+pruning). El diagnóstico de la mañana queda confirmado por los hechos: el
+silencio de una semana no era desinterés, era que un refactor de upstream había
+dejado el PR en conflicto. **Apenas volvió a estar mergeable, lo aprobaron.**
+
+### La lección del día: correr los hooks del repo ajeno, no solo sus tests
+
+En la misma bandeja llegó otro correo: el workflow de pre-commit del fork falló
+en `af45b94`, el commit del merge. Eran **cuatro cosas cosméticas, las cuatro
+introducidas por mi resolución de conflictos**:
+
+- `raise optuna.TrialPruned()` con paréntesis innecesarios (RSE102 de ruff)
+- una línea en blanco de más en `base_model.py`, donde quedó pegado el hook
+  junto al `compute_metrics` nuevo de upstream
+- una línea en blanco de menos en cada uno de los dos tests, donde se insertó
+  el helper `_holdout_evaluate`
+
+Comprobado que son nuestras: `ruff check` sobre `develop` **antes** del merge
+da "All checks passed" y `ruff format` no toca nada; sobre el árbol mergeado da
+1 error y 3 archivos a reformatear, y los tres archivos son los que tocamos.
+
+Se corrió la suite entera (1154 tests) **pero no se corrió `ruff` ni el
+pre-commit del proyecto** antes de pushear. El mantenedor los arregló él mismo
+ocho minutos después de mergear (`b3b729634`, "Pre-commit fix"). Ninguna afecta
+el comportamiento, pero le sumó trabajo justo cuando estaba haciendo el favor
+de mergear.
+
+**Regla dura, entonces: antes de pushear a un repo ajeno se corren SUS hooks,
+no solo sus tests.** El propio PR #810 de esta serie decía en su cuerpo "ruff
+check y ruff format clean" — la disciplina ya existía y esta vez se saltó. Ojo
+con el detalle que la explica: el CI de upstream corre `pytest`, no ruff, así
+que **el único lugar donde ese error aparecía era el pre-commit del fork**.
+
+### Lo que se hizo después del merge
+
+- **Los dos issues en reserva quedaron listos y re-verificados contra el
+  `develop` de hoy** (`b3b7296`), no contra el de la mañana. Bien que se
+  re-verificó: `cv.py` había cambiado `test_scores` por `validation_scores` en
+  cuestión de horas, así que la cita de la mañana ya estaba muerta. Uno de los
+  dos se probó **por ejecución**, no por lectura. Los textos van por el chat y
+  a las memorias del Mini, no acá (regla anti-leak: lo no reportado vive fuera).
+- **`tech.html` actualizado a tres PRs mergeados** y republicado el artifact.
+  De paso se verificaron dos afirmaciones que llevaba dentro y podían haber
+  envejecido mal: `io.github.Maarmapa/storefront-mcp` **sí está en el Registro
+  MCP oficial** (consultado en `registry.modelcontextprotocol.io/v0/servers`,
+  versión 1.0.1, que coincide con la de npm), y la agent card sigue declarada
+  como A2A 0.3.0, que es lo correcto. Se corrigieron los números viejos de
+  `dashai-mcp`: nueve herramientas y 25 tests pasaron a diez y 42, más PyPI.
+
+### Dos notas de entorno
+
+- **`devpost.com` está bloqueado entero** por el proxy (y sus espejos:
+  `discuss.google.dev`, `competehub.dev`, `agentdeadlines.com`). Para investigar
+  algo alojado ahí sirvió otra vez `WebSearch` con `allowed_domains`, y —esto es
+  lo nuevo— **`cloud.google.com` sí atraviesa**, así que el blog de Google Cloud
+  funciona como fuente primaria para verificar fechas de sus propios eventos.
+- **Republicar un artifact exige leer la versión viva primero.** El publicador
+  rechaza el intento si no la leíste, y con razón: obliga a mezclar en vez de
+  pisar. En este caso los 26.6 KB del vivo contra los 15.4 KB locales asustaban,
+  pero los 11 KB de diferencia eran el runtime que inyecta el propio
+  publicador — el cuerpo era idéntico. **Diffear antes de asustarse.**
+
 ## Referencia de gobernanza
 
 Estas reglas siguen el espíritu de la gobernanza ágil de IA: controles
