@@ -985,3 +985,158 @@ prácticos y proporcionales antes de acciones irreversibles, sin frenar el
 trabajo. Lectura de referencia: Gustavo Venegas, *Agile Artificial
 Intelligence Governance: A Practical Approach to Responsible Corporate
 Adoption* (SSRN, 2026) — https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6375439
+
+## 2026-08-25 (iii) — Sesión local · Boykot: Paris, win-back y el campo que estaba a la vista
+
+Sesión de una tarde entera sobre Boykot. Lo que sigue son las lecciones, no
+la bitácora.
+
+### La lección cara: mirar el dato de origen antes de deducirlo
+
+El problema: 51 publicaciones en Paris con el `skuSeller` roto (un código de
+barras en vez del SKU real), invisibles para el sync de stock.
+
+Lo que hice mal, en orden:
+
+1. **Crucé contra el catálogo equivocado.** Comparé los SKU de Paris contra
+   WooCommerce. Pero el sync lee **BSale** (vía Supabase), que es otro
+   catálogo y no coincide del todo. Diez publicaciones que marqué como rotas
+   estaban perfectas.
+2. **Emparejé por nombre lo que no hacía falta emparejar.** Armé un
+   matcher por tokens del nombre del producto. Marcaba 100% de confianza
+   cruzando tallas distintas: los pinceles Princeton Lauren 3/0, 4 y 5/0
+   caían todos en el SKU del 0.
+3. **Recomendé dar de baja productos vendibles.** Siete publicaciones que
+   dije "no existen, elimínalas" tenían stock real. Mario alcanzó a
+   preguntar antes de ejecutarlo.
+
+Lo que estaba ahí desde el principio: **el export del Seller Center trae una
+columna `Sku Seller Variant`**, a nivel variante, con el código correcto en
+las 51. El campo roto es solo el de nivel producto.
+
+**Regla: antes de inferir una equivalencia, agotá las columnas del archivo
+que ya tenés.** Un matcher por nombre es una hipótesis; una columna del
+export es un hecho. Y si el matcher da 100% en cosas que se distinguen por un
+número (talla, cantidad, medida), está midiendo mal — hay que degradar esos
+casos aunque el puntaje diga lo contrario.
+
+**Corolario sobre las fuentes**: preguntar *"¿contra qué compara el código
+que voy a parchar?"* antes de armar el análisis. Acá había tres catálogos
+(Paris, WooCommerce, BSale) y elegí el que no era.
+
+### Verificar por el rastro, no por el panel
+
+Cuando un tercero procesa una carga tuya, **se ve en el log de tu servidor**:
+va a buscar los archivos que referenciaste. Sirve para saber si entró la
+carga sin depender de que su panel te lo diga. Acá: descargas desde su IP con
+user-agent axios, todas 200.
+
+Y los contadores de su panel engañan: al actualizar imágenes de un producto
+ya aprobado, vuelve a Pendientes. **Que "Aprobados" baje es señal de que la
+carga entró**, no de que algo falló. El número que mide avance es Rechazados.
+
+### Mailchimp: dos cosas que cuestan horas si no se saben
+
+- **El API rechaza editar un correo de automatización mientras está
+  enviando** (400). Pasar la automatización a `paused` lo desbloquea. Al
+  reactivar, sigue como estaba.
+- **El contenido no está donde parece**: `/automations/{wf}/emails/{id}/content`
+  da 404 siempre. El HTML se lee por `/campaigns/{email_id}/content` — el id
+  del correo funciona como id de campaña.
+- Si `content_type` es `template`, un `PUT` de HTML crudo **aplana la
+  plantilla** y se pierde el editor de bloques. Para campañas propias de tipo
+  `html` no hay problema.
+
+### Antes de disparar una serie de campañas: medir el solapamiento
+
+Cuatro campañas a cuatro segmentos parecían 701 envíos. Eran **388 personas**:
+el segmento "general" contenía a casi todos los de los segmentos por marca.
+313 personas habrían recibido dos correos casi simultáneos.
+
+**Regla: bajar los miembros de cada segmento y calcular la unión antes de
+enviar.** Mailchimp no avisa. Y `static_is_not` no existe para segmentos
+estáticos — la salida es crear un segmento nuevo con la diferencia.
+
+### Decidir con los datos propios, no con las buenas prácticas
+
+Para elegir hora de envío y profundidad de descuento, servían más las propias
+campañas históricas que cualquier consejo general. Dos hallazgos que
+contradecían la intuición:
+
+- El mejor día y la mejor franja horaria de esa lista **no eran los que
+  recomienda la literatura**.
+- Un descuento más profundo rindió **menos por envío** que uno moderado. Más
+  descuento no compra más ventas, solo regala margen.
+
+### GIF para correo: el grano viene del tramado, no de la resolución
+
+Un GIF que se ve "lofi" casi siempre es el *dithering*, no los píxeles. Pasar
+de 96 colores con tramado bayer a 256 sin tramado limpia los campos de color
+planos; el costo se paga bajando fotogramas, no resolución.
+
+Y **Outlook de escritorio no anima GIF: muestra el primer fotograma**. El
+fotograma 1 tiene que funcionar solo como imagen fija.
+
+Detalle que se nota y nadie sabe explicar: si el fondo de la imagen no es
+blanco puro, contra una tarjeta blanca se lee como una caja gris. Aplanar el
+fondo a `#ffffff` con relleno conectado desde los bordes lo arregla sin tocar
+el producto.
+
+### MCP por proyecto: dónde queda registrado
+
+`claude mcp add` guarda el servidor **bajo el proyecto donde se corrió el
+comando** (`~/.claude.json`, clave `projects.<ruta>.mcpServers`). Si se corre
+desde otra carpeta, no aparece en el proyecto donde se lo necesita. Para que
+sea global: `--scope user`.
+
+Y un servidor MCP agregado con la sesión ya abierta **no se carga en esa
+sesión**. Pero se le puede hablar igual por `curl`: inicializar por JSON-RPC,
+guardar el `Mcp-Session-Id` de la respuesta, mandar
+`notifications/initialized` y recién ahí `tools/call`. La credencial sale del
+config y va directo al header, sin pasar por el contexto.
+
+### Sobre corregirse a tiempo
+
+Tres de los errores de esta sesión los cacé yo antes de que causaran daño, y
+uno lo cazó Mario preguntando "¿seguro?". El patrón de los cuatro es el
+mismo: **había una verificación barata que no hice porque el resultado
+parecía razonable**. Cruzar contra la fuente correcta, mirar las columnas del
+archivo, calcular la unión de los segmentos, revisar si el destino ya estaba
+ocupado. Ninguna costaba más de dos minutos.
+
+La regla que queda: **cuando un análisis produce una recomendación
+destructiva** —dar de baja, poner en cero, eliminar— **verificar el dato de
+entrada una vez más antes de recomendarla**, aunque el análisis se vea
+sólido. El costo de esa verificación es siempre menor que el de la acción.
+
+### Cierre operativo de esa misma sesión
+
+Cosas que se aprendieron después de escribir lo de arriba y que conviene
+tener a mano.
+
+**Cuando el canal falla, cambiar de canal — no insistir.** Mandé un archivo
+por correo tres veces; el API confirmaba el adjunto y el destinatario no lo
+veía. Discutir quién tenía razón no servía de nada. La salida fue subirlo al
+propio servidor y mandar el link, que es el mecanismo que ya había funcionado
+ese mismo día para otra cosa. **Regla: al segundo "no me llegó", cambiar de
+método.** El costo de insistir lo paga el usuario.
+
+**Los endpoints de dry-run suelen estar detrás de la sesión del navegador.**
+El de este proyecto valida `isAdmin()` por cookie, así que una sesión agéntica
+no lo puede correr — lo abre el usuario. Vale la pena leer la autenticación
+del endpoint ANTES de ofrecerse a ejecutarlo, para no prometer algo que no se
+puede hacer.
+
+**Para probar una rama sin mergear**: el preview de Vercel de esa rama sí
+tiene el cambio, producción no. La URL sigue el patrón
+`<proyecto>-git-<rama-con-guiones>-<team>.vercel.app`. Un 302 ahí significa
+que existe y pide login, no que falle.
+
+**Los bots de soporte de un proveedor sirven para dos cosas**: contestar lo
+que está documentado, y **decirte oficialmente que algo no lo está**. Esa
+segunda respuesta es la valiosa — es lo que justifica escalar a un humano sin
+que te devuelvan al bot. Conviene citarla al abrir el caso formal.
+
+**El canal formal y el chat rápido no son intercambiables.** El chat lleva al
+bot; para algo que el bot ya declaró fuera de su alcance, hay que ir al
+formulario de casos. Volver al chat es garantía de recibir la misma respuesta.
