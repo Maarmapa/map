@@ -17,6 +17,34 @@
   Se le responde a Mario contándole qué quedó sin commitear y se espera su ok.
   (Probado el 9-ago: el hook pidió push, la sesión no lo hizo.)
 
+## Regla cero: este archivo es una hipótesis, no la fuente
+
+El 25-ago se comprobó que **cuatro afirmaciones de este archivo eran falsas**,
+en dos repos distintos, todas cazadas con un `git clone`. Ninguna era mentira
+cuando se escribió: el código avanzó y las notas no.
+
+Este archivo es lo primero que lee cada sesión, así que un dato viejo acá se
+convierte en un razonamiento entero construido sobre arena. La regla que ya
+está escrita más abajo —*verifica el bug contra la rama, no contra el paquete
+instalado*— **también aplica a este archivo**.
+
+**Bloque 0 del protocolo de verificación. Antes de razonar sobre un repo:**
+
+1. ¿Estoy leyendo el código, o notas sobre el código? Si el hallazgo es sobre
+   un repo, se clona. `git clone --depth=1` cuesta segundos.
+2. ¿Estas notas son posteriores al último commit de la rama que voy a citar?
+   Si no, son la hipótesis.
+3. ¿Listé las ramas remotas? (`git ls-remote --heads`). Una rama con nombre
+   parecido a mi hallazgo significa que alguien ya lo arregló.
+4. **¿Lo desplegado coincide con el repo?** Se puede comprobar: los sitios
+   propios en Vercel no están bloqueados (ver "Límites conocidos").
+
+Y al entregar: cada afirmación con su evidencia (comando o `archivo:línea`),
+lo verificado y lo inferido marcados distinto, y **si un chequeo no se pudo
+correr, se dice cuál y por qué** — un chequeo omitido en silencio se lee como
+chequeo aprobado.
+
+
 ## Anti leak: este repo es PÚBLICO
 
 - Nada de documentos comerciales en el repositorio: cotizaciones, precios,
@@ -89,9 +117,26 @@
   `MEMORY.md`) y **no se sincronizan** con las sesiones en la nube. Una
   sesión remota no tiene acceso a ellas: si el contexto histórico importa,
   hay que subir el archivo por el chat.
-- El proxy de red bloquea varios dominios externos (SSRN, a2a-protocol.org,
-  sitios propios en Vercel). Para verificar algo de esos, usar búsqueda web
-  o pedirle el dato a Mario — no concluir por ausencia.
+- **Proxy de red, verificado el 25-ago.** Los sitios propios en Vercel **NO**
+  están bloqueados: `mapa-lab.vercel.app` y `maarmapa-portfolio.vercel.app`
+  responden 200 por `curl`. La nota anterior que los daba por bloqueados era
+  falsa. Consecuencia útil: **se puede verificar que lo desplegado coincide con
+  el repo** desde una sesión remota.
+  - ❌ `WebFetch` es inservible para casi todo lo externo. Bloqueados con 403 en
+    el CONNECT, comprobados uno por uno: `developer.uber.com`, `www.uber.com`,
+    `zenml.io`, `www.infoq.com`, `shiftmag.dev`, `aaif.io`, `huggingface.co`,
+    `datasets-server.huggingface.co`. Y los de antes: SSRN, a2a-protocol.org.
+  - ✅ Lo que sí atraviesa: la búsqueda web y los conectores MCP. **Truco que
+    salvó una investigación entera**: `WebSearch` con
+    `allowed_domains: ["dominio.com"]` devuelve el contenido de una página
+    bloqueada, porque el índice del buscador ya la leyó. Es fuente secundaria
+    —sirve para orientarse, no para citar—, pero es mucho mejor que nada.
+  - ⚠️ HuggingFace: el conector MCP funciona, pero el dataset
+    `zenml/llmops-database` tiene **dos capas y solo una está al día**: el
+    parquet (2.100 filas) está vivo; los `.md` de `markdown_data/` y el
+    `all_data_single_file.txt` son un snapshot viejo, sin nada de 2026. Y el
+    parquet no se puede descargar: solo leerlo paginando por el conector, sin
+    filtro, a ~4k tokens por fila.
 
 ## Infraestructura propia: cosas que sorprenden si no las sabes
 
@@ -182,45 +227,66 @@
   límite no aplica allá. La remota sí puede pushear una vez que el repo
   existe (`add_repo` con `access: "push"`).
 
-- 🔧 **Agent Card A2A v1.0 para `mapa-lab` — A MEDIO CAMINO**.
-  **`mapa-lab` ya NO vive dentro de `map`**: tiene repo propio,
-  `Maarmapa/mapa-lab` (público, TypeScript), creado el 8-ago 09:47 hora de
-  Chile. El card vive en `public/.well-known/agent-card.json` y **ya tiene el
-  dominio resuelto** (`https://mapa-lab.vercel.app`) — el `REEMPLAZAR-DOMINIO`
-  quedó atrás.
-  ⚠️ **Pero NO es conforme a A2A v1.0**: le faltan seis de los ocho campos
-  requeridos por `a2a.proto` v1.0 — `version`, `capabilities`,
-  `supportedInterfaces`, `defaultInputModes`, `defaultOutputModes` y `skills`.
-  Lo que tiene en su lugar son campos propios (`artist`, `payments`, `trust`,
-  `services`) y un `url` único, que es justo lo que v1.0 reemplazó por
-  `supportedInterfaces[]` (con `protocolBinding` y `protocolVersion` por
-  interfaz — el "multi-protocol support" del release). Un cliente A2A estándar
-  la rechaza por esquema inválido.
-  **La versión conforme ya está escrita y validada** (ocho campos completos,
-  tres skills declaradas — `search_obras`, `get_obra`, `reservar_obra` — con
-  esquema de seguridad por skill, el MCP preservado como interfaz adicional y
-  la metadata de artista/pagos/ERC-8004 movida a una clave `x-maarmapa` para
-  no romper el esquema). **Se entregó por el chat; falta aplicarla y
-  desplegarla.** Ojo con el `url` del `supportedInterfaces`: apunta a
-  `/api/a2a`, **endpoint que NO existe** — verificado el 9-ago sobre el repo
-  clonado: `mapa-lab/app/api/` solo tiene `chat/` y `mcp/`. Hay que crearlo
-  antes de publicar la card, o la card apunta al vacío.
-  Segundo pendiente del mismo repo: la skill `reservar_obra` está declarada
-  en la card pero **no hay tool que la implemente** (`/api/chat` solo expone
-  `buscar_obras` y `ver_obra`).
-  **Nota de coordinación**: la sesión del Mini tocó ese repo a las 10:10 hora
-  de Chile. Antes de pushear ahí, verificar que no haya trabajo en vuelo.
+- ✅ **`mapa-lab` — la A2A quedó resuelta y desplegada.** Verificado el 25-ago
+  sobre `main` (`d0933b3`) y contra producción.
+  - **`app/api/a2a/route.ts` existe** (122 líneas): implementa `message/send`,
+    devuelve una Task terminada con artifacts, CORS y un `GET` de descubrimiento.
+    Los datos salen de `lib/obras`, nunca del modelo.
+  - **La card ya no declara `reservar_obra`.** Sus dos skills —`buscar-obras` y
+    `detalle-obra`— están respaldadas por código. El desfase entre lo declarado
+    y lo implementado se cerró quitando la promesa, no fingiéndola.
+  - **La card conforme se aplicó**: `protocolVersion`, `version`,
+    `capabilities`, `defaultInputModes`, `defaultOutputModes`, `skills`,
+    `provider`. La metadata de artista, pagos y ERC-8004 vive en claves `x-*`.
+  - **Está viva y coincide con el repo**:
+    `mapa-lab.vercel.app/.well-known/agent-card.json` responde 200 y es
+    byte-idéntica al archivo del repo (`curl` + `diff`).
+  - ⚠️ **La card es A2A 0.3.0, NO v1.0.** Usa `additionalInterfaces` +
+    `preferredTransport` (esquema 0.3.x); v1.0 usa `supportedInterfaces[]`.
+    **No es un defecto**: la card es internamente consistente y honesta. Es una
+    decisión pendiente —¿migrar a v1.0 o quedarse?—, no un bug.
+  - ✅ **PR #1 (rondas de tools) mergeado el 25-ago** (squash `a83ee81`).
+    Antes de mergear se verificó: merge limpio sobre `main` con el rate limit
+    del #2 ya dentro, ambos features conviven, y `tsc --noEmit --skipLibCheck`
+    sin errores propios. **Ojo: el repo no tiene tests**, solo `next build`.
 
-- 🔧 **Página `/tech` del portfolio — entregada, sin desplegar.** Un
-  `tech.html` responsive (ocho proyectos, anchors por proyecto, meta tags OG)
-  quedó entregado por el chat. Va como `tech/index.html` en el deploy estático
-  de `maarmapa-portfolio` y lo publica Mario desde su terminal — recordar que
-  ese sitio no tiene repo en GitHub (regla de arriba). Referencia a
-  `rag-blindado`, que ya está vivo, así que no deja links muertos.
+- 🔴 **Estado real de `rag-blindado` (25-ago).** `main` = `940978d`. Ramas:
+  `main`, `claude/crag-self-rag`, `claude/evals-orden-argumentos`.
+  - ✅ El bug de orden de argumentos de argparse **ya está arreglado**:
+    `evals.yml:78` tiene el orden correcto y `ragb/cli.py` lo documenta.
+  - ✅ **La trazabilidad ya existe.** `pipeline.query()` devuelve traza completa
+    (pregunta, recuperados, usados, cuarentena con su razón, contextos con su
+    fuente). `evals/run.py` creció a 561 líneas: umbrales por métrica, manejo
+    explícito de `nan`, aserciones de propiedades, contabilidad de tokens y
+    rescate del razonamiento interno del juez que Ragas descarta.
+  - ✅ **La degradación del juez CRAG no es muda**: `grade_chunks()` devuelve
+    `graded=False` + `error`, y `pipeline` lo expone por ronda en `rounds[]`.
+  - 🔧 **El CRAG sigue sin mergear**: `ragb/grade.py` existe solo en
+    `claude/crag-self-rag`.
+  - 🔴 **Lo único abierto de verdad: la traza existe pero nadie la mira.** Se
+    devuelve en el dict de retorno y muere ahí — sin logging, sin persistencia,
+    sin alerta. El propio código ya entendió el problema a nivel de evals
+    (`evals/run.py:140`: *"sin saber cuál afirmación falló, un umbral que no se
+    alcanza es indistinguible de un juez que se equivoca"*); falta el mismo
+    razonamiento a nivel de runtime.
+  - ❓ **No verificable desde una sesión remota**: si el job `evals` pasa hoy.
+    El repo no está en el set autorizado, así que no hay acceso a la API de
+    GitHub para leer CI — solo lectura anónima del código por git.
 
-- Mientras la card no esté conforme, **el material público no debe afirmar
-  "Agent Card conforme a A2A v1.0"** (regla de arriba: nada que no se pueda
-  defender). El repo de `rag-blindado` sí se puede referenciar: está vivo.
+- 🔴 **Página `/tech` del portfolio — SIGUE SIN DESPLEGAR.** Verificado el
+  25-ago: `maarmapa-portfolio.vercel.app/tech/` responde **404**. El `tech.html`
+  entregado por el chat (ocho proyectos, anchors, meta tags OG) nunca se subió.
+  Va como `tech/index.html` en el deploy estático de `maarmapa-portfolio` y lo
+  publica Mario desde su terminal — ese sitio no tiene repo en GitHub.
+  ⚠️ **Antes de subirlo hay que releerlo**: se escribió el 10-ago y describe
+  estados que cambiaron. En particular, cualquier mención a "A2A v1.0" hay que
+  corregirla (la card es 0.3.0, ver abajo).
+
+- Sobre qué se puede afirmar en material público respecto de A2A: **sí** se
+  puede decir "agent card A2A publicada, con endpoint `/api/a2a` implementando
+  `message/send`" — cualquiera lo verifica con un `curl`. **No** se puede decir
+  "conforme a A2A v1.0": la card declara `protocolVersion 0.3.0`. `rag-blindado`
+  también se puede referenciar: está vivo.
 
 ## 2026-08-09 — Sesión remota: barrido LangGraph, escalada a humano y checkpointing
 
@@ -311,8 +377,8 @@ Todos quedaron como **draft**, ninguno mergeado: la decisión de mergear es suya
 | Repo | Rama | PR | Estado de CI |
 |---|---|---|---|
 | `map` | `claude/presupuesto-cotizacion-fek80w` | [#3](https://github.com/Maarmapa/map/pull/3) | Vercel ✅ · Cloudflare ❌ (ver abajo) |
-| `rag-blindado` | `claude/crag-self-rag` | [#1](https://github.com/Maarmapa/rag-blindado/pull/1) | `guards` ✅ (33 tests) · `evals` ❌ (ver abajo) |
-| `mapa-lab` | `claude/rondas-de-tools` | [#1](https://github.com/Maarmapa/mapa-lab/pull/1) | Vercel ✅ |
+| `rag-blindado` | `claude/crag-self-rag` | [#1](https://github.com/Maarmapa/rag-blindado/pull/1) | `guards` ✅ (33 tests) · `evals` ❌ · **sigue sin mergear** |
+| `mapa-lab` | `claude/rondas-de-tools` | [#1](https://github.com/Maarmapa/mapa-lab/pull/1) | ✅ **MERGEADO el 25-ago** (squash `a83ee81`) |
 | `BOYKOT` | `claude/hermes-escalada-humano` | [#52](https://github.com/Maarmapa/BOYKOT/pull/52) | Vercel ✅ (compila) |
 
 ### Dos rojos de CI que son deuda previa, no de este trabajo
@@ -324,20 +390,12 @@ fallar en `d7c5b09`, un commit que solo cambia `CLAUDE.md`. Un archivo markdown
 no rompe un build de worker. Toca desconectar ese proyecto de Cloudflare o
 darle su propio repo — tarea aparte.
 
-**2. El job `evals` de `rag-blindado` NUNCA ha pasado**, desde `993c3d2`.
-Dos bloqueos encadenados, ninguno del CRAG (el PR #1 no toca `cli.py` ni el
-workflow):
-
-- **Orden de argumentos.** `.github/workflows/evals.yml:50` corre
-  `python -m ragb.cli ingest corpus/ --tenant eval --write`, pero `--tenant`
-  está declarado en el parser de nivel superior (`ragb/cli.py:18`), no en el
-  subcomando, así que argparse lo rechaza con `unrecognized arguments`.
-  Lo correcto es `python -m ragb.cli --tenant eval ingest corpus/ --write`.
-  **Arreglo de una línea, sin pushear** — toca el workflow, fuera del alcance
-  del PR, y de todas formas no llegaría a verde por lo siguiente.
-- **Falta el secret `ANTHROPIC_API_KEY`** en el repo: llega vacío al env del
-  job. No es que la cuenta esté sin créditos — el secret no está configurado.
-  Lo pone Mario en Settings → Secrets; no hay parche de código que lo cubra.
+**2. El job `evals` de `rag-blindado`.** ⚠️ **Este diagnóstico quedó a medias
+y se corrigió el 25-ago** — ver "Estado real de `rag-blindado`" más abajo. El
+bug de orden de argumentos de argparse **ya está arreglado** en `main`. Lo que
+sigue faltando es el secret `ANTHROPIC_API_KEY`, que llega vacío al env del
+job: no es que la cuenta esté sin créditos, el secret no está configurado. Lo
+pone Mario en Settings → Secrets; no hay parche de código que lo cubra.
 
 **Lección**: un workflow que se escribe y se pushea sin verlo correr una vez
 puede estar roto en su primera línea durante días. El job `guards`, que sí se
@@ -568,6 +626,104 @@ diez segundos y evita una mala recomendación.
   comentario se traga el resto). Para pegar en un panel web conviene una versión
   sin comentarios de línea y con punto y coma en cada sentencia — se comprueba
   colapsando el archivo con `tr '\n' ' '` y pasándole `node --check`.
+
+## 2026-08-25 — Sesión remota: Uber, y cuatro notas falsas
+
+### La pregunta con la que arrancó (y su respuesta corta)
+
+*"¿Qué ofrece Uber de API, CLI o algo agéntico para conductores?"*
+
+**Nada construible.** La Driver API (`/partners/me`, `/trips`, `/payments`)
+existe pero está en acceso limitado tras aprobación desde que Uber cortó el
+API público en 2019 con siete días de aviso. El Supplier Platform —que sí
+tiene datos ricos: ubicación en vivo de la flota, pagos por conductor— exige
+ser socio de flota con acuerdo comercial. **No hay CLI**, y los SDKs son de la
+era pre-2019. Lo agéntico existe (Uber Assistant con OpenAI dentro de la app
+del conductor, y MCP oficial en `mcp.uber.com`) pero es **producto cerrado,
+del lado del pasajero, y US-only**.
+
+La única puerta abierta de verdad para datos de conductor con su permiso son
+los agregadores de ingresos tipo Argyle o Pinwheel — con la advertencia de que
+funcionan con las credenciales del trabajador, no con un scope acotado.
+
+**Conclusión: no es un camino, es un callejón.** Queda respondido; no hace
+falta volver a investigarlo.
+
+### El método, que es lo que sí se transfiere
+
+- **`WebFetch` quedó inservible** en esta sesión: 403 en el CONNECT para todo
+  lo externo que se probó. Ver "Límites conocidos" para la lista.
+- **El truco que salvó la investigación entera**: `WebSearch` con
+  `allowed_domains: ["dominio.com"]` devuelve el contenido de una página
+  bloqueada, porque el índice del buscador ya la leyó. Es fuente secundaria
+  —sirve para orientarse, jamás para citar— pero convierte un muro en un
+  inconveniente.
+- **Un dataset puede tener dos capas y solo una al día.** El
+  `zenml/llmops-database` de HuggingFace tiene el parquet vivo (2.100 filas) y
+  los `.md` de `markdown_data/` congelados en 2024. Se perdió tiempo buscando
+  en la capa muerta. **Antes de confiar en un mirror, comparar su fecha con la
+  del original.**
+
+### Lo que de verdad importó: cuatro afirmaciones falsas
+
+La sesión razonó sobre `CLAUDE.md` en vez de sobre el código y **afirmó cuatro
+cosas falsas con total confianza**. Las cuatro se cayeron con un `git clone`:
+
+| # | Se afirmó | Realidad |
+|---|---|---|
+| 1 | El bug de argparse de `rag-blindado` sigue abierto | Ya estaba arreglado en `main` |
+| 2 | Falta trazabilidad: solo entrada y salida | Ya existía, y `evals/run.py` había crecido a 561 líneas |
+| 3 | La degradación del juez CRAG es un catch mudo | Devuelve `graded=False` + `error`, expuestos en `rounds[]` |
+| 4 | `mapa-lab` declara `reservar_obra` sin implementación y `/api/a2a` no existe | Las dos cosas resueltas; la card desplegada es byte-idéntica al repo |
+
+**Ninguna era mentira cuando se escribió.** El código avanzó y las notas no.
+De ahí salió la **Regla cero** de arriba y su Bloque 0.
+
+### Las lecciones
+
+1. **Este archivo es una hipótesis, no la fuente.** Es lo primero que lee cada
+   sesión, así que un dato viejo acá se convierte en un razonamiento entero
+   construido sobre arena. La regla de *verificar contra la rama* ya estaba
+   escrita; lo que faltaba era aplicársela al archivo mismo.
+2. **El deploy es verificable desde una sesión remota.** Los sitios propios en
+   Vercel no están bloqueados. Eso convirtió "¿lo desplegado coincide con el
+   repo?" en un chequeo real, y en esta sesión rindió tres veces: confirmó la
+   card de `mapa-lab`, descubrió el 404 de `/tech`, y resolvió una pregunta
+   sobre material público consultando un endpoint en vivo.
+3. **Corregir la descripción de un PR antes de mergearlo.** El PR #1 de
+   `mapa-lab` listaba dos pendientes que ya eran falsos. Mergearlo tal cual
+   habría dejado el dato equivocado clavado en el historial para siempre.
+4. **El 95% offline es la trampa.** De la ficha de Uber sobre evaluación de
+   agentes: su agente de reserva por voz marcaba 95% en evals offline y en
+   producción malinterpretaba conversaciones de fondo. Lo detectó una
+   diseñadora conversacional, no un ingeniero. **Un checklist de
+   auto-verificación no se atrapa a sí mismo**; por eso el Bloque 2 del
+   protocolo es sobre cómo se entrega, no sobre cómo se revisa.
+5. **Un 100% de aprobación sigue siendo una señal de alarma** (ya estaba
+   anotado el 10-ago, se volvió a confirmar): acá la sesión pasó su propio
+   checklist de siete puntos y aun así falló cuatro veces, porque los siete
+   asumían que ya estabas mirando la fuente correcta.
+
+### Lo que quedó hecho
+
+| Repo | Qué | Estado |
+|---|---|---|
+| `mapa-lab` | PR #1 — encadenar hasta 3 rondas de tools | ✅ **mergeado** (squash `a83ee81`), verificado antes: merge limpio, features conviven, `tsc` sin errores propios |
+| `map` | PR #7 — corregir el estado real en `CLAUDE.md` + esta misma nota | ✅ mergeado |
+
+### Pendientes que dejó abiertos
+
+- **`tech.html` sigue sin desplegar** (404 verificado) y **hay que releerlo
+  antes de subirlo**: se escribió el 10-ago y describe estados que cambiaron.
+- **Decidir si la agent card de `mapa-lab` migra de A2A 0.3.0 a v1.0.** Hoy es
+  consistente y honesta; no es un bug, es una decisión.
+- **El CRAG de `rag-blindado` sigue sin mergear** y el secret
+  `ANTHROPIC_API_KEY` sigue faltando.
+- **Lo único abierto de verdad en `rag-blindado`**: la traza existe pero nadie
+  la mira. Sin logging, sin persistencia, sin alerta. Es la lección de Uber
+  intacta —*tracing por defecto + alerta proactiva*— y el propio código ya
+  entendió el problema a nivel de evals; falta a nivel de runtime.
+
 
 ## Referencia de gobernanza
 
