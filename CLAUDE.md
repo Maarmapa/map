@@ -1451,3 +1451,46 @@ Un demo que sale gratis, para el video: *"restock something just by uploading a
 photo"*. El agente ya tiene visión — le mostrás una foto de tus marcadores, saca
 los códigos y llama a `get_color_card`, que sabe stock real por tono. Cero código
 nuevo.
+
+### Addendum del 26-ago: dos datos verificados que envejecieron la nota de ayer
+
+La **Regla cero** otra vez, esta vez sobre una nota de menos de 24 horas.
+
+1. **`dashai-mcp` ya está en PyPI en 0.3.1** (consultado a
+   `pypi.org/pypi/dashai-mcp/json`: releases `0.2.1, 0.2.2, 0.3.0, 0.3.1`).
+   Arriba dice "0.2.2" y "el release a PyPI sigue siendo paso manual de Mario":
+   **eso ya pasó.** El paso que sigue quedó desbloqueado.
+2. **El envío al MCP Registry NO se hizo.** Verificado contra
+   `registry.modelcontextprotocol.io/v0/servers?search=dashai` → 0 resultados,
+   con `storefront-mcp` como control positivo en la misma consulta (sí aparece,
+   así que la búsqueda funciona y el cero es real, no un endpoint roto).
+   **Poner siempre un control positivo cuando una consulta devuelve vacío**: sin
+   él, "no está" y "la consulta no sirve" se ven igual.
+3. **El #828 quedó confirmado mergeado** por una vía independiente del correo:
+   `git fetch --depth=8` anónimo sobre `DashAISoftware/dashAI` muestra
+   `fb84c5c Merge pull request #828` en `develop`, con el `b3b7296 Pre-commit
+   fix` del mantenedor encima (los cuatro nits de ruff que dejó mi resolución de
+   conflictos — la lección de correr los hooks del repo ajeno, ya anotada).
+
+### Cómo se instala el `dashai-mcp` (no estaba escrito en ninguna parte)
+
+```bash
+pip install dashai-mcp          # 0.3.1 en PyPI
+claude mcp add dashai -- dashai-mcp
+```
+
+En cualquier otro cliente MCP: `{"mcpServers": {"dashai": {"command": "dashai-mcp"}}}`.
+
+Tres cosas que si no se dicen, frustran a quien lo prueba:
+
+- **dashAI tiene que estar corriendo aparte** (`dashai` o la app de escritorio).
+  El MCP lo busca en `http://localhost:8000`; se cambia con `DASHAI_BASE_URL`.
+- **No acepta una URL base remota** salvo variable de entorno explícita. Es la
+  guarda de diseño, no un bug: un MCP apuntado al servidor de otro es un MCP que
+  le manda datos a otro.
+- `pip install 'dashai-mcp[counts]'` si se quiere el conteo por clase de
+  `dashai_get_prediction` (necesita `pyarrow`). Sin eso devuelve el estado, y
+  **nunca las filas** — eso es a propósito.
+- ⚠️ `claude mcp add` sin `--scope user` registra el servidor **solo bajo la
+  carpeta desde donde se corrió el comando**. Ya pasó una vez (quedó bajo
+  `~/Documents/DashAI` y no aparecía donde se lo necesitaba).
