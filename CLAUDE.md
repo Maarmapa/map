@@ -1494,3 +1494,55 @@ Tres cosas que si no se dicen, frustran a quien lo prueba:
 - ⚠️ `claude mcp add` sin `--scope user` registra el servidor **solo bajo la
   carpeta desde donde se corrió el comando**. Ya pasó una vez (quedó bajo
   `~/Documents/DashAI` y no aparecía donde se lo necesitaba).
+
+### El marco que faltaba escribir: MCP vs. skill, y los tres descubrimientos
+
+Salió de una pregunta en un grupo —*"¿por qué MCP en lugar de una skill que
+llame al API y listo?"*— y vale anotarlo porque es el argumento que se repite en
+cada conversación sobre esto, y porque la respuesta honesta empieza dándole la
+razón a quien pregunta.
+
+**MCP no compite con "llamar al API". Compite con quién tiene que escribir ese
+código.** La pregunta que resuelve no es *cómo* le hablo al API, es **de quién es
+el agente**:
+
+- El agente es tuyo → una skill al endpoint está perfecta, y es menos maquinaria.
+  Para un caso interno de una sola punta, MCP es overhead: un proceso más, un
+  transporte, esquemas.
+- El agente **no** es tuyo → no le podés meter una skill adentro a Claude
+  Desktop, a ChatGPT ni al Cursor de un cliente. Publicar un servidor es lo
+  único que hay. Es un **puerto**, no un cliente de API más lindo.
+
+Y una cosa que no es de MCP pero se nota al construirlo: **un API no es
+agent-shaped.** Los endpoints se diseñaron para un programador con la
+documentación al lado; un agente necesita operaciones consolidadas y
+descripciones que digan dónde termina su permiso. Eso se puede hacer en una skill
+también — pero *hacerlo* es el 80% del trabajo, y no es lo que se está
+discutiendo cuando alguien dice "una skill y era".
+
+**Los tres descubrimientos que se confunden en una sola palabra:**
+
+1. **Dentro de un agente que ya las tiene**: las dos se descubren. Una skill
+   también se le lista al modelo con su descripción. Acá MCP no gana nada —
+   salvo que su lista se pide al conectarse, así que **cambiar las tools del
+   servidor no obliga a tocar la instalación del otro**.
+2. **Buscar capacidades que existen en el mundo**: gana MCP, pero **por el
+   registro, no por el protocolo**. Es la diferencia entre publicar en npm y
+   tener un script en tu carpeta.
+3. **Que un agente llegue solo a tu sitio**: no lo hace ninguno de los dos. Eso
+   es `/.well-known/mcp.json`, `llms.txt` y **WebMCP**. Boykot hace las tres, y
+   por eso un agente que aterriza ahí no necesita que nadie le haya instalado
+   nada.
+
+**El contrapeso que casi nadie menciona, y corre para el otro lado**: las tools
+MCP se cargan al conectarse y **ocupan contexto desde el minuto cero**, se usen o
+no. Las skills están diseñadas al revés: una línea de descripción, y el cuerpo se
+carga recién cuando hace falta. Por eso 200 skills son baratas y 200 tools MCP no
+—y por eso las sesiones agénticas modernas difieren la mayoría de sus
+herramientas y las buscan cuando las necesitan—.
+
+Conclusión para repetir sin exagerar: **no es que las skills no se encuentren; se
+encuentran solo dentro del agente donde ya están.** MCP da índice público y
+actualización en runtime; las skills dan costo cero hasta que se usan. Y para que
+te encuentre un agente que nunca oyó hablar de vos no sirve ninguno de los dos:
+sirve que tu propio sitio lo declare.
