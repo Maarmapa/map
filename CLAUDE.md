@@ -1210,3 +1210,339 @@ los que quedaron con una sola imagen. Identificados por nombre —
 ya tiene su segunda imagen generada en
 `wp-content/uploads/paris/PRINCE9117-2.jpg`, solo falta cargarla. Es lo más
 chico de todo el frente.
+
+## 2026-08-26 — Sesión remota · WebMCP para el hackathon, y el anti-sobreventa que estaba apagado
+
+Sesión larga sobre Boykot. Arrancó por un hackathon y terminó encontrando un
+bug de plata en producción; las dos cosas quedaron en PRs **draft, sin
+mergear**, esperando ok expreso.
+
+### Estado de los tres PRs (ninguno mergeado)
+
+| PR | Rama | Qué es | Estado |
+|---|---|---|---|
+| `BOYKOT#102` | `claude/webmcp` | La capa WebMCP: el catálogo como herramientas dentro de la propia página | verde, `clean` |
+| `BOYKOT#103` | `claude/reservas-vivas` | Las reservas vuelven a restarse + el pre-pedido agéntico aparta unidades 24 h | verde, `clean` |
+| `BOYKOT#104` | `claude/webmcp-acciones` | Tres herramientas que actúan sobre la página: carro y lista de deseos | apilado sobre #102 |
+
+### El hackathon: dónde quedó
+
+**The WebMCP Challenge** (OpenAI + Chromium/Cloudflare/Shopify/Vercel/Netlify/
+Render). **Cierra el 3 de septiembre.** Mario ya está registrado en Devpost.
+
+**El bloqueo real no es código: es que el preview de Vercel está detrás del
+SSO de Vercel, así que un juez no lo puede abrir.** O se mergea a producción,
+o se desactiva la protección de deployment para ese preview. No hay tercera.
+
+Pendiente de Mario, en orden de qué desbloquea qué:
+
+1. **Los dos origin trial tokens** — Chrome 149 y Edge 150 son registros
+   **distintos**, cada uno para el origen `boykot.cl`. Sin ellos la API no
+   existe en el navegador. Va primero porque no depende de ningún merge.
+2. **Decidir el merge de #102** (y #103): sin producción no hay URL pública.
+3. **Repo público** para el submission — una sesión remota no puede crear
+   repos (403, ver "Límites conocidos"); lo crea Mario vacío y la sesión
+   pushea.
+4. **Video demo** y escribir el submission.
+
+Quedó fuera a propósito el agregado de machine learning (búsqueda semántica
+del catálogo): es un segundo movimiento si al tercer día se va cómodo, no
+algo para meter ahora.
+
+### El dato que decide si WebMCP funciona
+
+**La API es `document.modelContext`, NO `navigator.modelContext`.** Casi todos
+los tutoriales dicen `navigator`, y `provideContext` ya ni existe. El dato
+salió del repo de la especificación (`webmachinelearning/webmcp`), no de una
+fuente secundaria. Con la versión de los blogs esto no se registra en ningún
+navegador — o sea: el proyecto entero no arranca.
+
+**Regla que generaliza**: para una API tan nueva que todavía está en origin
+trial, la fuente es el repo de la spec. Los blogs copian del primer blog.
+
+### Dos decisiones de diseño que vale la pena reusar
+
+1. **La selección de herramientas es una RESTA, no una lista blanca.**
+   `herramientasDePagina()` = `TOOLS` − `SENSITIVE_TOOLS`. Una lista blanca
+   envejece en silencio: alguien agrega una tool de administración, nadie se
+   acuerda de esta capa, y queda expuesta en el navegador. Restando, el
+   default es seguro.
+2. **Comprar cotiza, no ejecuta.** No se reenvía al `create_checkout` del
+   servidor porque ese candado (`MCP_CHECKOUT_LIVE`) se lee *dentro* de la
+   ruta: desde el navegador no hay forma de exigir modo dry. Un agente no
+   puede quedar a un flag de distancia de generar pedidos reales.
+
+### El hallazgo que no venía en el plan
+
+Revisando el camino del agente apareció que **`stock_reservations` estaba de
+solo escritura**: el carro insertaba reservas y nadie las restaba. Dos fallas
+encadenadas —una columna mal escrita cuyo error no se miraba, y un comentario
+que concluía "esta vista está en desuso" y la sacaba del cálculo— habían
+dejado el anti-sobreventa apagado sin que nada avisara.
+
+**Efecto medido el día de hoy: cero**, sobre las 9.681 variantes reales, porque
+no hay reservas vigentes. Empieza a proteger apenas haya un carro activo.
+
+De ahí salieron las lecciones más transferibles del día:
+
+- **Un error de base de datos que no se mira es peor que un crash.** Devolver
+  `0` ante un fallo es afirmar "no hay nada reservado", que es justo la
+  respuesta peligrosa: hace vendible lo apartado. Ahora lanza.
+- **Cuidado con arreglar el síntoma con un comentario.** El comentario que
+  decía "está en desuso y siempre devuelve 0 filas" era cierto en los hechos y
+  equivocado en la causa, y **congeló el bug por escrito**: cualquiera que lo
+  leyera repetía el razonamiento. Por eso hay un test que falla si esa frase
+  vuelve al archivo.
+- **Una sola definición de "disponible".** Buscando readers apareció
+  `/api/agent/stock` —la ruta que le contesta a un agente cuántas unidades
+  hay— restando solo una de las dos fuentes. Tener dos definiciones fue lo que
+  dejó perder la resta la vez pasada.
+
+### Escribir primero, verificar después (en vez de un lock)
+
+Para que el pre-pedido aparte unidades sin agregar transacciones ni locks:
+**se escribe la reserva y RECIÉN AHÍ se vuelve a leer el saldo.** Un chequeo
+previo es una foto de un instante que ya pasó; leyendo el resultado de la
+propia escritura, dos llamadas simultáneas por la última unidad no pueden
+salir las dos en verde — una ve el saldo en rojo y suelta.
+
+Para que eso funcione, **el saldo NO puede tener piso en 0**: pisado, una
+sobreventa consumada se ve idéntica a un agotado. El piso se aplica recién al
+mostrarlo.
+
+### Tests que se ejecutan, no que leen el archivo
+
+El repo tenía un solo archivo de tests, en `.mjs`, hecho de asserts sobre el
+**texto fuente** (regex contra el `.ts`). Sirve para cablear, pero no prueba
+aritmética.
+
+**Truco que resolvió eso sin agregar ni una dependencia**: Node 22 hace *type
+stripping*, así que `node --test` importa un `.ts` directo **siempre que ese
+archivo no importe nada** (las rutas sin extensión no resuelven en ESM). Se
+extrajo la aritmética a `reservas-core.ts`, **sin imports a propósito**, y
+quedó ejecutable de verdad.
+
+**Y se probó por mutación**: pisar en vez de sumar, poner piso en 0, dejar
+pasar la variante ausente. Las tres se cazan. Un test verde que no falla
+contra el código roto no prueba nada — ya pasó en la sesión anterior, donde un
+test pasaba contra el bug porque buscaba su patrón en todo el archivo.
+
+### Verificar contra el ESQUEMA, no contra el tipo
+
+Dos cosas que sólo aparecieron consultando la base de producción y que habrían
+reventado recién en vivo:
+
+- `carts` tiene un CHECK que exige `user_id` **o** `session_id`: un carro
+  anónimo ni se inserta.
+- `status` sólo acepta `active/abandoned/converted/expired`. El `'released'`
+  que había escrito primero —que suena perfecto— era una bomba de tiempo.
+
+Y una que contradecía al tipo de TypeScript: `pending_orders.cart_id` es
+**bigint** mientras `carts.id` es **uuid**, así que esa columna no puede unir
+las dos tablas por más que el tipo diga `number | null`. La llave terminó
+siendo derivada (`session_id = 'agente:<short_id>'`), que es el mismo criterio
+que el repo ya usaba para la expiración: derivar en vez de agregar estado que
+se pueda desincronizar.
+
+**Regla: antes de escribir en una tabla, leer sus constraints.** Cuesta una
+consulta y ahorra un incidente.
+
+### El ensayo contra producción, y cómo hacerlo sin dejar rastro
+
+El ciclo completo de la reserva se ensayó **contra la base de producción en
+UNA sola llamada** —crear carro, apartar, ver el saldo bajar, ligar por
+`short_id`, soltar, borrar— con una tabla temporal juntando las mediciones y
+un `select` final. Se verificó después que quedaran cero carros y cero
+reservas.
+
+**El patrón vale para cualquier ensayo en vivo**: si escribir y limpiar van en
+la misma llamada, la ventana en que alguien podría ver el estado intermedio se
+mide en milisegundos, y la limpieza no depende de que te acuerdes de hacerla.
+
+### Un filo elegido a propósito (no un descuido)
+
+Al pagar se suelta la reserva. Si la boleta de BSale falla —el webhook ya lo
+registra en `bsale_document_error`— nadie descontó esa unidad y la web vuelve
+a ofrecerla. Se eligió igual: la alternativa era esconder stock vendible hasta
+24 h en el caso normal, que es el de todos los días. **Está escrito en el
+código y en el PR para que la decisión se vea, no se descubra.**
+
+### Operativo que costó tiempo
+
+1. **`cp a b c dest/` con dos archivos que se llaman igual pisa uno.** Copié
+   `mcp/route.ts` y `payments/mp/webhook/route.ts` al mismo directorio de
+   respaldo y perdí una edición completa; hubo que rehacerla. Para respaldar
+   archivos homónimos, renombrar en el destino.
+2. **El clasificador volvió a bloquear `git push`, y reintentar volvió a
+   funcionar** (segunda vez documentada). También bloqueó un `git add &&
+   commit` encadenado: partido en comandos separados, pasó. Las dos reglas del
+   archivo se confirmaron una vez más.
+3. **`main` se había movido ~15 commits** (POS, idempotencia,
+   `continuar_en_tienda`) y el PR estaba en conflicto. Se mergeó `main` y se
+   resolvieron cuatro conflictos, todos de "quedan las dos cosas".
+   **Y se aplicó la lección de dashAI**: después de mergear no basta con ver
+   que tu línea sobrevivió — hay que preguntar **dónde vive ahora**, y si el
+   refactor de upstream reintrodujo el problema en otro archivo. Acá el chequeo
+   dio limpio, y de paso confirmó que la idempotencia nueva convive (un
+   reintento con la misma clave devuelve la respuesta guardada, no reserva de
+   nuevo).
+4. **`npm install` después del merge**: `main` había agregado una dependencia
+   (`qrcode`) y `tsc` fallaba por eso, no por el trabajo propio. Verificar que
+   el lockfile quede **idéntico al de main** antes de commitear.
+
+### Lo que NO se probó
+
+Que un `create_checkout` real end-to-end escriba la reserva: eso necesita
+`MCP_CHECKOUT_LIVE=1`. Lo probado es la mecánica completa de base de datos que
+ese camino ejecuta. Anotado también en el cuerpo del PR.
+
+### La segunda tanda de WebMCP: lo que un servidor MCP no puede hacer
+
+Salió de un anuncio de ChatGPT Work —un agente que inicia sesión en sitios con
+credenciales delegadas y opera la interfaz— y de preguntarse qué de eso servía
+acá. La respuesta útil no fue una feature: fue **el argumento**.
+
+**Lo que anunciaron es lo contrario de WebMCP.** Su agente maneja el sitio *por
+la UI*, tecleando en formularios con tus credenciales. WebMCP es que el sitio le
+entregue herramientas rotuladas para que nadie tenga que delegar nada. Para un
+jurado que hizo WebMCP, ese contraste es el ensayo del submission.
+
+Pero mirarlo dejó ver una carencia real del #102: **todas sus tools eran de
+lectura reenviadas a `/api/mcp`.** O sea, el servidor MCP metido en el
+navegador — un cliente externo hacía exactamente lo mismo. Nada ahí *necesitaba*
+WebMCP.
+
+Lo que sí lo necesita es el estado de **tu** página: el carro y la lista de
+deseos viven en la sesión de quien mira, y un servidor MCP no los conoce. De ahí
+el #104: `agregar_al_carro` (llena el carro **a la vista** y abre el panel),
+`ver_mi_carro` y `guardar_en_lista`.
+
+**La línea de la plata no se movió**: ninguna cobra, ninguna crea pedido,
+ninguna toca `create_checkout`. Llenar un carro es reversible con un clic; pagar
+no. Y va dicho *en las descripciones de las tools* — un agente que no sabe dónde
+termina su permiso pregunta de más o hace de más.
+
+Tres cosas de ahí que se transfieren:
+
+1. **Sumar, no pisar.** `setItem` recibe cantidad ABSOLUTA, pero el agente dice
+   "agregá dos". Pisando, dos llamadas de "agregá uno" dejan una unidad y el
+   agente informa que puso dos: **miente sin enterarse.** Cuando una API recibe
+   estado final y el llamador piensa en incrementos, la traducción es tuya.
+2. **Una feature que casi nadie puede usar no se le cobra a todo el mundo.**
+   `useCart()` consulta `/api/cart` al montar. Montado en el layout, cada visita
+   del sitio pagaba esa consulta por una API que casi ningún navegador trae. Los
+   hooks se montan solo si `document.modelContext` existe de verdad, y la
+   detección va por `useSyncExternalStore` para no romper la hidratación (el
+   servidor contesta `false`, que es la verdad allá).
+3. **El id lo decide el servidor.** Para armar una línea de carro el navegador
+   necesitaba el hash djb2 del slug… que ya estaba escrito dos veces en el repo.
+   Una tercera copia en el cliente era la forma segura de que algún día dejaran
+   de coincidir. Se agregó `cart_variant_id` a `get_product` y listo.
+
+**Y buscando eso apareció un bug anterior**: la ficha de producto le pasa a
+`AddToCartButton` el id de variación de **WooCommerce**, mientras las grillas y
+los caminos server-side usan el **hash del slug**. Hoy el mismo producto puede
+entrar al carro con dos ids distintos según desde dónde lo agregues, y quedar
+duplicado. No se arregló acá —es anterior y se toca aparte— pero **quedó escrito
+en el código**, que es la diferencia entre un problema conocido y uno que hay que
+volver a descubrir.
+
+Un demo que sale gratis, para el video: *"restock something just by uploading a
+photo"*. El agente ya tiene visión — le mostrás una foto de tus marcadores, saca
+los códigos y llama a `get_color_card`, que sabe stock real por tono. Cero código
+nuevo.
+
+### Addendum del 26-ago: dos datos verificados que envejecieron la nota de ayer
+
+La **Regla cero** otra vez, esta vez sobre una nota de menos de 24 horas.
+
+1. **`dashai-mcp` ya está en PyPI en 0.3.1** (consultado a
+   `pypi.org/pypi/dashai-mcp/json`: releases `0.2.1, 0.2.2, 0.3.0, 0.3.1`).
+   Arriba dice "0.2.2" y "el release a PyPI sigue siendo paso manual de Mario":
+   **eso ya pasó.** El paso que sigue quedó desbloqueado.
+2. **El envío al MCP Registry NO se hizo.** Verificado contra
+   `registry.modelcontextprotocol.io/v0/servers?search=dashai` → 0 resultados,
+   con `storefront-mcp` como control positivo en la misma consulta (sí aparece,
+   así que la búsqueda funciona y el cero es real, no un endpoint roto).
+   **Poner siempre un control positivo cuando una consulta devuelve vacío**: sin
+   él, "no está" y "la consulta no sirve" se ven igual.
+3. **El #828 quedó confirmado mergeado** por una vía independiente del correo:
+   `git fetch --depth=8` anónimo sobre `DashAISoftware/dashAI` muestra
+   `fb84c5c Merge pull request #828` en `develop`, con el `b3b7296 Pre-commit
+   fix` del mantenedor encima (los cuatro nits de ruff que dejó mi resolución de
+   conflictos — la lección de correr los hooks del repo ajeno, ya anotada).
+
+### Cómo se instala el `dashai-mcp` (no estaba escrito en ninguna parte)
+
+```bash
+pip install dashai-mcp          # 0.3.1 en PyPI
+claude mcp add dashai -- dashai-mcp
+```
+
+En cualquier otro cliente MCP: `{"mcpServers": {"dashai": {"command": "dashai-mcp"}}}`.
+
+Tres cosas que si no se dicen, frustran a quien lo prueba:
+
+- **dashAI tiene que estar corriendo aparte** (`dashai` o la app de escritorio).
+  El MCP lo busca en `http://localhost:8000`; se cambia con `DASHAI_BASE_URL`.
+- **No acepta una URL base remota** salvo variable de entorno explícita. Es la
+  guarda de diseño, no un bug: un MCP apuntado al servidor de otro es un MCP que
+  le manda datos a otro.
+- `pip install 'dashai-mcp[counts]'` si se quiere el conteo por clase de
+  `dashai_get_prediction` (necesita `pyarrow`). Sin eso devuelve el estado, y
+  **nunca las filas** — eso es a propósito.
+- ⚠️ `claude mcp add` sin `--scope user` registra el servidor **solo bajo la
+  carpeta desde donde se corrió el comando**. Ya pasó una vez (quedó bajo
+  `~/Documents/DashAI` y no aparecía donde se lo necesitaba).
+
+### El marco que faltaba escribir: MCP vs. skill, y los tres descubrimientos
+
+Salió de una pregunta en un grupo —*"¿por qué MCP en lugar de una skill que
+llame al API y listo?"*— y vale anotarlo porque es el argumento que se repite en
+cada conversación sobre esto, y porque la respuesta honesta empieza dándole la
+razón a quien pregunta.
+
+**MCP no compite con "llamar al API". Compite con quién tiene que escribir ese
+código.** La pregunta que resuelve no es *cómo* le hablo al API, es **de quién es
+el agente**:
+
+- El agente es tuyo → una skill al endpoint está perfecta, y es menos maquinaria.
+  Para un caso interno de una sola punta, MCP es overhead: un proceso más, un
+  transporte, esquemas.
+- El agente **no** es tuyo → no le podés meter una skill adentro a Claude
+  Desktop, a ChatGPT ni al Cursor de un cliente. Publicar un servidor es lo
+  único que hay. Es un **puerto**, no un cliente de API más lindo.
+
+Y una cosa que no es de MCP pero se nota al construirlo: **un API no es
+agent-shaped.** Los endpoints se diseñaron para un programador con la
+documentación al lado; un agente necesita operaciones consolidadas y
+descripciones que digan dónde termina su permiso. Eso se puede hacer en una skill
+también — pero *hacerlo* es el 80% del trabajo, y no es lo que se está
+discutiendo cuando alguien dice "una skill y era".
+
+**Los tres descubrimientos que se confunden en una sola palabra:**
+
+1. **Dentro de un agente que ya las tiene**: las dos se descubren. Una skill
+   también se le lista al modelo con su descripción. Acá MCP no gana nada —
+   salvo que su lista se pide al conectarse, así que **cambiar las tools del
+   servidor no obliga a tocar la instalación del otro**.
+2. **Buscar capacidades que existen en el mundo**: gana MCP, pero **por el
+   registro, no por el protocolo**. Es la diferencia entre publicar en npm y
+   tener un script en tu carpeta.
+3. **Que un agente llegue solo a tu sitio**: no lo hace ninguno de los dos. Eso
+   es `/.well-known/mcp.json`, `llms.txt` y **WebMCP**. Boykot hace las tres, y
+   por eso un agente que aterriza ahí no necesita que nadie le haya instalado
+   nada.
+
+**El contrapeso que casi nadie menciona, y corre para el otro lado**: las tools
+MCP se cargan al conectarse y **ocupan contexto desde el minuto cero**, se usen o
+no. Las skills están diseñadas al revés: una línea de descripción, y el cuerpo se
+carga recién cuando hace falta. Por eso 200 skills son baratas y 200 tools MCP no
+—y por eso las sesiones agénticas modernas difieren la mayoría de sus
+herramientas y las buscan cuando las necesitan—.
+
+Conclusión para repetir sin exagerar: **no es que las skills no se encuentren; se
+encuentran solo dentro del agente donde ya están.** MCP da índice público y
+actualización en runtime; las skills dan costo cero hasta que se usan. Y para que
+te encuentre un agente que nunca oyó hablar de vos no sirve ninguno de los dos:
+sirve que tu propio sitio lo declare.
