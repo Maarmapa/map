@@ -1187,3 +1187,26 @@ adjuntos de correo no llegan.
 **Rama obsoleta**: `fix/security-proxy-ratelimit` quedó atrás de `main` y
 arrastra `mapa-lab/`, que este repo sacó a propósito. Sus commits útiles ya
 entraron por otra vía. Conviene borrarla.
+
+### Lo que quedó pendiente de hacer
+
+**Enviar los cuatro correos de win-back.** Están en borrador, verificados,
+sin enviar. La ventana recomendada sale de los propios envíos históricos de
+esa lista: **miércoles entre 15:30 y 17:00 hora de Chile**. Martes y esa
+franja fueron los mejores en 99 campañas medidas, y las dos de mayor
+apertura de la historia salieron 15:30 y 17:05.
+
+**Mandar el ticket a Paris — al Centro de Ayuda, NO a "Contáctanos".** Ese
+botón lleva al asistente Aurora, que ya declaró dos veces que el caso está
+fuera de su alcance y derivó a Soporte. Volver ahí devuelve la misma
+respuesta. La pregunta única es si Soporte puede copiar el valor de
+`Sku Seller Variant` al campo `Sku Seller` en las 51 publicaciones. Conviene
+encabezarlo diciendo que Aurora ya derivó el caso, para que no lo reboten al
+bot.
+
+**Los 8 productos rechazados en Paris.** Distintos de las 51 del SKU: son
+los que quedaron con una sola imagen. Identificados por nombre —
+`INKFYR1`, `POSCA8KF13`, `PRINCE9117` y cinco `SKETCHSET`. El del Princeton
+ya tiene su segunda imagen generada en
+`wp-content/uploads/paris/PRINCE9117-2.jpg`, solo falta cargarla. Es lo más
+chico de todo el frente.
