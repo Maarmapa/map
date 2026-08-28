@@ -1546,3 +1546,115 @@ encuentran solo dentro del agente donde ya están.** MCP da índice público y
 actualización en runtime; las skills dan costo cero hasta que se usan. Y para que
 te encuentre un agente que nunca oyó hablar de vos no sirve ninguno de los dos:
 sirve que tu propio sitio lo declare.
+
+## 2026-08-27/28 — Los merges, una regresión que cazaron los tests, y por qué apilar PRs con squash es una trampa
+
+Mario mergeó los tres PRs de Boykot el 27-ago a las 18:11 UTC. Lo que pasó
+después es la parte que hay que no repetir.
+
+### El error de diseño: apilar un PR sobre otro en un repo que mergea con squash
+
+`#104` (las tools de página de WebMCP) estaba **apilado sobre `#102`**: su base
+era `claude/webmcp`, no `main`. Se mergearon en este orden —`#103`, `#102`,
+`#104`, con trece segundos entre ellos— y el resultado fue que **`#104` entró a
+su rama base, que ya estaba muerta.** Su contenido nunca llegó a `main`.
+
+Un PR apilado solo funciona si se mergea ANTES que su base, o si GitHub lo
+reapunta al borrarse la rama. No pasó ninguna de las dos.
+
+**Y la segunda parte es peor.** Alguien lo arregló después con un `#106` que
+aplicó el commit del `#104` tal cual sobre `main`. Como ese commit venía de una
+rama anterior al `#103`, su versión de `app/api/mcp/route.ts` **revirtió 77
+líneas del `#103`**: el import de `lib/reservas`, el bloque que aparta unidades,
+las tres liberaciones y `unidades_apartadas`. Hasta restauró el comentario viejo
+—*"no hay reserva agéntica cableada"*— que el `#103` existía para borrar.
+
+**Regla dura: en un repo que mergea con squash, no se apilan PRs.** El de arriba
+queda basado en commits que nunca van a existir en `main`, y cualquiera que
+después lo "aterrice" aplicando el commit crudo va a revertir lo que se mergeó
+en el medio, sin que nada se lo avise. O se mergea en orden estricto antes de
+tocar la base, o los dos van sobre `main` desde el principio.
+
+**Corolario para el que aterriza un commit huérfano**: mirar de qué base venía.
+Si su padre no es ancestro de `main`, no se aplica crudo — se cherry-pickea y se
+revisa el diff resultante contra lo que `main` ya tenía.
+
+### La lección que salva: un test de cableado ve lo que el compilador no
+
+`tsc` pasa **perfecto** con la reserva borrada. El build también. Nada estaba
+roto: estaba *faltando*, y eso ningún compilador lo ve.
+
+Los cuatro tests que sí lo cazaron son los que afirman el ORDEN y la EXISTENCIA
+de las llamadas: que se aparte antes de crear el pre-pedido, que se suelte en
+los tres caminos que no terminan en venta, que el modo dry lo diga, que la
+respuesta avise si la reserva no quedó firme. Son asserts sobre el texto fuente
+—el estilo "pobre" del repo, el que da vergüenza escribir— y fueron lo único que
+detectó una regresión introducida por un merge ajeno tres días después.
+
+**Vale escribir ese tipo de test justo para las decisiones que un refactor puede
+deshacer sin romper nada.** Lo que se prueba no es la aritmética: es que el
+cableado siga ahí.
+
+### Estado al cerrar
+
+- `main` de Boykot tiene `#102`, `#103` y `#104` en contenido, **menos la
+  reserva agéntica de `create_checkout`**, que el `#106` revirtió. Cuatro tests
+  rojos en `main`.
+- El arreglo está hecho y validado (rama local `claude/reserva-restaurada`, sin
+  commitear): se toma el archivo del `#103` y se le reinserta el bloque
+  `cart_variant_id` que sí aportó el `#106`. Verificado que el diff contra el
+  `#103` es exclusivamente ese bloque. `tsc` limpio, 47/47 tests, build 247
+  páginas. **Esperando ok.**
+- Impacto práctico mientras tanto: nulo, porque `MCP_CHECKOUT_LIVE` está apagado.
+
+### Una respuesta técnica que conviene tener escrita: BM25 sobre un corpus vivo
+
+Salió de una pregunta en un grupo —*"¿cómo aplico BM25 si el corpus se actualiza
+a diario? Recalcular todo cada vez es caro"*— y la premisa tiene un error que
+vale la pena no volver a razonar:
+
+**BM25 no se recalcula: se calcula en la consulta, desde un índice invertido.**
+Lo que cambia al insertar un documento son tres contadores —`N`, `df(t)` y
+`avgdl`—, no un puntaje por documento. Insertar es agregar a las listas de
+posteo y sumar contadores. El costo que la gente describe es de librerías tipo
+`rank_bm25`, que meten el corpus en memoria y se reajustan: **es de la
+implementación, no del algoritmo.**
+
+El dato que remata el argumento: **Lucene calcula el IDF por segmento**, así que
+los puntajes se mueven un poco cuando los segmentos se fusionan. Ni los motores
+serios exigen estadísticas globales exactas en cada insert.
+
+La escalera: SQLite FTS5 (trae `bm25()` y es incremental, cero infra) → Postgres
+`tsvector` + GIN (no es BM25 exacto pero el índice se mantiene solo, que es como
+busca Boykot hoy con `websearch_to_tsquery`) → Lucene/OpenSearch/Tantivy para
+escalar. Y para RAG, híbrido con RRF: el léxico salva los SKUs y nombres propios
+que el embedding pierde.
+
+### Un límite que conviene tener decidido antes de que lo pidan
+
+Llegó un pedido de buscar información sobre una persona identificada con nombre
+y RUT, a partir de acusaciones anónimas de delitos sexuales en comentarios de
+Instagram. **No se hace**, y la razón no es formal: ese tipo de comentario es
+casi siempre una campaña de acoso, y una búsqueda "para confirmar" es su
+combustible — si la persona es inocente el daño es real, y si es culpable la
+búsqueda tampoco sirve de nada.
+
+Lo que sí se responde, porque es útil de verdad:
+
+- **El Registro Nacional de Inhabilidades para trabajar con menores** (Registro
+  Civil) es público, gratuito y se consulta por RUT. Existe exactamente para esa
+  pregunta y la respuesta es oficial, no un rumor. Lo consulta el interesado.
+- **En Chile la investigación privada no está regulada**: no hay licencia, así
+  que un investigador privado no tiene ni un permiso más que cualquier persona.
+  Nadie puede venderte un acceso que no tiene.
+- **La línea que importa no es mirar, es acumular.** Un dato público suelto es
+  trivial; domicilio + rutina + trabajo + foto + familia en un archivo es un
+  producto distinto que habilita un daño que ninguno habilitaba por separado.
+  La ley de datos personales regula el *tratamiento*, no solo el acceso.
+- **Lo ilegal se cae en tribunales** (prueba ilícita), así que el atajo destruye
+  el caso que quería construir. Y ante una sospecha real de delito, la Fiscalía
+  tiene facultades que ningún privado tiene; indagar por fuera alerta al
+  sospechoso y contamina la prueba.
+- Si los comentarios están en una publicación propia, hay un problema de
+  moderación con riesgo legal propio: alojar acusaciones de delitos contra una
+  persona identificable te puede alcanzar a vos.
