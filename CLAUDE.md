@@ -1796,3 +1796,23 @@ rumor hasta que se vea en la fuente.** Vale igual para el resumen de una
 búsqueda, para un agregador y para la ficha que un tercero escribió sobre el
 negocio. En material que ve un cliente, el costo de equivocarse es la reunión
 entera.
+
+### Antes de auditar a alguien: revisar si compite con un cliente propio
+
+Salió de auditar restaurantes en unas pocas cuadras. Uno de los que se miró
+resultó estar **en el mismo edificio y en el mismo rubro que un cliente
+actual** — y el plan escrito de ese cliente lo trataba explícitamente como el
+rival a sortear.
+
+Auditarlo como inteligencia competitiva está perfecto y sirve. **Ofrecerle
+servicios sería perder al cliente que ya existe**, y el riesgo no es abstracto:
+en un rubro de barrio se enteran.
+
+Dos cosas que quedaron como práctica:
+
+1. **El chequeo de conflicto va ANTES de la auditoría**, no después de haberle
+   escrito. Mismo rubro + misma zona + un cliente propio cerca = revisar.
+2. **En el archivo de trabajo, la inteligencia competitiva va en una sección
+   aparte, rotulada, separada de la lista de prospectos vendibles.** Mezcladas,
+   una sesión futura lee la ficha, ve hallazgos jugosos y sale a ofrecer. La
+   separación no es orden: es lo que evita ese error.
