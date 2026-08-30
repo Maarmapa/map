@@ -1658,3 +1658,98 @@ Lo que sí se responde, porque es útil de verdad:
 - Si los comentarios están en una publicación propia, hay un problema de
   moderación con riesgo legal propio: alojar acusaciones de delitos contra una
   persona identificable te puede alcanzar a vos.
+
+## 2026-08-29 — Auditoría de restaurantes: el método, y por qué el detalle vive fuera de este repo
+
+Se abrió una línea nueva: auditar la presencia digital de restaurantes desde
+fuentes públicas y ofrecerles la implementación. **Los nombres de los
+prospectos, sus hallazgos, los precios y la táctica de acercamiento NO están
+acá** — se entregaron por el chat y van a las memorias locales del Mini. Es la
+regla anti-leak de arriba aplicada a su caso más obvio: son negocios reales,
+con nombre, a los que todavía no se les reportó nada. Publicar el defecto de un
+tercero antes de avisarle invierte el orden correcto, y este repo es público.
+
+Acá queda solo el método, que es lo que sirve para la próxima.
+
+### Lo que se puede auditar sin tocar ningún sistema del cliente
+
+Todo esto sale de fuentes públicas y es verificable delante del prospecto, que
+es lo que lo convierte en demostración en vez de presentación:
+
+- Nota y cantidad de reseñas en Google, y **hace cuánto publicó el dueño por
+  última vez** (la ficha reclamada pero congelada es un hallazgo más fino que la
+  ficha sin reclamar, y mucho más común).
+- Si el horario y el teléfono coinciden entre plataformas. Casi nunca coinciden.
+- **Qué es la carta**: texto, imagen, PDF o un QR que caduca. Es el hallazgo que
+  más pega, porque se comprueba en la mesa en cinco segundos.
+- Si hay dominio propio y si las reservas entran por un Gmail.
+- Cuántas puertas de reserva hay y si alguna deja el dato del comensal en casa.
+
+### El truco que reemplaza al fetch bloqueado
+
+El proxy de la sesión corta casi todo lo externo, así que no se pueden abrir los
+sitios. **`WebSearch` con `allowed_domains: ["dominio.cl"]` resuelve dos cosas a
+la vez**: devuelve lo que el buscador ya leyó, y —esto es lo nuevo— **la
+ausencia de resultados es en sí misma el hallazgo**. Se pidió "carta precios
+platos" restringido a un dominio y volvieron los títulos de las páginas pero
+ni un plato: eso predijo correctamente que la carta era una imagen. Confirmado
+después por el usuario, que estaba sentado en el local.
+
+**Generalizable: cuando no podés leer la página, preguntale al índice qué sabe
+de ella. Lo que el índice NO sabe es el diagnóstico.**
+
+Dos señales que salieron de ahí y conviene buscar siempre:
+
+- **El título de la página.** Si dice "Carta Qr Rd", eso es lo que lee la
+  máquina como nombre del documento. Varias cartas paralelas con nombres
+  internos = para un asistente no hay *una* carta.
+- **Qué título quedó indexado de la home.** Si dice "One moment, please…", lo
+  que el rastreador se llevó fue la pantalla anti-bot, no el sitio. El escudo
+  que protege el sitio es el que lo está tapando, y nadie lo revisó desde que
+  las IA empezaron a leer.
+
+### El error del día, que es el de siempre
+
+Se afirmó que un restaurante tenía 4,1 estrellas con 1.171 opiniones y la ficha
+sin reclamar. **Las dos cosas eran falsas**: 4,3 con 1,9 K y la ficha reclamada
+y verificada. La causa: se tomaron los números de un sitio scraper en vez de la
+fuente primaria. **Un pantallazo de Google tumbó las dos afirmaciones.**
+
+Es la Regla cero otra vez, en un dominio nuevo: *si el hallazgo es sobre algo,
+se mira ese algo, no lo que un tercero escribió sobre eso.* Y en material que
+va a un cliente el costo es alto — ofrecerle reclamar una ficha que ya es suya
+habría hundido la reunión en el primer minuto.
+
+De ahí salió una práctica que quedó: **rotular cada hallazgo como "verificado" o
+"por confirmar" dentro del propio documento que ve el cliente.** No es
+prolijidad, es lo que permite mostrar el diagnóstico sin haberlo terminado.
+
+### Correo en frío en Chile: el marco, para no volver a investigarlo
+
+No es asesoría legal, pero orienta la decisión:
+
+- **Chile es opt-out, no opt-in.** El correo comercial no solicitado no es
+  ilegal por sí mismo. El art. 28 B de la Ley 19.496 exige tres cosas:
+  identificarlo como publicidad, decir quién lo manda, y dar una vía real de
+  baja que se respete de inmediato.
+- **Lo que más importa no es el volumen, es a qué dirección.** Un
+  `contacto@empresa.cl` es dato de la empresa; un `nombre@gmail.com` o un
+  celular es dato personal de alguien identificable **aunque esté publicado**.
+- **La Ley 21.719 subió el piso**: la excepción de "fuentes accesibles al
+  público" es más estrecha que en la 19.628, y hay que poder nombrar la base
+  legal y mostrar de dónde salió cada contacto.
+- **El límite real es comercial, no legal.** Un envío masivo hunde la
+  reputación del dominio —y quien vende profesionalismo digital no puede
+  quemarse en eso—, y lo genérico desperdicia el contacto: no se le puede
+  volver a escribir al mismo lugar con el argumento bueno.
+- **Corolario del rubro**: en una calle donde todos se conocen, un blast te
+  convierte en "el del correo masivo" en una semana. Auditorías personalizadas
+  hacen lo contrario: se reenvían entre ellos.
+
+### Lo que convierte una propuesta en demostración
+
+La pieza no se manda como folleto: se manda como **link a la auditoría de ese
+restaurante**, con sus propios números adentro. Y el diagnóstico se abre
+diciendo que se hizo **solo con fuentes públicas, sin acceso a ningún sistema
+suyo**. Esa frase es la que cierra el argumento sola: si desde afuera se ve así,
+así lo ve también quien busca dónde comer.
