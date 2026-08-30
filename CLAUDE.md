@@ -1758,3 +1758,41 @@ restaurante**, con sus propios números adentro. Y el diagnóstico se abre
 diciendo que se hizo **solo con fuentes públicas, sin acceso a ningún sistema
 suyo**. Esa frase es la que cierra el argumento sola: si desde afuera se ve así,
 así lo ve también quien busca dónde comer.
+
+### Refinamientos del método de auditoría (30-ago)
+
+Cuatro cosas que aparecieron auditando un segundo y un tercer restaurante, y
+que la primera versión del método no tenía:
+
+- **Contar cuántas páginas del dominio propio están indexadas.** Se le pide al
+  buscador "carta precios sucursales" restringido al dominio del cliente. Si
+  vuelve **solo la portada**, el sitio es un volante: no hay carta, no hay
+  página por local, no hay nada que una máquina pueda citar. Es la versión
+  cuantificable del truco anterior.
+- **Comparar el sitio propio con la realidad operativa.** Un negocio con varios
+  locales cuya web oficial **no menciona uno de ellos** es un hallazgo
+  demoledor y verificable en diez segundos. Titular que se escribe solo: *su
+  web no sabe que este local existe*.
+- **Contar las fichas duplicadas.** Varias entradas en Tripadvisor, en
+  OpenTable, dos páginas de Facebook, directorios sueltos: la identidad
+  fragmentada se puede medir, y medida deja de ser una opinión.
+- **El nombre mismo puede ser el hallazgo.** Si el propio entorno del negocio
+  duda entre singular y plural, la ambigüedad de entidad ya existe — y una
+  máquina la sufre peor que una persona.
+
+### La disciplina que evitó repetir el error del scraper
+
+Auditando el tercer restaurante apareció, dentro del **resumen que arma el
+buscador**, que una de sus sucursales estaría operando ahora con otro nombre.
+Es un dato jugoso y encajaba perfecto con la tesis.
+
+No se afirmó. **Un resumen de buscador es fuente secundaria, exactamente de la
+misma clase que el sitio scraper que ya había hecho afirmar dos datos falsos
+sobre otro prospecto.** Quedó rotulado "por confirmar" en el material del
+cliente.
+
+La regla, ahora explícita: **lo que viene de un resumen automático se trata como
+rumor hasta que se vea en la fuente.** Vale igual para el resumen de una
+búsqueda, para un agregador y para la ficha que un tercero escribió sobre el
+negocio. En material que ve un cliente, el costo de equivocarse es la reunión
+entera.
