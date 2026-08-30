@@ -1546,3 +1546,210 @@ encuentran solo dentro del agente donde ya están.** MCP da índice público y
 actualización en runtime; las skills dan costo cero hasta que se usan. Y para que
 te encuentre un agente que nunca oyó hablar de vos no sirve ninguno de los dos:
 sirve que tu propio sitio lo declare.
+
+## 2026-08-27/28 — Los merges, una regresión que cazaron los tests, y por qué apilar PRs con squash es una trampa
+
+Mario mergeó los tres PRs de Boykot el 27-ago a las 18:11 UTC. Lo que pasó
+después es la parte que hay que no repetir.
+
+### El error de diseño: apilar un PR sobre otro en un repo que mergea con squash
+
+`#104` (las tools de página de WebMCP) estaba **apilado sobre `#102`**: su base
+era `claude/webmcp`, no `main`. Se mergearon en este orden —`#103`, `#102`,
+`#104`, con trece segundos entre ellos— y el resultado fue que **`#104` entró a
+su rama base, que ya estaba muerta.** Su contenido nunca llegó a `main`.
+
+Un PR apilado solo funciona si se mergea ANTES que su base, o si GitHub lo
+reapunta al borrarse la rama. No pasó ninguna de las dos.
+
+**Y la segunda parte es peor.** Alguien lo arregló después con un `#106` que
+aplicó el commit del `#104` tal cual sobre `main`. Como ese commit venía de una
+rama anterior al `#103`, su versión de `app/api/mcp/route.ts` **revirtió 77
+líneas del `#103`**: el import de `lib/reservas`, el bloque que aparta unidades,
+las tres liberaciones y `unidades_apartadas`. Hasta restauró el comentario viejo
+—*"no hay reserva agéntica cableada"*— que el `#103` existía para borrar.
+
+**Regla dura: en un repo que mergea con squash, no se apilan PRs.** El de arriba
+queda basado en commits que nunca van a existir en `main`, y cualquiera que
+después lo "aterrice" aplicando el commit crudo va a revertir lo que se mergeó
+en el medio, sin que nada se lo avise. O se mergea en orden estricto antes de
+tocar la base, o los dos van sobre `main` desde el principio.
+
+**Corolario para el que aterriza un commit huérfano**: mirar de qué base venía.
+Si su padre no es ancestro de `main`, no se aplica crudo — se cherry-pickea y se
+revisa el diff resultante contra lo que `main` ya tenía.
+
+### La lección que salva: un test de cableado ve lo que el compilador no
+
+`tsc` pasa **perfecto** con la reserva borrada. El build también. Nada estaba
+roto: estaba *faltando*, y eso ningún compilador lo ve.
+
+Los cuatro tests que sí lo cazaron son los que afirman el ORDEN y la EXISTENCIA
+de las llamadas: que se aparte antes de crear el pre-pedido, que se suelte en
+los tres caminos que no terminan en venta, que el modo dry lo diga, que la
+respuesta avise si la reserva no quedó firme. Son asserts sobre el texto fuente
+—el estilo "pobre" del repo, el que da vergüenza escribir— y fueron lo único que
+detectó una regresión introducida por un merge ajeno tres días después.
+
+**Vale escribir ese tipo de test justo para las decisiones que un refactor puede
+deshacer sin romper nada.** Lo que se prueba no es la aritmética: es que el
+cableado siga ahí.
+
+### Estado al cerrar
+
+- `main` de Boykot tiene `#102`, `#103` y `#104` en contenido, **menos la
+  reserva agéntica de `create_checkout`**, que el `#106` revirtió. Cuatro tests
+  rojos en `main`.
+- El arreglo está hecho y validado (rama local `claude/reserva-restaurada`, sin
+  commitear): se toma el archivo del `#103` y se le reinserta el bloque
+  `cart_variant_id` que sí aportó el `#106`. Verificado que el diff contra el
+  `#103` es exclusivamente ese bloque. `tsc` limpio, 47/47 tests, build 247
+  páginas. **Esperando ok.**
+- Impacto práctico mientras tanto: nulo, porque `MCP_CHECKOUT_LIVE` está apagado.
+
+### Una respuesta técnica que conviene tener escrita: BM25 sobre un corpus vivo
+
+Salió de una pregunta en un grupo —*"¿cómo aplico BM25 si el corpus se actualiza
+a diario? Recalcular todo cada vez es caro"*— y la premisa tiene un error que
+vale la pena no volver a razonar:
+
+**BM25 no se recalcula: se calcula en la consulta, desde un índice invertido.**
+Lo que cambia al insertar un documento son tres contadores —`N`, `df(t)` y
+`avgdl`—, no un puntaje por documento. Insertar es agregar a las listas de
+posteo y sumar contadores. El costo que la gente describe es de librerías tipo
+`rank_bm25`, que meten el corpus en memoria y se reajustan: **es de la
+implementación, no del algoritmo.**
+
+El dato que remata el argumento: **Lucene calcula el IDF por segmento**, así que
+los puntajes se mueven un poco cuando los segmentos se fusionan. Ni los motores
+serios exigen estadísticas globales exactas en cada insert.
+
+La escalera: SQLite FTS5 (trae `bm25()` y es incremental, cero infra) → Postgres
+`tsvector` + GIN (no es BM25 exacto pero el índice se mantiene solo, que es como
+busca Boykot hoy con `websearch_to_tsquery`) → Lucene/OpenSearch/Tantivy para
+escalar. Y para RAG, híbrido con RRF: el léxico salva los SKUs y nombres propios
+que el embedding pierde.
+
+### Un límite que conviene tener decidido antes de que lo pidan
+
+Llegó un pedido de buscar información sobre una persona identificada con nombre
+y RUT, a partir de acusaciones anónimas de delitos sexuales en comentarios de
+Instagram. **No se hace**, y la razón no es formal: ese tipo de comentario es
+casi siempre una campaña de acoso, y una búsqueda "para confirmar" es su
+combustible — si la persona es inocente el daño es real, y si es culpable la
+búsqueda tampoco sirve de nada.
+
+Lo que sí se responde, porque es útil de verdad:
+
+- **El Registro Nacional de Inhabilidades para trabajar con menores** (Registro
+  Civil) es público, gratuito y se consulta por RUT. Existe exactamente para esa
+  pregunta y la respuesta es oficial, no un rumor. Lo consulta el interesado.
+- **En Chile la investigación privada no está regulada**: no hay licencia, así
+  que un investigador privado no tiene ni un permiso más que cualquier persona.
+  Nadie puede venderte un acceso que no tiene.
+- **La línea que importa no es mirar, es acumular.** Un dato público suelto es
+  trivial; domicilio + rutina + trabajo + foto + familia en un archivo es un
+  producto distinto que habilita un daño que ninguno habilitaba por separado.
+  La ley de datos personales regula el *tratamiento*, no solo el acceso.
+- **Lo ilegal se cae en tribunales** (prueba ilícita), así que el atajo destruye
+  el caso que quería construir. Y ante una sospecha real de delito, la Fiscalía
+  tiene facultades que ningún privado tiene; indagar por fuera alerta al
+  sospechoso y contamina la prueba.
+- Si los comentarios están en una publicación propia, hay un problema de
+  moderación con riesgo legal propio: alojar acusaciones de delitos contra una
+  persona identificable te puede alcanzar a vos.
+
+## 2026-08-29 — Auditoría de restaurantes: el método, y por qué el detalle vive fuera de este repo
+
+Se abrió una línea nueva: auditar la presencia digital de restaurantes desde
+fuentes públicas y ofrecerles la implementación. **Los nombres de los
+prospectos, sus hallazgos, los precios y la táctica de acercamiento NO están
+acá** — se entregaron por el chat y van a las memorias locales del Mini. Es la
+regla anti-leak de arriba aplicada a su caso más obvio: son negocios reales,
+con nombre, a los que todavía no se les reportó nada. Publicar el defecto de un
+tercero antes de avisarle invierte el orden correcto, y este repo es público.
+
+Acá queda solo el método, que es lo que sirve para la próxima.
+
+### Lo que se puede auditar sin tocar ningún sistema del cliente
+
+Todo esto sale de fuentes públicas y es verificable delante del prospecto, que
+es lo que lo convierte en demostración en vez de presentación:
+
+- Nota y cantidad de reseñas en Google, y **hace cuánto publicó el dueño por
+  última vez** (la ficha reclamada pero congelada es un hallazgo más fino que la
+  ficha sin reclamar, y mucho más común).
+- Si el horario y el teléfono coinciden entre plataformas. Casi nunca coinciden.
+- **Qué es la carta**: texto, imagen, PDF o un QR que caduca. Es el hallazgo que
+  más pega, porque se comprueba en la mesa en cinco segundos.
+- Si hay dominio propio y si las reservas entran por un Gmail.
+- Cuántas puertas de reserva hay y si alguna deja el dato del comensal en casa.
+
+### El truco que reemplaza al fetch bloqueado
+
+El proxy de la sesión corta casi todo lo externo, así que no se pueden abrir los
+sitios. **`WebSearch` con `allowed_domains: ["dominio.cl"]` resuelve dos cosas a
+la vez**: devuelve lo que el buscador ya leyó, y —esto es lo nuevo— **la
+ausencia de resultados es en sí misma el hallazgo**. Se pidió "carta precios
+platos" restringido a un dominio y volvieron los títulos de las páginas pero
+ni un plato: eso predijo correctamente que la carta era una imagen. Confirmado
+después por el usuario, que estaba sentado en el local.
+
+**Generalizable: cuando no podés leer la página, preguntale al índice qué sabe
+de ella. Lo que el índice NO sabe es el diagnóstico.**
+
+Dos señales que salieron de ahí y conviene buscar siempre:
+
+- **El título de la página.** Si dice "Carta Qr Rd", eso es lo que lee la
+  máquina como nombre del documento. Varias cartas paralelas con nombres
+  internos = para un asistente no hay *una* carta.
+- **Qué título quedó indexado de la home.** Si dice "One moment, please…", lo
+  que el rastreador se llevó fue la pantalla anti-bot, no el sitio. El escudo
+  que protege el sitio es el que lo está tapando, y nadie lo revisó desde que
+  las IA empezaron a leer.
+
+### El error del día, que es el de siempre
+
+Se afirmó que un restaurante tenía 4,1 estrellas con 1.171 opiniones y la ficha
+sin reclamar. **Las dos cosas eran falsas**: 4,3 con 1,9 K y la ficha reclamada
+y verificada. La causa: se tomaron los números de un sitio scraper en vez de la
+fuente primaria. **Un pantallazo de Google tumbó las dos afirmaciones.**
+
+Es la Regla cero otra vez, en un dominio nuevo: *si el hallazgo es sobre algo,
+se mira ese algo, no lo que un tercero escribió sobre eso.* Y en material que
+va a un cliente el costo es alto — ofrecerle reclamar una ficha que ya es suya
+habría hundido la reunión en el primer minuto.
+
+De ahí salió una práctica que quedó: **rotular cada hallazgo como "verificado" o
+"por confirmar" dentro del propio documento que ve el cliente.** No es
+prolijidad, es lo que permite mostrar el diagnóstico sin haberlo terminado.
+
+### Correo en frío en Chile: el marco, para no volver a investigarlo
+
+No es asesoría legal, pero orienta la decisión:
+
+- **Chile es opt-out, no opt-in.** El correo comercial no solicitado no es
+  ilegal por sí mismo. El art. 28 B de la Ley 19.496 exige tres cosas:
+  identificarlo como publicidad, decir quién lo manda, y dar una vía real de
+  baja que se respete de inmediato.
+- **Lo que más importa no es el volumen, es a qué dirección.** Un
+  `contacto@empresa.cl` es dato de la empresa; un `nombre@gmail.com` o un
+  celular es dato personal de alguien identificable **aunque esté publicado**.
+- **La Ley 21.719 subió el piso**: la excepción de "fuentes accesibles al
+  público" es más estrecha que en la 19.628, y hay que poder nombrar la base
+  legal y mostrar de dónde salió cada contacto.
+- **El límite real es comercial, no legal.** Un envío masivo hunde la
+  reputación del dominio —y quien vende profesionalismo digital no puede
+  quemarse en eso—, y lo genérico desperdicia el contacto: no se le puede
+  volver a escribir al mismo lugar con el argumento bueno.
+- **Corolario del rubro**: en una calle donde todos se conocen, un blast te
+  convierte en "el del correo masivo" en una semana. Auditorías personalizadas
+  hacen lo contrario: se reenvían entre ellos.
+
+### Lo que convierte una propuesta en demostración
+
+La pieza no se manda como folleto: se manda como **link a la auditoría de ese
+restaurante**, con sus propios números adentro. Y el diagnóstico se abre
+diciendo que se hizo **solo con fuentes públicas, sin acceso a ningún sistema
+suyo**. Esa frase es la que cierra el argumento sola: si desde afuera se ve así,
+así lo ve también quien busca dónde comer.
