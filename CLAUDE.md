@@ -1664,7 +1664,12 @@ Lo que sí se responde, porque es útil de verdad:
 Se abrió una línea nueva: auditar la presencia digital de restaurantes desde
 fuentes públicas y ofrecerles la implementación. **Los nombres de los
 prospectos, sus hallazgos, los precios y la táctica de acercamiento NO están
-acá** — se entregaron por el chat y van a las memorias locales del Mini. Es la
+acá** — se entregaron por el chat y viven en
+`restaurantes-prospectos-y-hallazgos.md`, en las memorias locales del Mini
+(`~/.claude/projects/-Users-map/memory/`). Ese archivo tiene los prospectos con
+sus hallazgos verificados, los enlaces a las piezas ya construidas, la
+estructura de precios y las decisiones pendientes: **antes de retomar esta línea
+desde una sesión remota, hay que pedírselo a Mario por el chat.** Es la
 regla anti-leak de arriba aplicada a su caso más obvio: son negocios reales,
 con nombre, a los que todavía no se les reportó nada. Publicar el defecto de un
 tercero antes de avisarle invierte el orden correcto, y este repo es público.
