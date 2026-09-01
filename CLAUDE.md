@@ -53,6 +53,12 @@ chequeo aprobado.
   van siempre en variables de entorno (`process.env`), jamás en el código ni
   en commits. Ojo: un secreto commiteado queda en el historial aunque se
   borre después.
+- **Nada de códigos de descuento ni cupones**, ni "temporales" ni "de un solo uso": un
+  cupón es una tarifa, y en el historial de git queda para siempre aunque se
+  redacte después. Lo mismo para IDs de conversaciones o sesiones de
+  herramientas: opacos pero innecesarios en público. Viven en las memorias
+  locales. (Probado el 01-sep: se colaron dos cupones en una nota de estado y
+  hubo que redactarlos; el historial los conserva.)
 - Recuerda que los PRs cerrados conservan su diff visible públicamente:
   lo que entra al repo, aunque se revierta, deja traza.
 - **Hallazgos sobre código ajeno que todavía no se reportaron NO van al repo
