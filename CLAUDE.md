@@ -1159,9 +1159,9 @@ Segmentos estáticos: `8987754` Arsenal original, `8987757` Angelus,
 `8987758` Copic, `8987759` Holbein, y `8987760` creado para excluir el
 solapamiento — sin ese último, 313 personas recibían dos correos.
 
-Cupón **`VOLVER15`** en WooCommerce (id 241454): 15%, uso individual,
+Cupón de win-back en WooCommerce (código, id y condiciones en la memoria local `boykot-cupones-e-ids-01sep`): uso individual,
 excluye rebajados, uno por persona, vence 15-sep-2026. Distinto de
-`VUELVE15`, que es el del carro abandonado, para poder medirlos por
+`<cupón carro abandonado>`, que es el del carro abandonado, para poder medirlos por
 separado.
 
 **PRs abiertos**: `Maarmapa/BOYKOT#101` (los 51 alias del sync, draft) y
@@ -1174,7 +1174,7 @@ así que lo abre el usuario en su navegador. Confirmar que `unmatched` baja
 en 51 y que ninguna cae en `duplicateSkipped`.
 
 **Kapso**: proyecto `boykot`, número de tipo sandbox (no productivo), una
-conversación activa `68026efa-ed13-43ef-b409-89f12437ff90`. El MCP quedó
+conversación activa `<id en memoria local>`. El MCP quedó
 registrado bajo el proyecto `~/Documents/DashAI`, no bajo este — por eso no
 aparece acá. Se le habla igual por `curl`.
 
