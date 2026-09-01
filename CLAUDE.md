@@ -1816,3 +1816,64 @@ Dos cosas que quedaron como práctica:
    aparte, rotulada, separada de la lista de prospectos vendibles.** Mezcladas,
    una sesión futura lee la ficha, ve hallazgos jugosos y sale a ofrecer. La
    separación no es orden: es lo que evita ese error.
+
+## 2026-09-01 (tarde) — Sesión local · Walmart Chile conectado, ML saneado, y los CSV para el MacBook
+
+Continuación de la sesión de la mañana sobre Boykot. Lo que sigue es método y
+estado; los números de negocio viven fuera del repo.
+
+### Dónde quedaron los archivos (para abrirlos desde el MacBook)
+
+Los CSV **no van al repo** (es público). Quedaron en dos lugares del Mini:
+`~/Desktop/` y, si iCloud Drive está activo, `iCloud Drive/Boykot/`. Si el
+MacBook no los ve, pedirlos por el chat o por link desde el servidor.
+
+| archivo | qué es | qué hacer |
+|---|---|---|
+| `paris-51-skuseller.csv` | 51 publicaciones de Paris con `skuSeller` roto y su código correcto, sacado de la columna `Sku Seller Variant` del propio export | ya resuelto por alias en BOYKOT#101 (mergeado); el ticket a Paris es opcional |
+| `meli-541-sin-ficha-catalogo.csv` | 541 publicaciones de ML sin producto de catálogo: colores sueltos de Copic Classic, Holbein Acryla y acuarelas, Kirarina | nada — ML no tiene ficha para colores individuales |
+| `meli-297-sin-sku-candidatos.csv` | las 297 de ML sin SKU, con el mejor candidato de BSale y puntaje | usar solo `alta`; mirar `media` una por una; **las 231 `baja` son ruido, no usar** |
+| `bsale-381-barcodes-relleno.csv` | variantes de BSale con barcode de relleno (repetido, igual al SKU, 10 dígitos) | 11 se arreglan con un cero adelante; el resto es stock 0 |
+| `walmart-*.csv` | los lotes enviados a Walmart hoy | referencia; el envío ya se hace por ruta admin |
+
+### Walmart Chile (Lider): lo que quedó funcionando
+
+- API conectada. La receta del feed está en la memoria local
+  `walmart-chile-feed-recipe` y en `~/bin/walmart-match`. Lo que costó cuatro
+  intentos: `version 1.08`, `mart WALMART_CHILE`, y `requestId/requestBatchId/
+  feedDate` **obligatorios aunque la spec diga opcional**.
+- **`SUCCESS` en el feed no significa item creado.** Solo los que devuelven
+  `wpid` tienen ficha en Chile. De 309 enviados, 131 existen. Angelus ~50%,
+  Copic 6%. Lo demás necesita `MP_ITEM` (crear ficha con contenido).
+- **Mismo GTIN no garantiza misma unidad de venta.** Las puntas Copic tienen
+  en BSale el EAN de la **bolsa de 3** puesto en la **unidad**; casaron con la
+  ficha del pack. Se retiraron de Walmart y se excluyen del match. El arreglo
+  es en BSale: mover el EAN a la bolsa.
+- Todo está sin inventario hasta que el sync (BOYKOT#135) tenga las variables
+  en Vercel y `WALMART_SYNC_LIVE=1`. Rutas admin: `/api/admin/walmart/sync`
+  (dry) y `/api/admin/walmart/match-all` (BOYKOT#137, colgar el catálogo por
+  tandas; quedan ~9.300 candidatos).
+
+### MercadoLibre
+
+- BOYKOT#134 (mergeado): ruta `/api/admin/meli/skufix` con 99 SKU para
+  publicaciones que el sync no veía. Se aplica desde el navegador, dry-run
+  primero.
+- BOYKOT#136: `/api/admin/meli/fotos` (reusa las verticales de Paris para las
+  1.392 con <2 fotos) y `/api/admin/meli/catopt-marca` (fase 1 del recasador
+  de las 46 marcas; NO crea ni pausa nada).
+- La regla de la mañana volvió a aparecer: **el emparejador por nombre da 100%
+  en cosas que se distinguen por un número**. "Posca Set 16" casó al 0.83 con
+  el set de 8; "Ciao Set E" con el Set A. Por eso el CSV lleva puntaje y no se
+  aplica nada automático.
+
+### Método que sirvió
+
+- **Verificar el deploy antes de contar con el código.** Tras tres merges,
+  mirar el status de Vercel en `main` (`gh api .../commits/main/status`). Un
+  cron que corre antes del deploy usa el código viejo sin avisar.
+- **Cuando el volumen no pasa por el chat, escribir la ruta.** 9.000 filas por
+  CSV son 12 turnos; una ruta admin que lee Supabase y manda el feed es una
+  llamada del usuario y queda para la próxima vez.
+- **Precio de lista como fuente**: `price_19` de BSale coincide con la web en
+  el 97,6%; cuando difiere es más alto, nunca más bajo. Seguro para publicar.
