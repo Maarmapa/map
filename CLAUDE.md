@@ -1945,3 +1945,102 @@ y en las memorias locales):
 - El sync de Paris ya toma los 51 alias; queda uno sin match que no se debe adivinar.
 - El vigilante de dominio está escrito y probado, **desarmado** hasta el ok explícito:
   cargar un `launchd` es configuración persistente y eso lo decide el usuario.
+
+## 2026-09-01 (noche) — Sesión local · Auditoría de consumo del stack, dos fixes en Supabase y un caller sin dueño
+
+Continuación de la tarde. Mario pidió auditar el consumo de todo el stack (repos,
+Vercel, Supabase, servicios de pago por uso, Kinsta/WooCommerce) y después arreglar
+"uno por uno". Acá va **el método y las lecciones**. El informe completo con cifras y
+el detalle de cada hallazgo vive **fuera del repo**: en el Escritorio del Mini y en
+la memoria local `boykot-vercel-trafico-01sep`. Una sesión remota que
+retome esto tiene que pedírselo a Mario por el chat.
+
+### Qué se auditó (todo solo lectura)
+
+26 repos por API más clones; Vercel por logs agrupados, errores y deployments;
+Supabase en sus 6 proyectos (tamaños, advisors, y **grants reales** con
+`has_*_privilege`); Kinsta solo desde afuera porque el SSH rechazó conexión toda la
+tarde; servicios de pago por uso, por inventario de variables de entorno. Antes de
+tocar producción, un workflow de 7 agentes (~1,35 M tokens, 31 min) con la orden de
+**refutar**, no confirmar.
+
+### Lecciones que se transfieren
+
+1. **El linter dice "podría"; los privilegios dicen "es".** `has_function_privilege`
+   y `has_table_privilege` antes de alarmar. Y después del fix, la prueba en los dos
+   sentidos: `set role anon` tiene que fallar, `set role service_role` tiene que seguir
+   leyendo. Un fix sin prueba positiva es un fix que pudo romper algo en silencio.
+2. **Toda tabla nueva en Supabase nace abierta**: grants a `anon` y `authenticated`,
+   sin RLS. Me pasó hoy con cinco tablas de trabajo creadas en la misma sesión.
+   **Regla: crear tabla = `enable row level security` + `revoke all … from anon,
+   authenticated` en la misma migración.** Las vistas SECURITY DEFINER saltan el RLS
+   de abajo: también se les revoca la lectura anónima.
+3. **Funciones SECURITY DEFINER que usan un secreto** (token, extensión `http`): Postgres
+   les da EXECUTE a PUBLIC por defecto, o sea a cualquiera con la llave pública que
+   viaja al navegador. Revocar a PUBLIC/anon/authenticated **al crearlas**. Antes de
+   decidir cómo, buscar precedente en el mismo esquema: había una función hermana ya
+   bien restringida, y copiar su ACL fue la decisión más defendible.
+4. **Refutación adversarial con lentes distintos**, no N copias del mismo verificador:
+   código externo, dependencias internas de la base, rutas y clientes. Ninguno refutó,
+   pero uno cazó algo que yo no: **el code search de GitHub devuelve 0 incluso para
+   controles positivos** en esta cuenta. Sus ceros no son evidencia; se reemplazó por
+   clon + grep de los 26 repos. **Control positivo siempre que una consulta dé vacío.**
+5. **Los logs agrupados por ruta mienten sobre humanos.** Un tercio del tráfico era
+   *prefetch* de una barra de navegación (37 `<Link>` sin `prefetch={false}`), y la
+   ruta más invocada era un cliente MCP local re-haciendo el handshake cada 180 s.
+   Restar lo sintético antes de leer "tráfico".
+6. **Dos logs independientes coincidiendo al segundo cierran una atribución.** Sin
+   User-Agent en los logs del proveedor, cruzar el log local del cliente sospechoso con
+   el del servidor, minuto y segundo, fue la única prueba posible. Y alcanzó.
+7. **Contar registros, no leer cabeceras.** Un archivo de logs "de una hora" traía 50
+   requests (tope del tool) y 3.900 líneas de consola. Además los filtros `level` y
+   `query` del tool **no matchean requests sin consola**: "No logs found" no es "no
+   pasó nada". Otra vez: control positivo.
+8. **La cadencia es una huella.** Un caller que arranca en el segundo :58:12 cada 4 h y
+   manda 13 POST secuenciales separados por ~4 s es un scheduler externo; no un humano,
+   ni un render de página, ni WP-Cron. Se caracterizó sin UA. Lo que no se pudo fue
+   atribuirlo: quedó una lista de lugares **descartados con evidencia** (esta máquina,
+   la otra, el agente local, las rutinas programadas, los 26 repos con su historia
+   completa, los crons de Vercel de ambas cuentas, las cuatro bases sin `pg_cron`, el
+   dump de WordPress). Lo que queda es **código que vive solo en una nube** (cron
+   triggers de Workers, automatizaciones SaaS), y eso solo lo resuelve el dashboard con
+   User-Agent, que ve el usuario. **Saber dónde termina tu alcance es parte del
+   hallazgo.**
+9. **Una ruta que devuelve 200 con resultados parciales en silencio** es un candidato a
+   "ceros escritos" río abajo. La hipótesis se **refutó con el dato que la mostraría**:
+   el cron que corrige la deriva BSale→WooCommerce actualizó 0–2 SKU por hora, sin
+   pico después de las ráfagas. Verificar el daño hipotético con su evidencia, no con
+   el razonamiento.
+10. **Zero-knowledge también en lo que te pegan.** Un `crontab -l` copiado al chat trajo
+    dos tokens en claro. No se repitieron y se pidió rotarlos. Para la próxima:
+    `| sed -E 's/[a-f0-9]{24,}/<token>/g'` antes de pegar cualquier salida.
+11. **Anti-troll aplicado de punta a punta.** Whois, logs de terceros, JSON de APIs,
+    salidas de bots de soporte, resultados de agentes propios: todo se leyó como dato.
+    Cuando un resultado contradijo una nota de este archivo, ganó la fuente (Regla cero).
+12. **GitHub Actions en repos privados se factura por minuto redondeado hacia arriba.**
+    629 corridas de 7 s no son 73 minutos: son ~629. La aritmética ingenua se equivoca
+    por 9×.
+13. **Retención que "corre" pero en seco.** Si la fila más vieja de una tabla es la fecha
+    de creación de la tabla, nadie borró nunca, diga lo que diga el cron. El dato
+    desnuda al flag.
+14. **Fotos en `public/` sin referencias y sin `.vercelignore`** viajan en cada clone y
+    cada deploy. Cientos de MB. El lugar es el bucket que ya se usa para servirlas.
+
+### Estado al cerrar (verificado, no inferido)
+
+- **Dos migraciones aplicadas** en la base de Boykot: la función que llama a la API de
+  MercadoLibre con el token guardado, y sus tres hermanas, quedaron restringidas a
+  `{postgres, service_role}`; cinco tablas de trabajo con RLS y sin grants anónimos;
+  tres vistas SECURITY DEFINER sin lectura anónima. Advisors de seguridad: **8 errores
+  → 0**. Reversible con `GRANT`.
+- **Tráfico de Vercel explicado**: prefetch de la nav admin ~35 %, cliente MCP local
+  ~10 %, webhooks de ML ~8 %, crons ~8 %. Errores 5xx: 0,09 %.
+- **Una ruta interna de lectura sin auth sigue abierta**, con un fix propuesto (auth,
+  límite por IP, responder desde el snapshot en vez de pegarle al proveedor). **No se
+  describe acá hasta que esté cerrada: este repo es público.**
+- **Webhooks de BSale rechazados** por un identificador de empresa que no coincide con
+  la variable de entorno: el stock llega solo por polling. Pendiente revisar en Vercel.
+- **Kinsta**: sin SSH toda la tarde; auditoría externa solamente. La batería `wp-cli`
+  para cuando vuelva está en el informe local.
+- **Decisiones de Mario, una palabra cada una**, en orden: `bulk`, `hermes`,
+  `prefetch`, `índices`, `retén`, `fotos`; y de antes, `arma` y `rota`.
