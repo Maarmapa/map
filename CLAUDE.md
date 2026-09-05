@@ -2044,3 +2044,165 @@ tocar producción, un workflow de 7 agentes (~1,35 M tokens, 31 min) con la orde
   para cuando vuelva está en el informe local.
 - **Decisiones de Mario, una palabra cada una**, en orden: `bulk`, `hermes`,
   `prefetch`, `índices`, `retén`, `fotos`; y de antes, `arma` y `rota`.
+
+## 2026-09-03/04 — Sesión local · La entrega a The WebMCP Challenge desde dos máquinas
+
+Dos verticales (un restaurante y una tienda) como herramientas WebMCP. Lo que sigue es el
+método; el estado de la entrega, los textos y los parches viven en la carpeta de trabajo del
+Mini (`~/hackathon-webmcp/`, con `ESTADO.md` como fuente para cualquier sesión) y en el repo
+paraguas público `Maarmapa/webmcp-tengu-boykot`.
+
+### Lo que falló y se habría visto en el video
+
+1. **La tool llenaba un formulario que estaba oculto.** `preparar_reserva` escribía en el tab
+   de WhatsApp de la sección Reservas, pero el tab por defecto era el iframe de reserva online
+   (`display:none` para el formulario). La tool respondía "completado y visible en pantalla".
+   Nadie lo había visto porque nadie había **ejecutado la tool y leído el DOM de vuelta**: se
+   había verificado que se registraba, no que hacía lo que decía. Regla: **ejecutar cada tool
+   por el polyfill (`document.modelContext.tools.get(n).execute`) y leer el estado de la página
+   después, no el valor de retorno.**
+2. **Un `<select>` al que se le asigna un value inexistente queda vacío en silencio.** Con una
+   hora de almuerzo (el selector solo tenía cena) el campo quedaba vacío y la tool igual decía
+   "completado". Después de cada `set`, leer `.value` y reportar lo que **no** se aplicó, con las
+   opciones válidas. Vale para cualquier agente que rellena formularios.
+3. **El texto de la entrega prometía cosas que producción no tenía**: una tool que solo existía
+   en el servidor y no en la página; una reserva "que llega al restaurante" cuando el WhatsApp
+   era un número inventado; "persistencia en Postgres" cuando la página no llamaba a ese motor.
+   Las reglas dicen *must function as depicted*. **Antes de escribir una frase sobre el producto,
+   comprobarla contra lo desplegado, no contra el código ni contra la memoria.**
+4. **Proyectos preexistentes**: las reglas exigen documentar qué es previo y qué se hizo en el
+   período, con evidencia. Un repo "limpio" creado para la entrega **borra esa evidencia**. La
+   salida fue un repo paraguas con `git subtree add` de cada original: la historia viaja entera y
+   `git log --since` dentro del propio repo la demuestra.
+
+### Dos máquinas tocando lo mismo
+
+- **La carpeta de trabajo no se sincroniza entre máquinas**; el archivo de estado viaja por el
+  chat o por la red local. Un `python3 -m http.server` de solo lectura atado a la LAN (macOS no
+  trae `timeout`: `sh -c '… & P=$!; sleep N; kill $P'`) sirvió para que la otra máquina bajara
+  todo con `curl`. Antes de servir una carpeta: `grep` de números, tokens y llaves.
+- **El otro lado pusheó al repo paraguas en vez de al repo que despliega.** No se pierde nada:
+  `git subtree split --prefix=<carpeta> -b <rama>` extrae exactamente esos commits como rama del
+  original, se pushea y se abre el PR allá. Después, al hacer `subtree pull` de vuelta, choca
+  "mismo contenido, distinta historia": se toma `--theirs` (el `main` del original, que es el que
+  despliega) y se verifica con `diff` contra el raw de GitHub.
+- **Cada máquina cree que su rama es la última.** Antes de rebasar una rama local, listar los PRs
+  mergeados del día: dos de las tres mejoras de la rama del MacBook ya estaban en `main` por otro
+  camino.
+
+### Secretos y cosas públicas: cuál es cuál
+
+- **Un número de teléfono no va al repo**, ni siquiera el del negocio: la historia de git es
+  permanente y el repo es público. Vive en una variable de entorno y una función de 15 líneas
+  redirige a `wa.me`; sin la variable, 503 con texto claro en vez de un chat con un número falso.
+  Ojo: en Vercel las variables se **hornean en el deploy**, así que el orden es variable → merge,
+  no al revés.
+- **Los tokens de origin trial sí son públicos por diseño** (van en el HTML, atados a
+  `esquema://host:puerto`, vencen solos). Se decodifican del `<meta>` para verificar origen,
+  feature y vencimiento, y la prueba de 10 segundos es `typeof document.modelContext` en la
+  consola del navegador destino. Un token para `sitio.vercel.app` **no vale** para las URLs de
+  preview ni para un dominio propio futuro.
+- **Un `crontab -l` pegado en el chat trae tokens en claro.** Pedir la salida pasada por
+  `sed -E 's/[a-f0-9]{24,}/<token>/g'`.
+
+### La auditoría de la entrega
+
+- **Los "descartados" de una verificación adversarial pueden ser hallazgos vencidos, no
+  erróneos.** El workflow corrió mientras se arreglaban las cosas; once hallazgos quedaron
+  "descartados" porque el fix entró antes de que el verificador llegara. Al leer el resultado,
+  distinguir "no era cierto" de "dejó de ser cierto a las 21:27".
+- **Un límite de uso puede tumbar a la mitad de los verificadores** y dejar los hallazgos con
+  una sola opinión. Relanzar con `resume` reutiliza las lentes desde caché y corre solo lo que
+  faltó. Y aun así conviene verificar a mano los de severidad alta.
+- **Lo que un juez lee primero es el README del repo ejecutable**, no el texto de la entrega.
+  El de una vertical no mencionaba la feature que se estaba concursando. Mirarlo como si fuera
+  la página de inicio.
+- Un **XSS almacenado hacia el operador** apareció en un panel interno: campos que llegan por
+  endpoints públicos interpolados en `innerHTML` con escape parcial. Un solo `esc()` para todo
+  lo que se interpola, y validación server-side de los mismos campos: defensa en las dos puntas.
+
+### Operativo
+
+- **Devpost mostraba dos plazos**: el texto de las reglas decía uno y la plataforma otro, doce
+  horas después (una extensión por una caída). Manda el de la plataforma, pero se trabaja para
+  el más temprano. El nombre del proyecto tiene tope de 60 caracteres y el pitch de 200: medir
+  con `len()` antes de proponer textos, los primeros no cabían.
+- **Miniatura 3:2 sin dependencias**: `qlmanage -t -s N` renderiza SVG a PNG pero escala al lado
+  largo y recorta; la salida es dibujar el diseño centrado en un lienzo cuadrado del mismo fondo
+  y recortar después con `sips --cropToHeightWidth`. Verificar mirando la imagen, no el tamaño.
+- Chile va en UTC−4 hasta el primer domingo de septiembre. Toda conversión de plazos del hemisferio
+  norte se hace con `TZ=America/Los_Angeles date`, no de memoria.
+
+## 2026-09-04 (noche) — Sesión local · Auditoría completa de la operación de Boykot
+
+Mario pidió una auditoría de todo lo que mueve la tienda —BSale↔WooCommerce, MercadoLibre,
+Paris, Walmart, la app en Vercel, el WordPress en Kinsta y la base en Supabase— después de
+una semana de integraciones nuevas, "con cuidado y cariño, sin romper nada". Fue **solo
+lectura**: cero escrituras, cero llamadas directas a BSale, un puñado de GET a los
+marketplaces. Nueve lentes en paralelo, cada una con la orden de refutar antes de afirmar.
+**El informe completo, con cifras, rutas y hallazgos de seguridad abiertos, vive fuera del
+repo**: en el Escritorio del Mini (`auditoria-boykot-completa-2026-09-04.md` + anexo) y en las
+memorias locales. Acá, como siempre, método y lecciones.
+
+### Lo que se aprendió sobre auditar
+
+1. **"Descartado" no es "refutado".** El tope de gasto tumbó a 30 verificadores adversariales
+   a mitad de corrida y el script marcó sus hallazgos como descartados. Antes de creerle a un
+   resumen, leer el journal: ausencia de verificador tiene que quedar como **"sin verificar"**,
+   jamás como "descartado". El script del workflow se corrige para la próxima.
+2. **Cuando no hay presupuesto para relanzar 30 agentes, se verifican a mano los altos.** Seis
+   comandos (privilegios reales en la base, un GET al marketplace, un `grep` de auth en las
+   rutas, los errores agrupados del proveedor) confirmaron o descartaron todos los hallazgos
+   altos en diez minutos. Certeza suficiente, costo mínimo.
+3. **Un hallazgo puede vencer durante la misma auditoría.** Mientras corrían las lentes, otra
+   sesión mergeó un PR que arreglaba uno de los altos (un umbral de alerta desalineado con un
+   cambio de cadencia de la misma tarde). Regla cero aplicada al mismo día: **re-verificar los
+   altos contra `main` al cerrar, no al abrir**, y anotar "resuelto por #N" en vez de repetirlo.
+4. **Un precio de marketplace no dice si es neto o bruto: lo dice la aritmética del pedido.**
+   Un comentario heredado de otro canal ("en Chile el precio va con IVA") era una hipótesis, y
+   equivocada: en ese marketplace `ItemPrice + tax` es exactamente el precio de lista, o sea
+   `ItemPrice` ya es neto, y el código lo volvía a dividir por 1,19. **Antes de emitir
+   documentos tributarios automáticos desde un canal nuevo, comprobar la premisa fiscal con un
+   pedido real**, no con la documentación ni con otro canal.
+5. **Retirar algo en un tercero no es verificar que se retiró.** Lo que la nota del 1-sep daba
+   por retirado de un marketplace seguía publicado tres días después, con la ficha equivocada.
+   Toda acción sobre un tercero se verifica después con un `GET`, y hasta entonces se escribe
+   como "pendiente de verificar".
+6. **"Se aplica desde el navegador" es un pendiente, no un hecho.** Una tabla de trabajo con 99
+   correcciones listas seguía con `applied = null` tres días después: nadie abrió la URL. Un
+   trabajo que depende de que el usuario haga clic necesita recordatorio explícito o un cron con
+   candado, y la nota debe decir "sin aplicar" hasta que la tabla diga lo contrario.
+7. **Un cron que muere por timeout no deja fila.** La evidencia de la muerte es la **ausencia**
+   de registro: contar filas por hora contra las programadas. Y el patrón horario (muere solo en
+   horario comercial) apunta a la latencia del proveedor, no al código.
+8. **Una alerta en rojo permanente es una alerta muerta.** Un chequeo de seguridad lleva días en
+   `down` por funciones de un proyecto hermano que comparten base; nadie la mira ya. O se corrige
+   lo que mide, o se cambia lo que mide; dejarla roja entrena a ignorar la siguiente.
+9. **La resta protege las tools; nadie resta sobre `app/api/*`.** Un directorio de rutas de
+   desarrollo quedó público en producción, sin auth ni límite, pegándole a un proveedor con la
+   credencial del servidor. Regla: **toda ruta que toque una API externa exige auth o secreto de
+   cron, y un test de cableado lo afirma**, igual que ya se hace con las tools sensibles.
+10. **Un ID corto con `Math.random` y fecha es enumerable.** Si varias superficies públicas lo
+    aceptan como única prueba, es una llave y hay que tratarla como tal: `crypto.randomBytes` y
+    un segundo factor (correo del cliente o token firmado).
+11. **Métrica que sorprende y conviene medir siempre**: qué porcentaje del tráfico a la base es
+    leer una credencial por cada llamada a una API externa. Acá era la mitad. Cachear en memoria
+    del proceso con TTL corto lo elimina.
+12. **Zero-knowledge también al auditar**: las tablas con datos de compradores se consultan solo
+    por columnas numéricas y conteos, y un pedido de marketplace se imprime sin comprador.
+    Ninguna consulta de esta noche trajo un nombre ni un correo al contexto.
+13. **Dos máquinas, dos sesiones, misma noche.** Mientras el Mini auditaba, el MacBook mergeaba
+    fixes. Antes de recomendar un arreglo, `gh pr list --state merged --search "merged:>=hoy"`:
+    tres de los hallazgos ya tenían PR.
+
+### Estado al cerrar (lo que se puede decir en público)
+
+- Las nueve lentes cerraron; 45 hallazgos altos/medios y ~50 bajos, más fortalezas y métricas por
+  sistema. Los altos se verificaron a mano. **Ninguno se corrigió en esta sesión**: era auditoría,
+  y las decisiones son de Mario, una palabra cada una, listadas en el informe local.
+- Lo bueno pesa: el snapshot de stock es fresco y completo, la paridad de estado BSale↔Woo dio
+  cero discrepancias en la muestra viva, las reservas de notas restan de verdad, los guardarraíles
+  del sync abortan ante datos viejos, y el ecosistema de tools de página tiene tests que fallan
+  si alguien cablea un cobro.
+- Lo que sigue abierto se describe en el informe, no acá: este repo es público y varios hallazgos
+  son rutas y funciones que todavía no están cerradas.
