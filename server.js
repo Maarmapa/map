@@ -1,6 +1,29 @@
 // maarmapa — Claude API proxy v6 stable
 const express = require('express');
 const app = express();
+
+// ── Herramientas para Hermes (Boykot) ─────────────────────────────────
+// Dos rutas con token para otro agente que vive en otro repo: ver el
+// encabezado de factory-tools.js para el porqué. Sin FACTORY_TOOLS_TOKEN el
+// router responde 503 a todo — falla cerrado, no abierto.
+//
+// Se monta ANTES del `express.json()` global de abajo, a propósito: el router
+// autentica primero y recién después lee el cuerpo (con su propio límite de
+// 32 KB y un 400 en JSON). Si el parser global corriera antes, cualquiera sin
+// token haría leer y parsear hasta 100 KB por request, un JSON roto
+// respondería con el HTML de Express en vez de JSON, y el límite del router
+// quedaría como código muerto (body-parser salta si `req._body` ya existe).
+// El cap se pasa crudo: el router distingue "0" (apagado) de "" (default).
+const { createToolsRouter } = require('./factory-tools');
+app.use(createToolsRouter({
+  token: process.env.FACTORY_TOOLS_TOKEN || '',
+  grokKey: process.env.GROK_KEY || '',
+  r2Worker: 'https://maarmapa-media.mario-25d.workers.dev',
+  r2Token: process.env.R2_UPLOAD_TOKEN || '',
+  dailyImageCap: process.env.FACTORY_TOOLS_DAILY_IMAGES,
+  dailySearchCap: process.env.FACTORY_TOOLS_DAILY_SEARCHES,
+}));
+
 app.use(express.json());
 
 app.use((req, res, next) => {
