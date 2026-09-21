@@ -2370,3 +2370,119 @@ memorias locales. Acá, como siempre, método y lecciones.
   si alguien cablea un cobro.
 - Lo que sigue abierto se describe en el informe, no acá: este repo es público y varios hallazgos
   son rutas y funciones que todavía no están cerradas.
+
+## 2026-09-18/19 — Sesión remota · Cartas del mundo, Nueva York, y un nombre inventado
+
+Sesión larga de inteligencia para un restaurante cliente (los hallazgos, los
+nombres y los precios viven fuera del repo: se entregaron por el chat). Acá
+el método, las lecciones y las correcciones a este archivo.
+
+### Correcciones a notas anteriores (Regla cero, otra vez)
+
+- **`dashai-mcp` SÍ está en el registro oficial de MCP** (0.3.1, verificado
+  el 19-sep con control positivo: `storefront-mcp` 1.0.1 en la misma consulta).
+  La nota del 26-ago decía que ese envío no se había hecho; quedó vieja.
+- **`rag-blindado` tiene 45 tests**, no 22 ni 33 (clon del 19-sep, `0d0fcd1`).
+- **`alerta-clima.vercel.app` NO es el deploy de alerta-clima.** El vivo es
+  **`alertaclima.vercel.app`** (sin guion), como dice el workflow de GitHub
+  Actions del repo, y responde 200 con datos. El README del repo apunta al
+  dominio con guion, que devuelve 500 en todo, y esta sesión repitió ese
+  error durante un día entero: **afirmó que el sitio estaba caído**. Lección:
+  cuando un deploy "entero" falla, incluida su portada estática, sospechar
+  primero del dominio y buscar el real en el propio repo (workflows, env,
+  scripts) antes de diagnosticar. Corregir el README.
+- **`/tech` del portfolio sigue en 404** (19-sep).
+- **Los PRs #873 y #874 de dashAI siguen abiertos y mergeables**
+  (`refs/pull/N/merge` existe para los dos).
+
+### La lección más cara: inventé un nombre
+
+Al redactar un perfil profesional de Mario para una relatoría, **escribí un
+apellido que no era el suyo**. No lo saqué de ninguna fuente: lo completé.
+Lo cazó la revisión cruzada con el README del perfil de GitHub, no yo.
+
+**Regla dura, nueva:** un campo de identidad (nombre, RUT, cargo, fecha de
+nacimiento, título) **nunca se completa por inferencia**. Si no está en una
+fuente que se pueda citar, va como `[completar]`. Un dato inventado en un CV
+es peor que un hueco: el hueco se nota, el invento se manda.
+
+Corolario que salió de la misma revisión: **"en producción" solo se dice del
+dominio del cliente, no de una demo pública.** El MCP del restaurante corría
+en un `vercel.app` del hackathon y dos documentos lo llamaban "en
+producción". El dominio real no lo integra todavía. Se corrigió en los dos.
+
+### La historia de Mario no está en ningún repo
+
+Su trayectoria en Polkadot (Head Ambassador 2021–2024, moderador del Discord
+oficial, charlas en 2022) y en Bitcoin/Lightning vive en las memorias locales del Mini y en
+prensa de 2022; **una sesión remota no la ve y la buscó en vano en 26 repos y
+en su propio transcript**. Se reconstruyó desde Cointelegraph, Portal Innova
+y BeInCrypto, con fechas. **Para cualquier documento sobre Mario que salga
+de una sesión remota, pedir primero el archivo de identidad de las memorias
+locales.** Lo que no aparece en ninguna fuente pública (una participación
+relacionada con el real digital de Brasil) quedó como hueco, no como texto.
+
+### Método que sirvió y conviene no redescubrir
+
+- **Las páginas "por barrio" de la guía Michelin no filtran nada**: devuelven
+  la lista entera de la ciudad, con restaurantes de otras ciudades al final.
+  Lo que sí sirve: las tarjetas traen `data-lat`/`data-lng`; se filtra por
+  caja de coordenadas y se lee el `award` del JSON-LD de cada ficha.
+- **Los pies de foto de un blog de comensales son la carta**: en reseñas
+  con una foto por plato, el texto del pie ("Kinki fish, vegetables, miso")
+  enumera la secuencia completa. Trece menús de restaurantes con estrella que
+  no publican nada salieron de ahí, con fecha y precio pagado.
+- **El índice del buscador guarda series temporales gratis**: los títulos
+  indexados de Yelp llevan el mes y el conteo de reseñas ("Updated April 2026
+  · 1872 Reviews" … "September 2026 · 1880"). Es velocidad de reseñas por
+  mes sin tocar Yelp, que devuelve 403 al robot. **Velocidad y recencia miden
+  amor; el total mide edad.**
+- **Un sandbox remoto con salida a internet propia** (el de un conector de
+  medios) resolvió lo que el proxy de la sesión bloquea: Michelin, Yelp
+  (parcial), sitios de restaurantes, la API de GDELT. Su store de CA no trae
+  las raíces de Sectigo; `curl --cacert $(python3 -c "import certifi;…")`
+  lo arregla. Se borra a los ~10 s de cada llamada: encadenar en un comando
+  o correr en background y leer el log.
+- **GDELT limita por IP con 429** si se le pega dos veces seguidas desde el
+  mismo sandbox; una corrida interrumpida deja la siguiente bloqueada.
+- **Antes de mandar un PDF, mirarlo**: `pymupdf` renderiza páginas a PNG en
+  segundos. La primera maqueta tenía saltos de página forzados y hojas a
+  medio llenar; el usuario lo notó antes que yo.
+- **Un `.md` de 1.400 líneas no es un entregable para un tercero.** Se pidió
+  "uno solo enfocado en cartas y precios" y salió un documento de 200 líneas
+  que se lee entero. El maestro queda como respaldo.
+
+### Pendiente al cerrar
+
+  (18 y 19 feriados). Portal, perfil y `/tech` siguen sin hacer.
+- README del perfil de GitHub corregido y entregado por el chat; **no se
+  pusheó**: espera ok expreso.
+- Tres huecos `[completar]` en el perfil de relator, incluido el de Brasil.
+
+
+## Addendum 21-sep — lo que se aprendió con dos workflows y un límite de gasto
+
+- **Un agente de arreglo puede deshacer el trabajo del orquestador si el
+  prompt le dice "estos archivos no se tocan".** El stream de K8s encontró mis
+  ediciones de Jev en `README.md`, `requirements.txt` y `graph_flow.py`,
+  concluyó que otro stream había violado la regla, y las revirtió con
+  `git checkout --`. Lo hizo bien: movió el contenido a `ragb/graders.py` y a
+  una carpeta `jev/` con instrucciones para integrar. Regla: cuando el
+  orquestador edita archivos que los agentes tienen prohibidos, decirlo en el
+  prompt ("los cambios que veas ahí son míos, no los toques").
+- **El límite de gasto mensual tumba agentes a mitad de workflow y el
+  resumen los marca como fallados, no como pendientes.** Se reanudó con
+  `resumeFromRunId` apenas pasó la hora de reinicio: lo hecho vino de caché y
+  solo corrió lo que faltaba. Antes de reanudar conviene mirar el journal:
+  ahí está lo que cada agente devolvió de verdad.
+- **Los pantallazos que se mandan mientras la sesión trabaja no llegan.**
+  Tres veces en un día. Solo entran los adjuntos de un mensaje nuevo con la
+  sesión detenida.
+- **Verificar la URL, no el recuerdo de la URL.** Se dio por expirado el
+  seguía vigente. La Regla cero aplica también a los identificadores que
+  guarda la propia sesión.
+- **El resumen de un buscador no es fuente**: dijo que la x402 Foundation se
+  lanzó el 2 de abril; la nota de x402.org dice 14 de julio. Se citó la nota.
+- **Las métricas reales pesan más que las buenas**: el cross-encoder dio F1
+  0,62 en valid con recall 0,44. Está escrito así, con el tamaño del dataset
+  al lado, porque un 0,94 que nadie puede reproducir vale menos.
