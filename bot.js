@@ -12,6 +12,8 @@ const WebPostHaikuImages = require('./webpost-haiku-images-ultra-simple');
 const WebPostHyperframes = require('./webpost-hyperframes-module');
 const WebPostHaikuAdobeMCP = require('./webpost-haiku-adobe-mcp-module');
 const WebPostOpenRouter = require('./webpost-openrouter-module');
+const ad = require('./lib/product-ad');
+const runway = require('./lib/runway');
 const SOUTHSIDE_AUDIO = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/SOUTH%20SIDE%20CRIMINI.mp3';
 const R2_BASE = 'https://pub-5dd65bdf9977446c93204c83d30ec735.r2.dev/';
 const R2_WORKER = 'https://maarmapa-media.mario-25d.workers.dev';
@@ -77,6 +79,14 @@ async function tg(method, body) {
 }
 async function send(chatId, text) { return (await tg('sendMessage', { chat_id: chatId, text, parse_mode: 'Markdown' }))?.message_id; }
 async function edit(chatId, msgId, text) { try { await tg('editMessageText', { chat_id: chatId, message_id: msgId, text, parse_mode: 'Markdown' }); } catch(e) {} }
+async function sendPlain(chatId, text) {
+  const body = String(text || '').slice(0, 4000);
+  return (await tg('sendMessage', { chat_id: chatId, text: body }))?.message_id;
+}
+async function editPlain(chatId, msgId, text) {
+  if (!msgId) return;
+  try { await tg('editMessageText', { chat_id: chatId, message_id: msgId, text: String(text || '').slice(0, 4000) }); } catch(e) {}
+}
 async function photo(chatId, url, caption) {
   try {
     const r = await tg('sendPhoto', { chat_id: chatId, photo: url, caption });
@@ -132,25 +142,34 @@ async function grokImg(prompt) {
   } catch(e) { return null; }
 }
 
-// Runway
+// Runway gen4_turbo. Duración entera 2–10 (3s es válido). Si la imagen no pasa
+// el chequeo de URL de Runway (HTTPS, HEAD 200, Content-Type real, sin redirect)
+// se baja y se manda como data URI o upload efímero. El error vuelve al chat:
+// antes un fallo devolvía null y /boykot lo ignoraba.
 async function runwayVideo(imageUrl, prompt, duration) {
-  if (!process.env.RUNWAY_KEY) return null;
+  const dur = ad.gen4TurboDuration(duration);
+  if (dur.error) return { error: dur.error };
+  if (!process.env.RUNWAY_KEY) return { error: 'RUNWAY_KEY no configurada' };
   try {
-    const r = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
-      body: JSON.stringify({ model: 'gen4_turbo', promptImage: imageUrl, promptText: prompt, ratio: '720:1280', duration: duration || 5 })
+    const image = await ad.ensureRunwayImage(imageUrl, {
+      checkGen4Aspect: true,
+      uploadEphemeral: (bytes, filename, contentType) => runway.uploadEphemeral(process.env.RUNWAY_KEY, bytes, filename, contentType)
     });
-    const txt = await r.text();
-    let d; try { d = JSON.parse(txt); } catch(e) { return null; }
-    if (!d.id) return null;
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 10000));
-      const t = await (await fetch('https://api.dev.runwayml.com/v1/tasks/' + d.id, { headers: { 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' } })).json();
-      if (t.status === 'SUCCEEDED') return t.output?.[0] || null;
-      if (t.status === 'FAILED') return null;
-    }
-  } catch(e) { return null; }
+    if (!image.uri) return { error: 'No pude preparar la imagen (' + (image.reason || image.via || 'sin uri') + ')' };
+    const created = await runway.createImageToVideo(process.env.RUNWAY_KEY, {
+      model: 'gen4_turbo',
+      promptImage: image.uri,
+      promptText: prompt,
+      ratio: '720:1280',
+      duration: dur.duration
+    });
+    if (!created.id) return { error: 'image_to_video no devolvió id' };
+    const task = await runway.pollTask(process.env.RUNWAY_KEY, created.id, { maxMs: 8 * 60 * 1000 });
+    if (task.status === 'SUCCEEDED' && task.output && task.output[0]) return { url: task.output[0] };
+    return { error: runway.describeTaskResult(task) };
+  } catch (e) {
+    return { error: ad.redact(e.message) };
+  }
 }
 
 // Seedance
@@ -425,8 +444,8 @@ async function runFactory(chatId, topic, run = null) {
       await edit(chatId, msgId, '🏭 *maarmapa factory*\n' + bar(9, 10) + '\n_🎬 Clip ' + (i + 1) + '/7..._');
       const vid = await runs.step(run, 'clip-' + i, async () => {
         const v = await runwayVideo(slides[i], motions[i], 4);
-        if (!v) throw new Error('Runway no devolvió video');
-        return v;
+        if (!v.url) throw new Error(v.error || 'Runway no devolvió video');
+        return v.url;
       });
       if (vid) { await video(chatId, vid, '🎬 Clip ' + (i + 1)); clips++; }
     }
@@ -480,7 +499,8 @@ async function runAnime(chatId, concept) {
       await photo(chatId, su, '🎬 Shot ' + (i+1) + '/3');
       await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(6+i, 10) + '\n_🎬 Runway Shot ' + (i+1) + '..._');
       const vid = await runwayVideo(su, motions[i], 5);
-      if (vid) { clips.push(vid); await video(chatId, vid, '🎬 Shot ' + (i+1) + '/3'); }
+      if (vid.url) { clips.push(vid.url); await video(chatId, vid.url, '🎬 Shot ' + (i+1) + '/3'); }
+      else await sendPlain(chatId, '❌ Shot ' + (i + 1) + ' Runway: ' + (vid.error || 'sin detalle'));
     }
   }
   await edit(chatId, msgId, '🎬 *anime factory*\n' + bar(10, 10) + '\n✅ *Completado*');
@@ -508,15 +528,17 @@ async function runSquad(chatId) {
       await photo(chatId, u, '🎨 ' + angles[i].label);
       await edit(chatId, msgId, '🥷 *SQUAD factory*\n' + bar(i+1, angles.length+1) + '\n_🎬 Runway: ' + angles[i].label + '..._');
       const vid = await runwayVideo(u, angles[i].motion, 5);
-      if (vid) {
-        await video(chatId, vid, '🎬 ' + angles[i].label);
+      if (vid.url) {
+        await video(chatId, vid.url, '🎬 ' + angles[i].label);
         try {
-          const vr = await fetch(vid);
+          const vr = await fetch(vid.url);
           const vb = await vr.arrayBuffer();
           const r2u = await uploadToR2(vb, 'squad_' + i + '_' + Date.now() + '.mp4', 'video/mp4');
           if (r2u) saveClip(chatId, r2u);
         } catch(e) { console.error('R2 upload (squad) failed:', e.message); }
-        clips.push(vid);
+        clips.push(vid.url);
+      } else {
+        await sendPlain(chatId, '❌ ' + angles[i].label + ' Runway: ' + (vid.error || 'sin detalle'));
       }
     }
   }
@@ -617,19 +639,19 @@ async function runRunwayScene(chatId, sceneKey) {
   await photo(chatId, imgUrl, '🎨 Frame: ' + sceneKey);
   await edit(chatId, msgId, '🎬 *Runway factory*\n' + bar(6, 10) + '\n_🎬 Runway animando..._');
   const vid = await runwayVideo(imgUrl, scene.motion, 5);
-  if (vid) {
-    await video(chatId, vid, '🎬 Runway — ' + sceneKey);
+  if (vid.url) {
+    await video(chatId, vid.url, '🎬 Runway — ' + sceneKey);
     await edit(chatId, msgId, '🎬 *Runway factory*\n' + bar(9, 10) + '\n_☁️ Subiendo a R2..._');
     try {
-      const vr = await fetch(vid);
+      const vr = await fetch(vid.url);
       const vb = await vr.arrayBuffer();
       const filename = 'runway_' + sceneKey.replace('-', '_') + '_' + Date.now() + '.mp4';
       const r2u = await uploadToR2(vb, filename, 'video/mp4');
       if (r2u) saveClip(chatId, r2u);
-    } catch(e) { saveClip(chatId, vid); }
+    } catch(e) { saveClip(chatId, vid.url); }
     await edit(chatId, msgId, '🎬 *Runway factory*\n' + bar(10, 10) + '\n✅ *Completado — guardado para /sync*');
   } else {
-    await edit(chatId, msgId, '❌ Runway no generó el clip.');
+    await editPlain(chatId, msgId, '❌ Runway no generó el clip.\n' + (vid.error || 'sin detalle'));
   }
 }
 
@@ -746,7 +768,8 @@ async function runBoykotPost(chatId, topic) {
     const motions = ['Product reveal slow push-in. Neon yellow-green sweeps surface. Commercial editorial.', 'Detail zoom macro. Acid yellow highlight traces edge. Professional.', 'Lifestyle artist hand motion blur. Yellow-green neon glow pulses.'];
     for (let i = 0; i < reelUrls.length; i++) {
       const vid = await runwayVideo(reelUrls[i], motions[i], 3);
-      if (vid) { await video(chatId, vid, 'Reel clip ' + (i+1) + ' Boykot.cl'); clips++; }
+      if (vid.url) { await video(chatId, vid.url, 'Reel clip ' + (i+1) + ' Boykot.cl'); clips++; }
+      else await sendPlain(chatId, '❌ Reel ' + (i + 1) + ' Runway: ' + (vid.error || 'sin detalle'));
     }
   }
   await edit(chatId, msgId, '🎨 *Boykot factory*\n' + bar(10, 10) + '\n✅ *Completado*');
@@ -810,7 +833,6 @@ async function runOracleBackgrounds(chatId, onlyCity = null) {
     { name: 'nyc', prompt: 'Aerial view from Empire State Building height looking down, Manhattan grid, Hudson and East River, morning golden light, photorealistic, cinematic, no people' },
   ];
   const results = [];
-  console.log('RUNWAY_KEY prefix:', (process.env.RUNWAY_KEY || '').slice(0, 8));
   const citiesToProcess = onlyCity ? cities.filter(c => c.name === onlyCity) : cities;
   for (let i = 0; i < citiesToProcess.length; i++) {
     const city = citiesToProcess[i];
@@ -870,48 +892,215 @@ function logAccess(msg, authorized) {
   }));
 }
 
-// === REFRAME 16:9 con Runway Aleph (video-to-video) ===
+// Baja el mp4 de Runway enseguida (la URL expira en 24–48h), lo deja en R2
+// y lo manda al chat como archivo, no solo como link.
+async function deliverVideo(chatId, sourceUrl, filename, caption) {
+  const res = await fetch(sourceUrl, { signal: AbortSignal.timeout(120000) });
+  if (!res.ok) throw new Error('no pude bajar el video (' + res.status + ')');
+  const buf = Buffer.from(await res.arrayBuffer());
+  const r2u = await uploadToR2(buf, filename, 'video/mp4');
+  if (r2u) saveClip(chatId, r2u);
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  form.append('video', new Blob([buf], { type: 'video/mp4' }), filename);
+  if (caption) form.append('caption', String(caption).slice(0, 1000));
+  const sent = await fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendVideo', {
+    method: 'POST', body: form, signal: AbortSignal.timeout(120000)
+  });
+  const body = await sent.json().catch(() => ({}));
+  if (!body.ok) {
+    if (r2u) await sendPlain(chatId, 'El video quedó en R2 pero Telegram no lo adjuntó:\n' + r2u);
+    else throw new Error('Telegram no aceptó el video');
+  }
+  return r2u;
+}
+
+function safeFilePart(value) {
+  return String(value || 'ad').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'ad';
+}
+
+// gen4_aleph se retiró el 2026-07-30. El reemplazo documentado es aleph2,
+// con targetAspectRatio (no el ratio 1280:720 viejo). Entrada: 2–30s, ≤30 fps.
 async function reframeVideo(videoUrl, prompt) {
   if (!process.env.RUNWAY_KEY) return { error: 'RUNWAY_KEY no configurada' };
   try {
-    const r = await fetch('https://api.dev.runwayml.com/v1/video_to_video', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' },
-      body: JSON.stringify({
-        model: 'gen4_aleph',
-        videoUri: videoUrl,
-        promptText: prompt || 'Expand the scene to a wide 16:9 frame. Keep the original subject centered and unchanged. Fill the new left and right areas with coherent matching dark cinematic environment (ruins, smoke), solid and detailed, no transparent or ghostly elements.',
-        ratio: '1280:720'
-      })
+    const prepared = await ad.prepareVideoForAleph(videoUrl, {
+      uploadEphemeral: (bytes, filename, contentType) => runway.uploadEphemeral(process.env.RUNWAY_KEY, bytes, filename, contentType)
     });
-    const txt = await r.text();
-    console.log('Reframe:', txt.slice(0, 250));
-    let d; try { d = JSON.parse(txt); } catch(e) { return { error: 'resp no-JSON: ' + txt.slice(0,150) }; }
-    if (!d.id) return { error: txt.slice(0, 220) };
-    for (let i = 0; i < 60; i++) {
-      await new Promise(res => setTimeout(res, 10000));
-      const t = await (await fetch('https://api.dev.runwayml.com/v1/tasks/' + d.id, { headers: { 'Authorization': 'Bearer ' + process.env.RUNWAY_KEY, 'X-Runway-Version': '2024-11-06' } })).json();
-      if (t.status === 'SUCCEEDED') return { url: t.output?.[0] };
-      if (t.status === 'FAILED') return { error: 'FAILED: ' + JSON.stringify(t.failure || t.failureCode || t).slice(0, 200) };
-    }
-    return { error: 'timeout (>10min)' };
-  } catch(e) { return { error: e.message }; }
+    const created = await runway.createVideoToVideo(process.env.RUNWAY_KEY, {
+      model: 'aleph2',
+      videoUri: prepared.uri,
+      promptText: prompt || 'Expand the scene to a wide 16:9 frame. Keep the original subject centered and unchanged. Fill the new left and right areas with a coherent matching dark cinematic environment, solid and detailed.',
+      targetAspectRatio: '16:9'
+    });
+    if (!created.id) return { error: 'video_to_video no devolvió id' };
+    const task = await runway.pollTask(process.env.RUNWAY_KEY, created.id, { maxMs: 15 * 60 * 1000 });
+    if (task.status === 'SUCCEEDED' && task.output && task.output[0]) return { url: task.output[0] };
+    return { error: runway.describeTaskResult(task) };
+  } catch (e) {
+    return { error: ad.redact(e.message) };
+  }
 }
 
 async function runReframe(chatId, videoUrl) {
-  const msgId = await send(chatId, '🔄 *Reframe 16:9 (Runway Aleph)*\n' + bar(0,10) + '\n_Procesando... puede tardar varios min_');
+  const msgId = await send(chatId, '🔄 *Reframe 16:9 (Aleph 2.0)*\n' + bar(0,10) + '\n_2–30s, máximo 30 fps. Puede tardar varios min_');
   const res = await reframeVideo(videoUrl, null);
   if (res && res.url) {
-    await video(chatId, res.url, '🔄 Reframe 16:9 — Runway Aleph');
     try {
-      const vb = await (await fetch(res.url)).arrayBuffer();
-      const r2u = await uploadToR2(vb, 'reframe_' + Date.now() + '.mp4', 'video/mp4');
-      if (r2u) saveClip(chatId, r2u);
-    } catch(e) {}
-    await edit(chatId, msgId, '🔄 *Reframe 16:9*\n' + bar(10,10) + '\n✅ *Completado*');
+      const r2u = await deliverVideo(chatId, res.url, 'reframe_' + Date.now() + '.mp4', '🔄 Reframe 16:9 — Aleph 2.0');
+      await editPlain(chatId, msgId, 'Reframe 16:9 listo' + (r2u ? '\nR2: ' + r2u : ''));
+    } catch (e) {
+      await editPlain(chatId, msgId, 'Runway terminó pero falló la entrega: ' + ad.redact(e.message) + '\n' + res.url);
+    }
   } else {
-    await edit(chatId, msgId, '❌ Reframe falló:\n`' + (res?.error || 'sin detalle') + '`');
+    await editPlain(chatId, msgId, 'Reframe falló:\n' + (res?.error || 'sin detalle'));
   }
+}
+
+async function adCaption(product, concept) {
+  const fallback = [
+    product.name + (product.priceLabel ? ' — ' + product.priceLabel : ''),
+    product.permalink,
+    'En Boykot.cl',
+    '#boykot #arte #chile #materialesdearte'
+  ].join('\n');
+  const system = 'Eres community manager de Boykot.cl, tienda chilena de materiales de arte. Escribes un caption listo para Instagram o TikTok, en español de Chile, cercano, sin relleno. La marca es negro y verde ácido #CCFF00. Incluyes el link del producto tal cual. Devuelves SOLO el caption, con pocos hashtags al final.';
+  const prompt = [
+    'Producto: ' + product.name,
+    product.priceLabel ? 'Precio: ' + product.priceLabel : '',
+    product.variationLabel ? 'Variante: ' + product.variationLabel : '',
+    product.features ? 'Datos: ' + product.features : '',
+    'Link: ' + product.permalink,
+    'Idea: ' + (concept || ad.DEFAULT_USER_CONCEPT)
+  ].filter(Boolean).join('\n');
+  const text = await deepseek(prompt, system);
+  return (text && text.trim()) || fallback;
+}
+
+async function runSaldo(chatId) {
+  if (!process.env.RUNWAY_KEY) { await sendPlain(chatId, 'RUNWAY_KEY no configurada.'); return; }
+  try {
+    const org = await runway.getOrganization(process.env.RUNWAY_KEY);
+    await sendPlain(chatId, ad.formatOrganization(org));
+  } catch (e) {
+    await sendPlain(chatId, 'No pude leer GET /v1/organization: ' + ad.redact(e.message));
+  }
+}
+
+async function runAd(chatId, text) {
+  const parsed = ad.parseAdArgs(text);
+  if (parsed.usage) { await sendPlain(chatId, ad.AD_USAGE); return; }
+  if (parsed.error) { await sendPlain(chatId, parsed.error); return; }
+
+  const msgId = await sendPlain(chatId, 'Buscando el producto en boykot.cl...');
+  let product;
+  try {
+    product = await ad.resolveBoykotProduct(parsed.query);
+  } catch (e) {
+    await editPlain(chatId, msgId, e.message);
+    return;
+  }
+
+  await editPlain(chatId, msgId, product.name + '\n' + (product.priceLabel || 'sin precio') + '\nPreparando ' + product.imageUrls.length + ' imagen(es) para Runway...');
+  const upload = (bytes, filename, contentType) => runway.uploadEphemeral(process.env.RUNWAY_KEY, bytes, filename, contentType);
+  let prepared;
+  try {
+    prepared = [];
+    for (const src of product.imageUrls) {
+      prepared.push(await ad.ensureRunwayImage(src, {
+        dryRun: parsed.dry || !process.env.RUNWAY_KEY,
+        uploadEphemeral: parsed.dry ? null : upload
+      }));
+    }
+  } catch (e) {
+    await editPlain(chatId, msgId, e.message);
+    return;
+  }
+  if (prepared.some(img => !img.uri)) {
+    const pending = prepared.filter(img => !img.uri).map(img => img.filename + ' (' + img.bytes + ' bytes, ' + img.reason + ')').join('\n');
+    await editPlain(chatId, msgId, 'Esas fotos no pasan como URL y pesan más que un data URI (3.3 MB). Hay que subirlas con POST /v1/uploads, y este modo no lo hace:\n' + pending);
+    return;
+  }
+
+  const plan = ad.planProductAd({ duration: parsed.duration, lowRes: parsed.lowRes, audio: parsed.audio });
+  const bodies = plan.lines.map(line => ad.buildProductAdBody({
+    product,
+    imageUris: prepared.map(img => img.uri),
+    concept: parsed.concept,
+    ratio: line.ratio,
+    duration: parsed.duration,
+    audio: parsed.audio
+  }));
+  const summary = [
+    product.name + (product.sku ? ' · SKU ' + product.sku : ''),
+    product.priceLabel || 'sin precio',
+    product.variationLabel || '',
+    product.permalink,
+    'Imágenes (' + prepared.map(img => img.via).join(', ') + '):',
+    ...product.imageUrls.map((src, i) => (i + 1) + '. ' + src),
+    '',
+    ad.formatCostPlan(plan)
+  ].filter(Boolean).join('\n');
+
+  if (parsed.dry) {
+    await sendPlain(chatId, summary + '\n\n--dry: no llamé a Runway. Costo real: 0 créditos.');
+    for (const body of bodies) {
+      await sendPlain(chatId, 'Payload ' + body.ratio + ':\n' + ad.previewPayload(body));
+    }
+    await editPlain(chatId, msgId, 'Listo el ensayo. No se gastaron créditos.');
+    return;
+  }
+
+  if (!process.env.RUNWAY_KEY) {
+    await sendPlain(chatId, summary + '\n\nRUNWAY_KEY no configurada. No lancé nada.');
+    return;
+  }
+
+  let balance = null;
+  try {
+    const org = await runway.getOrganization(process.env.RUNWAY_KEY);
+    balance = org.creditBalance;
+  } catch (e) {
+    await sendPlain(chatId, 'No pude leer el saldo antes de lanzar (' + ad.redact(e.message) + '). Sigo igual.');
+  }
+  if (balance != null && balance < plan.credits) {
+    await sendPlain(chatId, summary + '\n\nSaldo ' + balance + ' créditos, estimado ' + plan.credits + '. No lancé las tareas.');
+    await editPlain(chatId, msgId, 'Cancelado: no alcanza el saldo.');
+    return;
+  }
+
+  await sendPlain(chatId, summary + '\n\nLanzando ' + bodies.length + ' tareas. Las URLs de Runway vencen en 24–48h: las bajo en cuanto terminen.');
+  await editPlain(chatId, msgId, 'Runway trabajando...');
+
+  const jobs = bodies.map(async (body) => {
+    const created = await runway.createProductAd(process.env.RUNWAY_KEY, body);
+    const quoted = created.estimatedCost && created.estimatedCost.credits;
+    await sendPlain(chatId, body.ratio + ' tarea ' + created.id + (quoted != null ? ' · estimatedCost ' + quoted + ' créditos' : ''));
+    const task = await runway.pollTask(process.env.RUNWAY_KEY, created.id, {
+      maxMs: 20 * 60 * 1000,
+      onStatus: (t) => editPlain(chatId, msgId, body.ratio + ' ' + (t.status || '') + (t.progress != null ? ' ' + Math.round(t.progress * 100) + '%' : ''))
+    });
+    if (task.status !== 'SUCCEEDED' || !task.output || !task.output.length) {
+      throw new Error(body.ratio + ' ' + runway.describeTaskResult(task));
+    }
+    const saved = [];
+    for (let i = 0; i < task.output.length; i++) {
+      const filename = 'ad_' + safeFilePart(product.sku || product.slug || product.name) + '_' + body.ratio.replace(':', 'x') + '_' + Date.now() + (task.output.length > 1 ? '_' + i : '') + '.mp4';
+      const r2u = await deliverVideo(chatId, task.output[i], filename, product.name + ' ' + body.ratio);
+      saved.push(r2u);
+    }
+    return { ratio: body.ratio, saved };
+  });
+
+  const settled = await Promise.allSettled(jobs);
+  const caption = await adCaption(product, parsed.concept);
+  await sendPlain(chatId, caption);
+  const failed = settled.filter(r => r.status === 'rejected');
+  const ok = settled.filter(r => r.status === 'fulfilled');
+  if (failed.length) {
+    await sendPlain(chatId, failed.map(r => r.reason && r.reason.message ? r.reason.message : String(r.reason)).join('\n'));
+  }
+  await editPlain(chatId, msgId, 'Anuncio: ' + ok.length + '/' + settled.length + ' listos.' + (failed.length ? ' El detalle del fallo está arriba.' : ''));
 }
 
 // COMMAND HANDLER
@@ -954,19 +1143,21 @@ async function handle(msg) {
   }
 
   if (text === '/start') {
-    await send(chatId, '🎨 *maarmapa factory v7.5*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/seedance16 [escena]` 🆕 — Seedance en HORIZONTAL 16:9 widescreen\n`/reframe [URL]` 🔄 — Reencuadra un video existente a 16:9 (Runway Aleph)\n`/seedancemini [prompt]` 🆕 — Seedance Mini (rápido/barato)\n`/seedance4k [prompt]` 🆕 — Seedance en 4K\n`/seedream [prompt]` 🆕 — Imagen Seedream 5.0\n`/omniflash [prompt]` 🆕 — Google Omni Flash\n`/seedaudio [texto]` 🆕 — Seed Audio 1.0\n`/probemodelos` 🔬 — Lista los modelos disponibles (OpenRouter + Runway)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n`/runs` 🆕 — Últimas corridas y su estado\n`/retry [id]` 🆕 — Retoma una corrida sin volver a pagar lo ya generado\n📸 *Foto* — Runway la convierte en video 5s');
+    await send(chatId, '🎨 *maarmapa factory v7.6*\n\n*📝 Content*\n`/post [tema]` — Narrativa + 7 slides Grok + animados con Runway\n`/boykot [producto]` — Carrusel editorial negro/#CCFF00 para Boykot.cl\n`/ad [SKU o URL] [idea]` — Anuncio Runway product_ad, 9:16 + 1:1. `--dry` `--dur 6` `--720` `--audio`\n`/saldo` — Créditos Runway (creditBalance y límites del tier)\n\n*🖼 WebPost*\n`/webpost [tema]` — Busca en web, extrae imágenes, caption con DeepSeek\n`/webpost-lite [tema]` 🟢 — Sin fallback Grok, más rápido\n`/webpost-carousel [tema]` — Carrusel de slides con texto e imágenes\n`/webpost-carousel-lite [tema]` 🟢 — Carousel sin Grok fallback\n`/webpost-haiku-images [tema]` ⭐ — Ultra simple con Claude Haiku\n`/webpost-hyperframes [tema]` — Post con frames cinematográficos\n`/webpost-adobe [tema]` — Post via módulo Adobe MCP\n`/webpost-openrouter [tema]` — Post 100% vía OpenRouter\n\n*🎬 Video / Imágenes*\n`/runway [escena]` — Imagen Grok + animada con Runway gen4 (5s 9:16)\n`/seedance [escena]` — Video con Seedance vía OpenRouter (9:16 720p)\n`/seedance16 [escena]` 🆕 — Seedance en HORIZONTAL 16:9 widescreen\n`/reframe [URL]` 🔄 — Reencuadra a 16:9 con Aleph 2.0 (2–30s, ≤30 fps)\n`/seedancemini [prompt]` 🆕 — Seedance Mini (rápido/barato)\n`/seedance4k [prompt]` 🆕 — Seedance en 4K\n`/seedream [prompt]` 🆕 — Imagen Seedream 5.0\n`/omniflash [prompt]` 🆕 — Google Omni Flash\n`/seedaudio [texto]` 🆕 — Seed Audio 1.0\n`/probemodelos` 🔬 — Lista los modelos disponibles (OpenRouter + Runway)\n`/squad` — 7 ángulos del squad Grok+Runway\n`/anime` — Character sheets + 3 shots animados con Runway\n\n*🌆 Oracle*\n`/oracle-bg` — Genera fondos de ciudades en altura para el Oracle (GPT Image 2 + R2)\n\n*🎵 Sync*\n`/syncr2` — Carga clips MP4 desde R2\n`/addclip [URL]` — Agrega clip manualmente\n`/clips` — Lista clips en memoria\n`/clearclips` — Borra lista de clips\n`/sync` — Mezcla clips con SOUTHSIDE BPM 103 → video final\n\n*💬 Utils*\n`/buscar [query]` — Búsqueda vía agente Grok\n`/chat [pregunta]` — Chat con DeepSeek\n`/digest` — Resumen semanal arte/blockchain/AI\n`/runs` 🆕 — Últimas corridas y su estado\n`/retry [id]` 🆕 — Retoma una corrida sin volver a pagar lo ya generado\n📸 *Foto* — Runway la convierte en video 5s');
     return;
   }
 
   if (text.startsWith('/post ')) { runFactory(chatId, text.replace('/post ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text.startsWith('/boykot ')) { runBoykotPost(chatId, text.replace('/boykot ', '')).catch(e => send(chatId, '❌ ' + e.message)); return; }
+  if (text === '/saldo' || text.startsWith('/saldo@') || text.startsWith('/saldo ')) { runSaldo(chatId).catch(e => sendPlain(chatId, '❌ ' + e.message)); return; }
+  if (/^\/ad(?:@\w+)?(?:\s|$)/i.test(text)) { runAd(chatId, text).catch(e => sendPlain(chatId, '❌ ' + ad.redact(e.message))); return; }
   if (text.startsWith('/anime') || text === '/anime') { runAnime(chatId, text.replace('/anime', '').trim() || 'southside').catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text.startsWith("/oracle-bg")) { const bgCity = text.replace("/oracle-bg", "").trim() || null; runOracleBackgrounds(chatId, bgCity).catch(e => send(chatId, '❌ ' + e.message)); return; }
   if (text === '/squad') { runSquad(chatId).catch(e => send(chatId, '❌ ' + e.message)); return; }
 
   if (text.startsWith('/reframe')) {
     const url = text.replace('/reframe', '').trim();
-    if (!url.startsWith('http')) { await send(chatId, '🔄 Uso: `/reframe [URL del video]`\nReencuadra de vertical a 16:9 rellenando los lados (Runway Aleph). Ojo: Aleph tiene límite de duración, probá con clips cortos.'); return; }
+    if (!url.startsWith('http')) { await sendPlain(chatId, 'Uso: /reframe [URL del video]\nReencuadra a 16:9 con Aleph 2.0 (targetAspectRatio 16:9).\nEl video tiene que durar entre 2 y 30 segundos y ir a 30 fps o menos.'); return; }
     runReframe(chatId, url).catch(e => send(chatId, '❌ ' + e.message));
     return;
   }
@@ -1209,7 +1400,7 @@ async function handle(msg) {
       await send(chatId, '✅ Clip guardado. Total: ' + getClips(chatId).length);
       return;
     }
-    await send(chatId, '💡 `/post [tema]` — post\n`/runway [escena]` — video\n`/seedance [escena]` — video\n`/buscar [tema]` — noticias');
+    await send(chatId, '💡 `/post [tema]` — post\n`/ad [SKU o URL]` — anuncio Boykot\n`/saldo` — créditos Runway\n`/runway [escena]` — video\n`/seedance [escena]` — video\n`/buscar [tema]` — noticias');
   }
 }
 
@@ -1250,7 +1441,7 @@ async function runWebPostCarousel(chatId, topic, liteMode = false) {
 }
 
 async function poll() {
-  console.log('maarmapa bot v7.3 — oracle-bg + GPT Image 2 + R2');
+  console.log('maarmapa bot v7.6 — /ad product_ad + /saldo + aleph2');
   let offset = 0;
   while (true) {
     try {
