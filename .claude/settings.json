@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Shopify__graphql_schema",
+      "mcp__Shopify__graphql_query",
+      "mcp__Shopify__validate_graphql_codeblocks",
+      "mcp__Shopify__search_docs_chunks",
+      "mcp__Gmail__get_thread",
+      "mcp__Gmail__search_threads",
+      "mcp__Gmail__get_draft"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get(\"tool_input\",{}).get(\"file_path\",\"\"))'); case \"$f\" in *.md) python3 \"$CLAUDE_PROJECT_DIR/scripts/voseo-lint.py\" \"$f\" >&2 || { echo 'voseo-lint: corrige las formas voseantes de arriba (tuteo chileno).' >&2; exit 2; };; esac"
+          }
+        ]
+      }
+    ]
+  }
+}

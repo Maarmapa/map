@@ -17,6 +17,19 @@
   Se le responde a Mario contándole qué quedó sin commitear y se espera su ok.
   (Probado el 9-ago: el hook pidió push, la sesión no lo hizo.)
 
+## Idioma: español de Chile, tuteo
+
+- Se escribe en español de Chile y en tuteo: «tienes», «puedes», «agrega»,
+  «mira», «pregúntale», «a ti». Nunca voseo rioplatense: «tenés», «podés»,
+  «agregá», «mirá», «vos», «dale», «che». Vale para el chat, los documentos
+  que se entregan y estas notas.
+- Por qué está escrito: el modelo imita el registro de lo que lee, y este
+  archivo es lo primero que lee cada sesión. Doce formas voseantes en estas
+  notas bastaron para que se colaran en entregables (medido el 17-oct).
+- Antes de commitear notas: `python3 scripts/voseo-lint.py CLAUDE.md`. Lista
+  línea y forma, y sale con error si encuentra algo. El hook de
+  `.claude/settings.json` lo corre solo cada vez que se edita un `.md`.
+
 ## Regla cero: este archivo es una hipótesis, no la fuente
 
 El 25-ago se comprobó que **cuatro afirmaciones de este archivo eran falsas**,
@@ -1020,8 +1033,8 @@ Lo que estaba ahí desde el principio: **el export del Seller Center trae una
 columna `Sku Seller Variant`**, a nivel variante, con el código correcto en
 las 51. El campo roto es solo el de nivel producto.
 
-**Regla: antes de inferir una equivalencia, agotá las columnas del archivo
-que ya tenés.** Un matcher por nombre es una hipótesis; una columna del
+**Regla: antes de inferir una equivalencia, agota las columnas del archivo
+que ya tienes.** Un matcher por nombre es una hipótesis; una columna del
 export es un hecho. Y si el matcher da 100% en cosas que se distinguen por un
 número (talla, cantidad, medida), está midiendo mal — hay que degradar esos
 casos aunque el puntaje diga lo contrario.
@@ -1431,7 +1444,7 @@ termina su permiso pregunta de más o hace de más.
 Tres cosas de ahí que se transfieren:
 
 1. **Sumar, no pisar.** `setItem` recibe cantidad ABSOLUTA, pero el agente dice
-   "agregá dos". Pisando, dos llamadas de "agregá uno" dejan una unidad y el
+   "agrega dos". Pisando, dos llamadas de "agrega uno" dejan una unidad y el
    agente informa que puso dos: **miente sin enterarse.** Cuando una API recibe
    estado final y el llamador piensa en incrementos, la traducción es tuya.
 2. **Una feature que casi nadie puede usar no se le cobra a todo el mundo.**
@@ -1515,7 +1528,7 @@ el agente**:
 - El agente es tuyo → una skill al endpoint está perfecta, y es menos maquinaria.
   Para un caso interno de una sola punta, MCP es overhead: un proceso más, un
   transporte, esquemas.
-- El agente **no** es tuyo → no le podés meter una skill adentro a Claude
+- El agente **no** es tuyo → no le puedes meter una skill adentro a Claude
   Desktop, a ChatGPT ni al Cursor de un cliente. Publicar un servidor es lo
   único que hay. Es un **puerto**, no un cliente de API más lindo.
 
@@ -1550,7 +1563,7 @@ herramientas y las buscan cuando las necesitan—.
 Conclusión para repetir sin exagerar: **no es que las skills no se encuentren; se
 encuentran solo dentro del agente donde ya están.** MCP da índice público y
 actualización en runtime; las skills dan costo cero hasta que se usan. Y para que
-te encuentre un agente que nunca oyó hablar de vos no sirve ninguno de los dos:
+te encuentre un agente que nunca oyó hablar de ti no sirve ninguno de los dos:
 sirve que tu propio sitio lo declare.
 
 ## 2026-08-27/28 — Los merges, una regresión que cazaron los tests, y por qué apilar PRs con squash es una trampa
@@ -1663,7 +1676,7 @@ Lo que sí se responde, porque es útil de verdad:
   sospechoso y contamina la prueba.
 - Si los comentarios están en una publicación propia, hay un problema de
   moderación con riesgo legal propio: alojar acusaciones de delitos contra una
-  persona identificable te puede alcanzar a vos.
+  persona identificable te puede alcanzar a ti.
 
 ## 2026-08-29 — Auditoría de restaurantes: el método, y por qué el detalle vive fuera de este repo
 
@@ -1706,7 +1719,7 @@ platos" restringido a un dominio y volvieron los títulos de las páginas pero
 ni un plato: eso predijo correctamente que la carta era una imagen. Confirmado
 después por el usuario, que estaba sentado en el local.
 
-**Generalizable: cuando no podés leer la página, preguntale al índice qué sabe
+**Generalizable: cuando no puedes leer la página, pregúntale al índice qué sabe
 de ella. Lo que el índice NO sabe es el diagnóstico.**
 
 Dos señales que salieron de ahí y conviene buscar siempre:
@@ -1910,8 +1923,8 @@ como **no concluyente** en vez de convertirlo en el hallazgo jugoso que
 parecía. Estaba bien: el nombre era otro. **La regla ya escrita —el índice
 como fuente secundaria, jamás para citar— vale también para sus ausencias.**
 
-Y su reverso, que sí es método útil: **cuando no podés abrir la página,
-preguntale al índice qué sabe de ella; lo que el índice NO sabe es el
+Y su reverso, que sí es método útil: **cuando no puedes abrir la página,
+pregúntale al índice qué sabe de ella; lo que el índice NO sabe es el
 diagnóstico.** Eso sigue funcionando, pero se rotula "por confirmar" y se
 verifica en pantalla antes de mostrárselo a nadie.
 
@@ -1945,7 +1958,7 @@ nunca escriben; reciben las valoraciones por correo cada mañana y nadie abre el
 correo.
 
 De ahí sale la frase que reemplaza al reproche: *no te falta una herramienta
-más, te falta alguien a cargo de lo que queda entre las que ya tenés.*
+más, te falta alguien a cargo de lo que queda entre las que ya tienes.*
 
 **Límite honesto**: son ~13 negocios, casi todos del mismo tipo de zona, todos
 mirados desde el índice y ninguno desde adentro. El patrón es consistente y
